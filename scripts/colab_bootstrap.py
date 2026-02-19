@@ -78,27 +78,26 @@ _banner("4/6 — Preparing dataset cache")
 # Install pv if missing (needed for progress display)
 _run("which pv >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq pv > /dev/null 2>&1)")
 
+
 if os.path.isdir(LOCAL_CACHE) and os.listdir(LOCAL_CACHE):
     print(f"  ✓ Local cache already exists at {LOCAL_CACHE} — skipping copy")
 else:
     os.makedirs(LOCAL_CACHE, exist_ok=True)
 
-    # Measure source size for progress bar
-    print("  📏 Measuring dataset size …")
-    du_result = subprocess.run(
-        f'du -sb "{DRIVE_DATASET}" | cut -f1',
+    # Quick file count (much faster than du -sb on 100k+ small files)
+    print("  📂 Counting files …")
+    fc = subprocess.run(
+        f'find "{DRIVE_DATASET}" -type f | wc -l',
         shell=True, capture_output=True, text=True
     )
-    total_bytes = du_result.stdout.strip()
-
-    print(f"  📦 Dataset size: {int(total_bytes) / (1024**3):.2f} GB")
+    file_count = fc.stdout.strip()
+    print(f"  📦 Dataset: ~{file_count} files")
     print(f"  🚀 Streaming dataset → {LOCAL_CACHE} …\n")
 
-    # Stream-copy using tar + pv (single-line progress, no rsync)
-    pv_size_flag = f"-s {total_bytes}" if total_bytes.isdigit() else ""
+    # Stream-copy using tar + pv (shows speed & transferred bytes, no % — avoids slow du)
     stream_cmd = (
         f'tar -C "{DRIVE_DATASET}" -cf - . '
-        f'| pv -f -pterb {pv_size_flag} '
+        f'| pv -f -trb '
         f'| tar -C "{LOCAL_CACHE}" -xf -'
     )
     _run(stream_cmd)
@@ -114,7 +113,6 @@ print(f"  🔗 Symlinked {repo_datasets} → {LOCAL_CACHE}")
 # Disk usage report
 print("\n  📊 Disk usage:")
 _run(f'df -h /content | tail -1 | awk \'{{print "     /content  — used: "$3"  free: "$4"  ("$5" full)"}}\'')
-_run(f'du -sh "{LOCAL_CACHE}" 2>/dev/null | awk \'{{print "     Cache     — "$1}}\'')
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 5. Configure Ultralytics Output → Drive
