@@ -83,18 +83,9 @@ if os.path.isdir(LOCAL_CACHE) and os.listdir(LOCAL_CACHE):
     print(f"  ✓ Local cache already exists at {LOCAL_CACHE} — skipping copy")
 else:
     os.makedirs(LOCAL_CACHE, exist_ok=True)
-
-    # Quick file count (much faster than du -sb on 100k+ small files)
-    print("  📂 Counting files …")
-    fc = subprocess.run(
-        f'find "{DRIVE_DATASET}" -type f | wc -l',
-        shell=True, capture_output=True, text=True
-    )
-    file_count = fc.stdout.strip()
-    print(f"  📦 Dataset: ~{file_count} files")
     print(f"  🚀 Streaming dataset → {LOCAL_CACHE} …\n")
 
-    # Stream-copy using tar + pv (shows speed & transferred bytes, no % — avoids slow du)
+    # Stream-copy directly — no size/count scan (too many small files)
     stream_cmd = (
         f'tar -C "{DRIVE_DATASET}" -cf - . '
         f'| pv -f -trb '
