@@ -12,7 +12,7 @@ ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 DATASET_DIR = ARTIFACTS_DIR / "dataset_uap_uai"
 AUDIT_REPORT = ARTIFACTS_DIR / "audit_report.json"
 
-# Dataset# Filter criteria for datasets
+# Filter criteria for datasets
 TARGET_CLASSES = {
     "uap": 0,
     "uai": 1,
@@ -28,6 +28,9 @@ TARGET_CLASSES = {
 
 import os
 
+# Training project dir can be overridden via env var (e.g. Colab -> Drive)
+_project_dir = os.environ.get("UAV_PROJECT_DIR", str(ARTIFACTS_DIR / "training_results"))
+
 # Training Params
 TRAIN_CONFIG = {
     "epochs": 10, # Increased for better convergence as per user request
@@ -35,7 +38,7 @@ TRAIN_CONFIG = {
     "imgsz": 640, # Optimized for speed
     "device": 0,
     "model": "yolov8s.pt", 
-    "project": ARTIFACTS_DIR / "training_results",
+    "project": Path(_project_dir),
     "name": "uav_v3_optimized",
     "workers": 8, # Optimal for 12-thread CPU stability
     "amp": True, 

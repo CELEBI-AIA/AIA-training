@@ -7,7 +7,7 @@ from pathlib import Path
 
 from config import DATASET_DIR, ARTIFACTS_DIR, DATASETS_ROOT
 
-def smoke_infer(model_path, source=str(DATASET_DIR / "images" / "val"), num_images=5):
+def smoke_infer(model_path, source=str(DATASET_DIR / "val" / "images"), num_images=5):
     print(f"Loading model from {model_path}...")
     try:
         model = YOLO(model_path)

@@ -6,9 +6,9 @@
 # ── Configuration ───────────────────────────────────────────────────────────
 REPO_URL      = "https://github.com/YOUR_USER/YOUR_REPO.git"   # ← set this
 REPO_BRANCH   = "main"                                          # ← set this
-DRIVE_DATASET = "/content/drive/MyDrive/train"
-LOCAL_CACHE   = "/content/train_local"
-DRIVE_RUNS    = "/content/drive/MyDrive/runs"
+DRIVE_DATASET = "/content/drive/MyDrive/AIA/datasets"
+LOCAL_CACHE   = "/content/datasets_local"
+DRIVE_RUNS    = "/content/drive/MyDrive/AIA/runs"
 TRAIN_SCRIPT  = "uav_training/train.py"
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -104,6 +104,13 @@ else:
     _run(stream_cmd)
     print("\n  ✓ Dataset streaming complete")
 
+# Symlink repo's datasets/ → local cache so training scripts find it
+repo_datasets = os.path.join(REPO_DIR, "datasets")
+if os.path.islink(repo_datasets) or os.path.isdir(repo_datasets):
+    _run(f'rm -rf "{repo_datasets}"')
+os.symlink(LOCAL_CACHE, repo_datasets)
+print(f"  🔗 Symlinked {repo_datasets} → {LOCAL_CACHE}")
+
 # Disk usage report
 print("\n  📊 Disk usage:")
 _run(f'df -h /content | tail -1 | awk \'{{print "     /content  — used: "$3"  free: "$4"  ("$5" full)"}}\'')
@@ -115,7 +122,9 @@ _run(f'du -sh "{LOCAL_CACHE}" 2>/dev/null | awk \'{{print "     Cache     — "$
 _banner("5/6 — Configuring output directories")
 
 _run(f'yolo settings runs_dir="{DRIVE_RUNS}"', check=False)
+os.environ["UAV_PROJECT_DIR"] = DRIVE_RUNS
 print(f"  ✓ Ultralytics runs_dir → {DRIVE_RUNS}")
+print(f"  ✓ UAV_PROJECT_DIR → {DRIVE_RUNS}")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 6. Launch Training (with automatic resume)
@@ -143,10 +152,10 @@ if not os.path.isfile(train_script_path):
 
 if checkpoint:
     print(f"  🔄 Resuming from checkpoint: {checkpoint}")
-    train_cmd = f'{sys.executable} "{train_script_path}" --resume "{checkpoint}"'
+    train_cmd = f'{sys.executable} "{train_script_path}" --resume'
 else:
     print("  🆕 No checkpoint found — starting fresh training")
-    train_cmd = f'{sys.executable} "{train_script_path}" --data "{LOCAL_CACHE}"'
+    train_cmd = f'{sys.executable} "{train_script_path}"'
 
 print(f"  ▶ Command: {train_cmd}\n")
 print("─" * 60)

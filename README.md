@@ -55,7 +55,7 @@ A YOLO-based UAV detection and GPS-based position tracking training pipeline des
 
 1. Open [`notebooks/train_colab.ipynb`](notebooks/train_colab.ipynb) in Colab
 2. Set `REPO_URL` to your GitHub repo URL
-3. Ensure your dataset is at `Google Drive > MyDrive > train`
+3. Ensure your dataset is at `Google Drive > MyDrive > AIA > datasets`
 4. Run the cell — it handles everything automatically:
    - Drive mount → Repo clone → Dependency install → Dataset streaming → Training
 
@@ -126,10 +126,10 @@ See [`gps_training/README.md`](gps_training/README.md) for details.
 │   GitHub (Code)     │────▶│  /content/repo       │
 └─────────────────────┘     └──────────────────────┘
                                       │
-┌─────────────────────┐     ┌──────────────────────┐
-│ Google Drive        │────▶│  /content/train_local│
-│ MyDrive/train       │ tar │  (SSD cache)         │
-└─────────────────────┘ +pv └──────────────────────┘
+┌─────────────────────┐     ┌────────────────────────┐
+│ Google Drive        │────▶│  /content/datasets_local│
+│ MyDrive/AIA/datasets│ tar │  (SSD cache)            │
+└─────────────────────┘ +pv └────────────────────────┘
                                       │
                             ┌──────────────────────┐
                             │  Training (GPU)      │
@@ -137,7 +137,7 @@ See [`gps_training/README.md`](gps_training/README.md) for details.
                                        │
                             ┌──────────▼───────────┐
                             │ Google Drive          │
-                            │ MyDrive/runs          │
+                            │ MyDrive/AIA/runs      │
                             │ (persistent outputs)  │
                             └──────────────────────┘
 ```
