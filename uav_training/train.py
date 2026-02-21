@@ -17,7 +17,7 @@ import csv
 import shutil
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 

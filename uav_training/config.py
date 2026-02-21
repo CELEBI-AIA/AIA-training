@@ -82,27 +82,27 @@ def auto_detect_hardware() -> tuple:
     if vram >= 35:
         # ── A100 40GB / A6000 48GB ──
         tier = "A100-40GB"
-        model = "yolov8l.pt"
-        imgsz = 1280
-        batch = 16          # ~30-35GB VRAM with AMP
+        model = "yolov8s.pt"
+        imgsz = 640
+        batch = 64          # yolov8s@640 → ~8-10GB VRAM, max throughput
     elif vram >= 20:
         # ── A100 24GB / L4 24GB ──
         tier = "A100-24GB / L4"
-        model = "yolov8l.pt"
-        imgsz = 1280
-        batch = 8           # ~18-22GB VRAM with AMP
+        model = "yolov8s.pt"
+        imgsz = 640
+        batch = 64          # yolov8s@640 → ~8-10GB VRAM
     elif vram >= 14:
         # ── T4 16GB / V100 16GB ──
         tier = "T4-16GB / V100"
-        model = "yolov8m.pt"
+        model = "yolov8s.pt"
         imgsz = 640
-        batch = 32          # ~12-14GB VRAM with AMP
+        batch = 32          # yolov8s@640 → ~5-6GB VRAM
     elif vram >= 7:
         # ── Various 8GB GPUs ──
         tier = "8GB GPU"
         model = "yolov8s.pt"
         imgsz = 640
-        batch = 16          # ~5-6GB VRAM with AMP
+        batch = 16          # yolov8s@640 → ~3-4GB VRAM
     else:
         # ── Low VRAM / CPU ──
         tier = "Low VRAM"
@@ -113,11 +113,11 @@ def auto_detect_hardware() -> tuple:
     # Workers: cap at 8 (more can cause Colab dataloader issues)
     workers = min(cpus, 8)
 
-    # Multi-scale: only if enough VRAM headroom
-    multi_scale = vram >= 16
+    # Multi-scale OFF — variable sizes cause OOM with large batches
+    multi_scale = False
 
-    # Cache strategy: RAM cache since cloud has plenty
-    cache = "ram" if ram >= 20 else True
+    # Disk cache — RAM cache needs 127GB+ for this dataset, disk is fast enough on SSD
+    cache = True
 
     config_overrides = {
         "epochs": 100,
