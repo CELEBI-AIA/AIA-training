@@ -116,8 +116,10 @@ def auto_detect_hardware() -> tuple:
     # Multi-scale OFF — variable sizes cause OOM with large batches
     multi_scale = False
 
-    # Disk cache — RAM cache needs 127GB+ for this dataset, disk is fast enough on SSD
-    cache = True
+    # Cache OFF — Colab NVMe SSD is fast enough (read: ~800MB/s).
+    # RAM cache currently takes >30GB RAM which maxes out the A100 system RAM 
+    # when DataLoaders spin up, causing massive OS swapping and 2.7 it/s thrashing.
+    cache = False
 
     config_overrides = {
         "epochs": 100,

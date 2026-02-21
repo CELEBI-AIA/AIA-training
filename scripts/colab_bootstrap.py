@@ -280,15 +280,16 @@ except Exception as _e:
 # ═══════════════════════════════════════════════════════════════════════════
 _banner("6/8 — Starting training")
 
-# Search for the latest checkpoint in Drive runs
-def find_latest_checkpoint(runs_dir: str) -> str | None:
-    candidates = glob.glob(os.path.join(runs_dir, "**", "weights", "last.pt"), recursive=True)
-    if not candidates:
-        return None
-    candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-    return candidates[0]
+# Search for the latest checkpoint (Local SSD first, then Drive)
+def find_latest_checkpoint(*dirs) -> str | None:
+    for d in dirs:
+        candidates = glob.glob(os.path.join(d, "**", "weights", "last.pt"), recursive=True)
+        if candidates:
+            candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+            return candidates[0]
+    return None
 
-checkpoint = find_latest_checkpoint(DRIVE_RUNS)
+checkpoint = find_latest_checkpoint("/content/runs", DRIVE_RUNS)
 
 train_script_path = os.path.join(REPO_DIR, TRAIN_SCRIPT)
 if not os.path.isfile(train_script_path):
@@ -296,8 +297,8 @@ if not os.path.isfile(train_script_path):
         f"Training script not found at {train_script_path}."
     )
 
-# ── Prepare log file ──
-log_dir = os.path.join(DRIVE_UPLOAD, "logs")
+# ── Prepare log file (Local SSD for max speed) ──
+log_dir = "/content/logs"
 os.makedirs(log_dir, exist_ok=True)
 log_name = datetime.now().strftime("log_%Y-%m-%d_%H-%M.txt")
 log_path = os.path.join(log_dir, log_name)
@@ -348,9 +349,26 @@ else:
 print(f"  📝 Full log saved: {log_path}", flush=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 7. Post-Training Summary
+# 7. Post-Training Sync to Drive
 # ═══════════════════════════════════════════════════════════════════════════
-_banner("7/8 — Post-training summary")
+_banner("7/8 — Syncing outputs to Google Drive")
+
+# Sync logs
+drive_log_dir = os.path.join(DRIVE_UPLOAD, "logs")
+os.makedirs(drive_log_dir, exist_ok=True)
+print(f"  ☁️  Syncing logs to: {drive_log_dir}", flush=True)
+_run(f'rsync -a "{log_dir}/" "{drive_log_dir}/"', check=False)
+
+# Results are synced by train.py itself, but we can do a fallback sync here just in case
+runs_dir = "/content/runs"
+if os.path.exists(runs_dir):
+    print(f"  ☁️  Syncing runs to: {DRIVE_RUNS}", flush=True)
+    _run(f'rsync -a "{runs_dir}/" "{DRIVE_RUNS}/"', check=False)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 8. Post-Training Summary
+# ═══════════════════════════════════════════════════════════════════════════
+_banner("8/8 — Post-training summary")
 
 print(f"\n  📁 Training outputs: {DRIVE_RUNS}", flush=True)
 _run(f'du -sh "{DRIVE_RUNS}" 2>/dev/null | awk \'{{print "     Size: "$1}}\'', check=False)
@@ -375,12 +393,12 @@ if best_files:
         size_mb = os.path.getsize(bf) / (1024 * 1024)
         print(f"     → {os.path.basename(bf)} ({size_mb:.1f} MB)")
 
-# List log files
-log_files = sorted(glob.glob(os.path.join(log_dir, "log_*.txt")))
+# List log files from Drive
+log_files = sorted(glob.glob(os.path.join(drive_log_dir, "log_*.txt")))
 if log_files:
-    print(f"\n  📝 Training logs in {log_dir}:")
+    print(f"\n  📝 Training logs in {drive_log_dir}:")
     for lf in log_files[-5:]:  # Show last 5 logs
         size_kb = os.path.getsize(lf) / 1024
         print(f"     → {os.path.basename(lf)} ({size_kb:.0f} KB)")
 
-_banner("✅ Training complete — outputs saved to Google Drive")
+_banner("✅ Training complete — all outputs saved to Google Drive")

@@ -251,8 +251,9 @@ def build_dataset():
                                             
                                             if w > 0.001 and h > 0.001:
                                                 new_line = f"{target_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n"
-                                                temp_lines.append(new_line)
-                                                has_valid_cls = True
+                                                if new_line not in temp_lines:
+                                                    temp_lines.append(new_line)
+                                                    has_valid_cls = True
                                     except ValueError:
                                         continue
                             
