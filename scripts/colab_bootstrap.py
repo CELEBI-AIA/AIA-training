@@ -3,6 +3,8 @@
 # Paste this entire cell into Colab and run.
 ##############################################################################
 
+VERSION = "0.5.0"
+
 # ── Configuration ───────────────────────────────────────────────────────────
 REPO_URL       = "https://github.com/CELEBI-AIA/AIA-training.git"
 REPO_BRANCH    = "main"
@@ -27,6 +29,9 @@ def _run(cmd: str, *, check: bool = True, **kw):
 
 def _banner(msg: str):
     print(f"\n{'='*60}\n  {msg}\n{'='*60}", flush=True)
+
+print(f"\n🛰️  UAV Training Bootstrap v{VERSION}", flush=True)
+print(f"    Repo: {REPO_URL} ({REPO_BRANCH})\n", flush=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 1. Mount Google Drive
@@ -206,12 +211,16 @@ _run("nvidia-smi", check=False)
 
 # Quick torch probe for verification
 print("\n  📊 PyTorch GPU Probe:", flush=True)
-_run(f'{sys.executable} -c "'
-     'import torch; '
-     'print(f\"  CUDA available: {{torch.cuda.is_available()}}\"); '
-     'print(f\"  GPU: {{torch.cuda.get_device_name(0)}}\") if torch.cuda.is_available() else None; '
-     'print(f\"  VRAM: {{torch.cuda.get_device_properties(0).total_mem / 1024**3:.1f}} GB\") if torch.cuda.is_available() else None'
-     '"', check=False)
+try:
+    import torch as _t
+    print(f"  CUDA available: {_t.cuda.is_available()}", flush=True)
+    if _t.cuda.is_available():
+        _p = _t.cuda.get_device_properties(0)
+        print(f"  GPU: {_p.name}  |  VRAM: {_p.total_memory / 1024**3:.1f} GB", flush=True)
+    del _t, _p
+except Exception as _e:
+    print(f"  ⚠️ PyTorch probe failed: {_e}", flush=True)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 6. Launch Training (with live log tee)

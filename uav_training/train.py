@@ -16,6 +16,11 @@ import time
 import csv
 import shutil
 
+# Version — keep in sync with uav_training/__init__.py
+__version__ = "0.5.0"
+
+print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
+
 
 def kill_gpu_hogs():
     """Clear GPU memory before training."""
@@ -200,8 +205,8 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
         import torch
         if torch.cuda.is_available():
             gpu = torch.cuda.get_device_name(0)
-            vram_total = torch.cuda.get_device_properties(0).total_mem / (1024**3)
-            vram_free = (torch.cuda.get_device_properties(0).total_mem - torch.cuda.memory_allocated(0)) / (1024**3)
+            vram_total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            vram_free = (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / (1024**3)
             print(f"  GPU: {gpu}  |  VRAM: {vram_free:.1f}/{vram_total:.1f} GB free", flush=True)
     except Exception:
         pass
