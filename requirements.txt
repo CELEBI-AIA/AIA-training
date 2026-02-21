@@ -7,3 +7,4 @@ opencv-python-headless
 pandas
 numpy
 matplotlib
+psutil

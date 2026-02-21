@@ -1,5 +1,12 @@
 # CHANGELOGS
 
+## 0.0.04 - 2026-02-21
+- **Colab Auto Hardware Detection**: `uav_training/config.py` now auto-detects GPU/RAM/CPU on Colab and maximizes batch/workers/imgsz/model size.
+- **Dataset `.tar.gz` Support**: `scripts/colab_bootstrap.py` now extracts `datasets.tar.gz` from Drive using `pigz` (parallel decompression) with local SSD caching.
+- **Post-Training Export**: `uav_training/train.py` renames `best.pt` with mAP50 and mAP50-95 scores appended and uploads to `Drive/AIA/`.
+- **GitHub URL Updated**: All references now point to `CELEBI-AIA/AIA-training`.
+- **Notebook Synced**: `notebooks/train_colab.ipynb` updated with 7-step auto-tuned pipeline.
+
 ## 0.0.01 - 2026-02-21
 - Fixed resume robustness in `gps_training/train.py` to avoid KeyError when `scheduler_state_dict` is missing in older/incomplete checkpoints.
 - Added guarded loading for both optimizer and scheduler states with warning-based fallback.

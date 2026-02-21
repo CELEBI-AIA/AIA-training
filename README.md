@@ -54,17 +54,16 @@ A YOLO-based UAV detection and GPS-based position tracking training pipeline des
 ### Google Colab (Önerilen / Recommended)
 
 1. Open [`notebooks/train_colab.ipynb`](notebooks/train_colab.ipynb) in Colab
-2. Set `REPO_URL` to your GitHub repo URL
-3. Ensure your dataset is at `Google Drive > MyDrive > AIA > datasets`
-4. Run the cell — it handles everything automatically:
-   - Drive mount → Repo clone → Dependency install → Dataset streaming → Training
+2. Ensure your dataset is at `Google Drive > MyDrive > AIA > datasets.tar.gz`
+3. Run the cell — it handles everything automatically:
+   - Drive mount → Repo clone → Dependency install → Dataset extraction (pigz) → Auto hardware detection → Training → best.pt rename & upload
 
 ### Local Setup
 
 ```bash
 # Clone
-git clone https://github.com/YOUR_USER/YOUR_REPO.git
-cd YOUR_REPO
+git clone https://github.com/CELEBI-AIA/AIA-training.git
+cd AIA-training
 
 # Install
 pip install -r requirements.txt
@@ -95,11 +94,19 @@ YOLO (Ultralytics) tabanlı nesne tespit eğitimi.
 5. `visualize_dataset.py` — Visual verification with bounding boxes
 
 **Key Config (`uav_training/config.py`):**
-- Model: `yolov8s.pt`
-- Image size: 640
+- Model: `yolov8s.pt` (auto-upgraded on Colab based on VRAM)
+- Image size: 640 (auto 1280 on VRAM ≥ 24GB)
+- Batch: autobatch on Colab (max GPU utilization)
 - AMP: enabled
 - RAM cache: enabled
 - Smart sampling: 100% humans, 10% vehicles (for megaset)
+
+**Auto-Tuning (Colab):**
+When running on Colab, `config.py` automatically detects GPU/RAM/CPU and overrides:
+- Model size (yolov8s → yolov8m → yolov8l)
+- Batch size (autobatch)
+- Image size, workers, multi-scale
+- After training: `best.pt` renamed with mAP scores and uploaded to Drive
 
 See [`uav_training/README.md`](uav_training/README.md) for details.
 
@@ -126,26 +133,33 @@ See [`gps_training/README.md`](gps_training/README.md) for details.
 │   GitHub (Code)     │────▶│  /content/repo       │
 └─────────────────────┘     └──────────────────────┘
                                       │
-┌─────────────────────┐     ┌────────────────────────┐
-│ Google Drive        │────▶│  /content/datasets_local│
-│ MyDrive/AIA/datasets│ tar │  (SSD cache)            │
-└─────────────────────┘ +pv └────────────────────────┘
-                                      │
-                            ┌──────────────────────┐
-                            │  Training (GPU)      │
-                            └──────────┬───────────┘
-                                       │
-                            ┌──────────▼───────────┐
-                            │ Google Drive          │
-                            │ MyDrive/AIA/runs      │
-                            │ (persistent outputs)  │
-                            └──────────────────────┘
+┌──────────────────────────┐  ┌────────────────────────┐
+│ Google Drive             │─▶│  /content/datasets_local│
+│ MyDrive/AIA/datasets.tar │  │  (SSD cache)            │
+│ .gz (pigz + pv)          │  └────────────────────────┘
+└──────────────────────────┘            │
+                            ┌───────────────────────┐
+                            │  Auto Hardware Detect  │
+                            │  → max batch/workers   │
+                            └───────────┬───────────┘
+                                        │
+                            ┌───────────▼───────────┐
+                            │  Training (GPU)       │
+                            └───────────┬───────────┘
+                                        │
+                   ┌────────────────────▼────────────────────┐
+                   │ Google Drive                            │
+                   │ MyDrive/AIA/runs (training outputs)     │
+                   │ MyDrive/AIA/best_mAP50-X_mAP50-95-Y.pt │
+                   └────────────────────────────────────────┘
 ```
 
 - **Code**: GitHub → cloned fresh each session
-- **Dataset**: Drive → streamed to local SSD via `tar + pv`
+- **Dataset**: Drive `.tar.gz` → extracted to local SSD via `pigz + pv`
+- **Hardware**: Auto-detected → model/batch/imgsz auto-tuned
 - **Outputs**: Saved directly to Drive (survives runtime restarts)
 - **Resume**: Auto-detects `last.pt` checkpoint in Drive
+- **Export**: `best.pt` renamed with mAP scores → uploaded to `MyDrive/AIA/`
 
 ---
 
