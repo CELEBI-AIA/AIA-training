@@ -3,7 +3,7 @@
 # Paste this entire cell into Colab and run.
 ##############################################################################
 
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 # ── Configuration ───────────────────────────────────────────────────────────
 REPO_URL       = "https://github.com/CELEBI-AIA/AIA-training.git"
@@ -251,6 +251,17 @@ _banner("5/8 — Auto-detecting hardware & configuring")
 # Training itself runs on local SSD (/content/runs/) for max I/O speed
 os.environ["UAV_PROJECT_DIR"] = DRIVE_RUNS
 os.environ["DRIVE_UPLOAD_DIR"] = DRIVE_UPLOAD
+
+# --- CRITICAL TWEAK FOR A100 / DATALOADER BOTTLENECKS ---
+# Prevent OpenCV and OpenMP from spawning threads inside DataLoader multiprocessing workers.
+# 8 workers * 12 default threads = 96 threads fighting for 12 CPU cores = 1.3 it/s thrashing.
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["OPENCV_FOR_THREADS_NUM"] = "1"
+# ---------------------------------------------------------
 
 # Point YOLO's runs dir to local SSD (NOT Drive — Drive FUSE stalls GPU)
 _run('yolo settings runs_dir="/content/runs"', check=False)
