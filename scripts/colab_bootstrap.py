@@ -268,8 +268,10 @@ with open(log_path, 'wb') as lf:
         data = os.read(fd, 8192)  # os.read returns partial reads → real-time
         if not data:
             break
-        sys.stdout.buffer.write(data)
-        sys.stdout.buffer.flush()
+        # Colab's sys.stdout is IPython OutStream (no .buffer attribute)
+        # Decode bytes → text and use .write() which works everywhere
+        sys.stdout.write(data.decode('utf-8', errors='replace'))
+        sys.stdout.flush()
         lf.write(data)
         lf.flush()
 
@@ -291,15 +293,25 @@ _banner("7/7 — Post-training summary")
 print(f"\n  📁 Training outputs: {DRIVE_RUNS}", flush=True)
 _run(f'du -sh "{DRIVE_RUNS}" 2>/dev/null | awk \'{{print "     Size: "$1}}\'', check=False)
 
-# List any best_*.pt files in upload dir
+# List exported model folders
+models_dir = os.path.join(DRIVE_UPLOAD, "models")
+if os.path.isdir(models_dir):
+    model_folders = sorted([d for d in os.listdir(models_dir)
+                            if os.path.isdir(os.path.join(models_dir, d))])
+    if model_folders:
+        print(f"\n  🏆 Exported models in {models_dir}:")
+        for mf in model_folders[-5:]:  # Show last 5
+            mf_path = os.path.join(models_dir, mf)
+            n_files = len(os.listdir(mf_path))
+            print(f"     📂 {mf} ({n_files} files)")
+
+# List any best_*.pt files in upload dir (quick access)
 best_files = glob.glob(os.path.join(DRIVE_UPLOAD, "best_*.pt"))
 if best_files:
-    print(f"\n  🏆 Uploaded models in {DRIVE_UPLOAD}:")
+    print(f"\n  🎯 Quick access models in {DRIVE_UPLOAD}:")
     for bf in sorted(best_files):
         size_mb = os.path.getsize(bf) / (1024 * 1024)
         print(f"     → {os.path.basename(bf)} ({size_mb:.1f} MB)")
-else:
-    print(f"\n  ⚠️ No renamed best.pt found in {DRIVE_UPLOAD}")
 
 # List log files
 log_files = sorted(glob.glob(os.path.join(log_dir, "log_*.txt")))

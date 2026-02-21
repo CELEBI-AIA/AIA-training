@@ -11,7 +11,6 @@ except ImportError:
 
 from config import ARTIFACTS_DIR, DATASET_DIR, TRAIN_CONFIG
 from build_dataset import build_dataset
-import subprocess
 import os
 import time
 import csv
@@ -66,9 +65,11 @@ def get_best_metrics(results_dir: Path) -> dict:
 def rename_and_export_best(results_dir: Path, drive_dest: str | None = None) -> Path | None:
     """
     Rename best.pt with mAP scores appended to filename.
-    Optionally copy to Google Drive.
+    Export to Drive/models/<unique_folder>/ with all analysis files.
     Returns the renamed path, or None on failure.
     """
+    from datetime import datetime
+
     best_pt = results_dir / "weights" / "best.pt"
     if not best_pt.exists():
         print(f"⚠️ best.pt not found at {best_pt}", flush=True)
@@ -86,21 +87,62 @@ def rename_and_export_best(results_dir: Path, drive_dest: str | None = None) -> 
     shutil.copy2(best_pt, renamed_path)
     print(f"\n✅ Renamed: {best_pt.name} → {new_name}", flush=True)
 
-    # Upload to Drive if destination specified
-    if drive_dest:
-        os.makedirs(drive_dest, exist_ok=True)
-        drive_path = Path(drive_dest) / new_name
-        shutil.copy2(renamed_path, drive_path)
-        print(f"☁️  Uploaded to Drive: {drive_path}", flush=True)
+    # All analysis files to export
+    EXPORT_FILES = [
+        # Results
+        "results.csv", "results.png",
+        # Confusion matrices
+        "confusion_matrix.png", "confusion_matrix_normalized.png",
+        # Curves
+        "PR_curve.png", "F1_curve.png", "R_curve.png", "P_curve.png",
+        # Labels
+        "labels.jpg", "labels_correlogram.jpg",
+        # Training args
+        "args.yaml",
+        # Batch visualizations
+        "train_batch0.jpg", "train_batch1.jpg", "train_batch2.jpg",
+        "val_batch0_labels.jpg", "val_batch0_pred.jpg",
+        "val_batch1_labels.jpg", "val_batch1_pred.jpg",
+        "val_batch2_labels.jpg", "val_batch2_pred.jpg",
+    ]
 
-        # Also copy results.csv and results.png
-        for extra in ["results.csv", "results.png", "confusion_matrix.png",
-                       "confusion_matrix_normalized.png", "PR_curve.png",
-                       "F1_curve.png"]:
-            src = results_dir / extra
+    if drive_dest:
+        # ── Create unique model folder under Drive/models/ ──
+        # Format: 2026-02-21_yolov8l_mAP50-0.853_mAP50-95-0.620
+        model_name = TRAIN_CONFIG.get("model", "yolo").replace(".pt", "")
+        date_str = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        folder_name = f"{date_str}_{model_name}_mAP50-{map50:.3f}_mAP50-95-{map50_95:.3f}"
+
+        models_dir = os.path.join(drive_dest, "models", folder_name)
+        os.makedirs(models_dir, exist_ok=True)
+
+        print(f"\n☁️  Exporting to: {models_dir}", flush=True)
+
+        # Copy renamed best.pt
+        shutil.copy2(renamed_path, os.path.join(models_dir, new_name))
+        print(f"  ✓ {new_name}", flush=True)
+
+        # Copy last.pt too
+        last_pt = results_dir / "weights" / "last.pt"
+        if last_pt.exists():
+            shutil.copy2(last_pt, os.path.join(models_dir, "last.pt"))
+            print(f"  ✓ last.pt", flush=True)
+
+        # Copy all analysis files
+        copied = 0
+        for fname in EXPORT_FILES:
+            src = results_dir / fname
             if src.exists():
-                shutil.copy2(src, Path(drive_dest) / extra)
-                print(f"☁️  Uploaded: {extra}", flush=True)
+                shutil.copy2(src, os.path.join(models_dir, fname))
+                copied += 1
+                print(f"  ✓ {fname}", flush=True)
+
+        print(f"\n  📊 Exported {copied + 2} files to {models_dir}", flush=True)
+
+        # Also copy best.pt to flat DRIVE_UPLOAD for quick access
+        os.makedirs(drive_dest, exist_ok=True)
+        shutil.copy2(renamed_path, os.path.join(drive_dest, new_name))
+        print(f"  ☁️  Quick access copy: {os.path.join(drive_dest, new_name)}", flush=True)
 
     return renamed_path
 
