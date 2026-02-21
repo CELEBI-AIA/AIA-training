@@ -101,10 +101,24 @@ def train(resume=False):
     criterion = nn.MSELoss()
     scaler = torch.cuda.amp.GradScaler(enabled=TRAIN_CONFIG["mixed_precision"])
 
-    # Load optimizer state if resuming
-    if resume and checkpoint is not None and 'optimizer_state_dict' in checkpoint:
-         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+    # Load optimizer/scheduler state if resuming.
+    # Older checkpoints may not contain every key.
+    if resume and checkpoint is not None:
+        if "optimizer_state_dict" in checkpoint:
+            try:
+                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            except Exception as e:
+                print(f"Warning: could not load optimizer state: {e}")
+        else:
+            print("Warning: checkpoint missing optimizer_state_dict; continuing without it.")
+
+        if "scheduler_state_dict" in checkpoint:
+            try:
+                scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+            except Exception as e:
+                print(f"Warning: could not load scheduler state: {e}")
+        else:
+            print("Warning: checkpoint missing scheduler_state_dict; continuing without it.")
 
     # Training Loop
     best_val_loss = float("inf")
