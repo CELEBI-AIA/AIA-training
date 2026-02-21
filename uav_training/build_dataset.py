@@ -6,6 +6,8 @@ from tqdm import tqdm
 import yaml
 import json
 import random
+import atexit
+import fcntl
 
 # Use configuration from config.py if needed, or define constants here for standalone utility
 from config import PROJECT_ROOT, DATASET_DIR, ARTIFACTS_DIR
@@ -72,7 +74,29 @@ MAPPINGS = {
 
 DATASETS_DIR = PROJECT_ROOT / "datasets" / "TRAIN"
 
+
+def _acquire_file_lock(lock_path: Path) -> int:
+    os.makedirs(lock_path.parent, exist_ok=True)
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
+
+
+def _release_file_lock(fd: int, lock_path: Path) -> None:
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+    try:
+        os.remove(lock_path)
+    except OSError:
+        pass
+
 def build_dataset():
+    lock_path = ARTIFACTS_DIR / ".build_dataset.lock"
+    lock_fd = _acquire_file_lock(lock_path)
+    atexit.register(_release_file_lock, lock_fd, lock_path)
+
     if DATASET_DIR.exists():
         print(f"Removing existing {DATASET_DIR}...")
         shutil.rmtree(DATASET_DIR)

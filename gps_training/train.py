@@ -16,10 +16,35 @@ torch.backends.cudnn.benchmark = True
 
 import argparse
 import sys
+import os
+import atexit
+import fcntl
 
 # ... imports ...
 
+
+def _acquire_file_lock(lock_path: Path) -> int:
+    os.makedirs(lock_path.parent, exist_ok=True)
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
+
+
+def _release_file_lock(fd: int, lock_path: Path) -> None:
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+    try:
+        os.remove(lock_path)
+    except OSError:
+        pass
+
 def train(resume=False):
+    lock_path = ARTIFACTS_DIR / ".gps_train.lock"
+    lock_fd = _acquire_file_lock(lock_path)
+    atexit.register(_release_file_lock, lock_fd, lock_path)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
