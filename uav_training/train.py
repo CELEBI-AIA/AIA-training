@@ -34,7 +34,7 @@ def get_best_metrics(results_dir: Path) -> dict:
     """
     results_csv = results_dir / "results.csv"
     if not results_csv.exists():
-        print(f"⚠️ results.csv not found at {results_csv}")
+        print(f"⚠️ results.csv not found at {results_csv}", flush=True)
         return {"mAP50": 0.0, "mAP50-95": 0.0}
 
     best_map50 = 0.0
@@ -58,7 +58,7 @@ def get_best_metrics(results_dir: Path) -> dict:
                     elif "map50" in k:
                         best_map50 = max(best_map50, v)
     except Exception as e:
-        print(f"⚠️ Error parsing results.csv: {e}")
+        print(f"⚠️ Error parsing results.csv: {e}", flush=True)
 
     return {"mAP50": best_map50, "mAP50-95": best_map50_95}
 
@@ -71,7 +71,7 @@ def rename_and_export_best(results_dir: Path, drive_dest: str | None = None) -> 
     """
     best_pt = results_dir / "weights" / "best.pt"
     if not best_pt.exists():
-        print(f"⚠️ best.pt not found at {best_pt}")
+        print(f"⚠️ best.pt not found at {best_pt}", flush=True)
         return None
 
     metrics = get_best_metrics(results_dir)
@@ -84,14 +84,14 @@ def rename_and_export_best(results_dir: Path, drive_dest: str | None = None) -> 
 
     # Rename locally
     shutil.copy2(best_pt, renamed_path)
-    print(f"\n✅ Renamed: {best_pt.name} → {new_name}")
+    print(f"\n✅ Renamed: {best_pt.name} → {new_name}", flush=True)
 
     # Upload to Drive if destination specified
     if drive_dest:
         os.makedirs(drive_dest, exist_ok=True)
         drive_path = Path(drive_dest) / new_name
         shutil.copy2(renamed_path, drive_path)
-        print(f"☁️  Uploaded to Drive: {drive_path}")
+        print(f"☁️  Uploaded to Drive: {drive_path}", flush=True)
 
         # Also copy results.csv and results.png
         for extra in ["results.csv", "results.png", "confusion_matrix.png",
@@ -100,9 +100,19 @@ def rename_and_export_best(results_dir: Path, drive_dest: str | None = None) -> 
             src = results_dir / extra
             if src.exists():
                 shutil.copy2(src, Path(drive_dest) / extra)
-                print(f"☁️  Uploaded: {extra}")
+                print(f"☁️  Uploaded: {extra}", flush=True)
 
     return renamed_path
+
+
+def print_training_config(train_args: dict):
+    """Print the full training configuration so it's visible in logs."""
+    print(f"\n{'─'*60}", flush=True)
+    print(f"  📋 TRAINING CONFIGURATION")
+    print(f"{'─'*60}")
+    for k, v in train_args.items():
+        print(f"  {k:<20}: {v}")
+    print(f"{'─'*60}\n", flush=True)
 
 
 def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
@@ -124,24 +134,35 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
         # Auto-detect latest checkpoint
         project_results = TRAIN_CONFIG['project']
         if not project_results.exists():
-             print(f"Error: Project directory {project_results} not found.")
+             print(f"Error: Project directory {project_results} not found.", flush=True)
              sys.exit(1)
 
         # Find all last.pt files in the project directory
         checkpoints = list(project_results.rglob("last.pt"))
         if not checkpoints:
-            print(f"Error: No 'last.pt' found in {project_results}")
+            print(f"Error: No 'last.pt' found in {project_results}", flush=True)
             sys.exit(1)
 
         # Sort by modification time (newest first)
         latest_ckpt = max(checkpoints, key=lambda p: p.stat().st_mtime)
-        print(f"Found latest checkpoint: {latest_ckpt}")
+        print(f"Found latest checkpoint: {latest_ckpt}", flush=True)
 
         model_path = latest_ckpt
     else:
-        print(f"Starting training for {model_path} on UAV dataset...", flush=True)
+        print(f"🚀 Starting training: {model_path} on UAV dataset", flush=True)
 
-    print(f"Epochs: {epochs}, Batch: {batch}, Device: {device}", flush=True)
+    print(f"  Epochs: {epochs}  |  Batch: {batch}  |  Device: {device}", flush=True)
+
+    # GPU info before training
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu = torch.cuda.get_device_name(0)
+            vram_total = torch.cuda.get_device_properties(0).total_mem / (1024**3)
+            vram_free = (torch.cuda.get_device_properties(0).total_mem - torch.cuda.memory_allocated(0)) / (1024**3)
+            print(f"  GPU: {gpu}  |  VRAM: {vram_free:.1f}/{vram_total:.1f} GB free", flush=True)
+    except Exception:
+        pass
 
     # Load a model
     model = YOLO(model_path)
@@ -150,7 +171,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
     yaml_path = DATASET_DIR / "dataset.yaml"
 
     if not yaml_path.exists():
-        print(f"Error: Dataset config not found at {yaml_path}")
+        print(f"Error: Dataset config not found at {yaml_path}", flush=True)
         print("Please run build_dataset.py first.")
         sys.exit(1)
 
@@ -179,15 +200,31 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
             if p in TRAIN_CONFIG:
                 train_args[p] = TRAIN_CONFIG[p]
 
+        # Print full config so it appears in logs
+        print_training_config(train_args)
+
         results = model.train(**train_args)
 
-        print("\nTraining completed.", flush=True)
+        print("\n✅ Training completed.", flush=True)
+
+        # Print GPU usage after training
+        try:
+            import torch
+            if torch.cuda.is_available():
+                vram_used = torch.cuda.max_memory_allocated(0) / (1024**3)
+                print(f"  Peak GPU VRAM used: {vram_used:.1f} GB", flush=True)
+        except Exception:
+            pass
 
         # Validation
-        print("\nRunning validation...", flush=True)
+        print("\n🔍 Running validation...", flush=True)
         metrics = model.val()
-        print(f"mAP50: {metrics.box.map50}", flush=True)
-        print(f"mAP50-95: {metrics.box.map}", flush=True)
+        print(f"\n{'='*60}", flush=True)
+        print(f"  📊 FINAL RESULTS")
+        print(f"{'='*60}")
+        print(f"  mAP50     : {metrics.box.map50:.4f}")
+        print(f"  mAP50-95  : {metrics.box.map:.4f}")
+        print(f"{'='*60}\n", flush=True)
 
         # Determine results directory
         results_dir = Path(str(TRAIN_CONFIG['project'])) / TRAIN_CONFIG['name']
@@ -200,11 +237,13 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
             "mAP50": metrics.box.map50,
             "mAP50-95": metrics.box.map,
             "results_dir": str(results_dir),
-            "best_pt": str(renamed) if renamed else None, 
+            "best_pt": str(renamed) if renamed else None,
         }
 
     except Exception as e:
-        print(f"An error occurred during training: {e}")
+        print(f"\n❌ An error occurred during training: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 if __name__ == "__main__":

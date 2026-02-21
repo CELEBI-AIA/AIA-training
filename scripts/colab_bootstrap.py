@@ -14,17 +14,16 @@ TRAIN_SCRIPT   = "uav_training/train.py"
 # ────────────────────────────────────────────────────────────────────────────
 
 import subprocess, sys, os, glob, time
+from datetime import datetime
 
-# ── Force unbuffered output so ALL print/log lines appear in Colab instantly ──
+# ── Force unbuffered output → ALL print/log lines appear in Colab INSTANTLY ──
 os.environ["PYTHONUNBUFFERED"] = "1"
 
 def _run(cmd: str, *, check: bool = True, **kw):
     """Run a shell command with real-time output streaming to Colab cell."""
-    # Flush Python's own output first so banners/prints appear BEFORE subprocess
     sys.stdout.flush()
     sys.stderr.flush()
-    r = subprocess.run(cmd, shell=True, check=check, **kw)
-    return r
+    return subprocess.run(cmd, shell=True, check=check, **kw)
 
 def _banner(msg: str):
     print(f"\n{'='*60}\n  {msg}\n{'='*60}", flush=True)
@@ -44,9 +43,13 @@ if not os.path.isfile(DRIVE_DATASET):
 
 os.makedirs(DRIVE_RUNS, exist_ok=True)
 os.makedirs(DRIVE_UPLOAD, exist_ok=True)
-print(f"  ✓ Drive mounted — dataset archive found at {DRIVE_DATASET}", flush=True)
-print(f"  ✓ Runs directory ready at {DRIVE_RUNS}")
-print(f"  ✓ Upload directory ready at {DRIVE_UPLOAD}")
+print(f"  ✓ Drive mounted", flush=True)
+print(f"  ✓ Dataset archive: {DRIVE_DATASET}")
+# Print archive size
+tar_size = os.path.getsize(DRIVE_DATASET) / (1024**3)
+print(f"  ✓ Archive size: {tar_size:.2f} GB")
+print(f"  ✓ Runs dir: {DRIVE_RUNS}")
+print(f"  ✓ Upload dir: {DRIVE_UPLOAD}")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 2. Clone or Pull Repository
@@ -62,26 +65,31 @@ else:
     print(f"  ↓ Cloning {REPO_URL} …", flush=True)
     _run(f"git clone --depth 1 -b {REPO_BRANCH} {REPO_URL} {REPO_DIR}")
 
-print("  ✓ Repo ready")
+# Show repo info
+_run(f"git -C {REPO_DIR} log --oneline -1")
+print("  ✓ Repo ready", flush=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 3. Install Requirements
 # ═══════════════════════════════════════════════════════════════════════════
 _banner("3/7 — Installing dependencies")
 
-# Show pip output in real-time (removed -q flag for visibility)
 req_file = os.path.join(REPO_DIR, "requirements.txt")
 if os.path.isfile(req_file):
     print("  📦 Installing requirements.txt …", flush=True)
     _run(f"{sys.executable} -m pip install --progress-bar on -r {req_file}")
-    print("  ✓ requirements.txt installed")
 else:
-    print("  ⚠ No requirements.txt found — skipping")
+    print("  ⚠ No requirements.txt found")
 
 # Ensure ultralytics + psutil are available
 print("  📦 Verifying ultralytics & psutil …", flush=True)
 _run(f"{sys.executable} -m pip install --progress-bar on ultralytics psutil", check=False)
-print("  ✓ ultralytics & psutil verified")
+
+# Print key package versions
+print("\n  📊 Package versions:", flush=True)
+_run(f'{sys.executable} -c "import ultralytics; print(f\'     ultralytics: {{ultralytics.__version__}}\')"', check=False)
+_run(f'{sys.executable} -c "import torch; print(f\'     torch: {{torch.__version__}}, CUDA: {{torch.version.cuda}}\')"', check=False)
+print("  ✓ Dependencies installed", flush=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 4. Dataset Extraction (Drive .tar.gz → Local SSD Cache)
@@ -96,29 +104,31 @@ _run("apt-get update -qq && apt-get install -y pigz mbuffer 2>&1 | tail -3", che
 
 # Marker = extraction fully completed previously
 CACHE_MARKER = os.path.join(LOCAL_CACHE, ".done")
-
-# Get CPU count for pigz thread tuning
 NCPU = os.cpu_count() or 2
-
-# Check if mbuffer is actually available
 HAS_MBUFFER = os.system("which mbuffer >/dev/null 2>&1") == 0
+
+# Smart cache detection:
+# 1. If .done marker exists → instant skip
+# 2. If no marker but directory has >5000 files → treat as complete (user put data there manually)
+# 3. If partial (100-5000 files) → incremental extraction
+# 4. If empty → full speed extraction
+
+existing = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
 
 t0 = time.time()
 
 if os.path.isfile(CACHE_MARKER):
-    # ═══ TIER 1: Fully cached — instant skip (0 seconds) ═══
-    existing = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
+    # ═══ TIER 1: Fully cached — instant skip ═══
     print(f"  ⚡ Cache complete ({existing} files) — skipping extraction entirely", flush=True)
 
-else:
-    # Count existing files
-    existing = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
+elif existing > 5000:
+    # ═══ TIER 1b: No marker but lots of files — assume complete, create marker ═══
+    print(f"  ⚡ Dataset already in local cache ({existing} files) — skipping extraction", flush=True)
+    with open(CACHE_MARKER, 'w') as f:
+        f.write("1")
 
+else:
     # Common tar flags for maximum speed:
-    #   --no-same-owner        → skip chown() per file (saves 1 syscall/file)
-    #   --no-same-permissions  → skip chmod() per file (saves 1 syscall/file)
-    #   -b 512                 → 256KB read blocks (fewer read syscalls)
-    #   For 100K+ tiny files these syscall savings add up to minutes
     TAR_FAST = "--no-same-owner --no-same-permissions -b 512"
 
     if existing > 100:
@@ -135,13 +145,6 @@ else:
         _run(extract_cmd)
     else:
         # ═══ TIER 3: Fresh extraction — maximum speed pipeline ═══
-        # Pipeline: Drive → mbuffer(64MB) → pigz(all cores) → tar(fast flags)
-        #
-        # mbuffer smooths Drive's bursty network I/O with a 64MB RAM buffer
-        # so pigz never stalls waiting for data. This alone can save 20-30%.
-        #
-        # pigz -p N uses all N cores for parallel decompression.
-        # tar with fast flags skips per-file chown/chmod syscalls.
         if HAS_MBUFFER:
             print(f"  🚀 Max-speed extraction → {LOCAL_CACHE}", flush=True)
             print(f"     Pipeline: Drive → mbuffer(64MB) → pigz({NCPU} cores) → tar(fast)")
@@ -154,7 +157,6 @@ else:
                 f'--checkpoint-action=echo="  %u dosya çıkarıldı…"'
             )
         else:
-            # Fallback: pigz without mbuffer (still fast)
             print(f"  🚀 Fast extraction → {LOCAL_CACHE} (pigz {NCPU} cores)", flush=True)
             extract_cmd = (
                 f'pigz -d -c -p {NCPU} "{DRIVE_DATASET}" '
@@ -170,8 +172,6 @@ else:
         f.write("1")
 
 elapsed = time.time() - t0
-
-# Quick count after extraction
 final_count = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
 print(f"\n  ✓ Done in {elapsed:.1f}s — {final_count} files ready", flush=True)
 
@@ -197,21 +197,29 @@ os.environ["UAV_PROJECT_DIR"] = DRIVE_RUNS
 os.environ["DRIVE_UPLOAD_DIR"] = DRIVE_UPLOAD
 
 _run(f'yolo settings runs_dir="{DRIVE_RUNS}"', check=False)
-print(f"  ✓ UAV_PROJECT_DIR → {DRIVE_RUNS}")
+print(f"  ✓ UAV_PROJECT_DIR → {DRIVE_RUNS}", flush=True)
 print(f"  ✓ DRIVE_UPLOAD_DIR → {DRIVE_UPLOAD}")
 
-# Print GPU info (visible in Colab)
-print("\n  📊 GPU Info:", flush=True)
-_run("nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv,noheader", check=False)
+# Full nvidia-smi output (visible in Colab)
+print("\n  📊 GPU Status:", flush=True)
+_run("nvidia-smi", check=False)
+
+# Quick torch probe for verification
+print("\n  📊 PyTorch GPU Probe:", flush=True)
+_run(f'{sys.executable} -c "'
+     'import torch; '
+     'print(f\"  CUDA available: {{torch.cuda.is_available()}}\"); '
+     'print(f\"  GPU: {{torch.cuda.get_device_name(0)}}\") if torch.cuda.is_available() else None; '
+     'print(f\"  VRAM: {{torch.cuda.get_device_properties(0).total_mem / 1024**3:.1f}} GB\") if torch.cuda.is_available() else None'
+     '"', check=False)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 6. Launch Training (with automatic resume)
+# 6. Launch Training (with live log tee)
 # ═══════════════════════════════════════════════════════════════════════════
 _banner("6/7 — Starting training")
 
 # Search for the latest checkpoint in Drive runs
 def find_latest_checkpoint(runs_dir: str) -> str | None:
-    """Walk the runs directory and return the most recent last.pt by mtime."""
     candidates = glob.glob(os.path.join(runs_dir, "**", "weights", "last.pt"), recursive=True)
     if not candidates:
         return None
@@ -223,9 +231,14 @@ checkpoint = find_latest_checkpoint(DRIVE_RUNS)
 train_script_path = os.path.join(REPO_DIR, TRAIN_SCRIPT)
 if not os.path.isfile(train_script_path):
     raise FileNotFoundError(
-        f"Training script not found at {train_script_path}. "
-        f"Check TRAIN_SCRIPT config (currently: '{TRAIN_SCRIPT}')."
+        f"Training script not found at {train_script_path}."
     )
+
+# ── Prepare log file ──
+log_dir = os.path.join(DRIVE_UPLOAD, "logs")
+os.makedirs(log_dir, exist_ok=True)
+log_name = datetime.now().strftime("log_%Y-%m-%d_%H-%M.txt")
+log_path = os.path.join(log_dir, log_name)
 
 if checkpoint:
     print(f"  🔄 Resuming from checkpoint: {checkpoint}", flush=True)
@@ -234,22 +247,49 @@ else:
     print("  🆕 No checkpoint found — starting fresh training", flush=True)
     train_cmd = f'{sys.executable} -u "{train_script_path}"'
 
-print(f"  ▶ Command: {train_cmd}\n")
-print("─" * 60, flush=True)
+print(f"  ▶ Command: {train_cmd}", flush=True)
+print(f"  📝 Live log: {log_path}", flush=True)
+print(f"\n{'─'*60}", flush=True)
 
 os.chdir(REPO_DIR)
-_run(train_cmd)
+
+# ── Real-time output forwarding with tee to log file ──
+# Uses subprocess.Popen + os.read for TRUE real-time output in Colab.
+# Every byte from train.py appears instantly in the cell AND in the log file.
+proc = subprocess.Popen(
+    train_cmd, shell=True,
+    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    env={**os.environ, "PYTHONUNBUFFERED": "1"}
+)
+
+with open(log_path, 'wb') as lf:
+    fd = proc.stdout.fileno()
+    while True:
+        data = os.read(fd, 8192)  # os.read returns partial reads → real-time
+        if not data:
+            break
+        sys.stdout.buffer.write(data)
+        sys.stdout.buffer.flush()
+        lf.write(data)
+        lf.flush()
+
+exit_code = proc.wait()
+print(f"\n{'─'*60}", flush=True)
+
+if exit_code != 0:
+    print(f"  ❌ Training exited with code {exit_code}", flush=True)
+else:
+    print(f"  ✅ Training completed successfully", flush=True)
+
+print(f"  📝 Full log saved: {log_path}", flush=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 7. Post-Training Summary
 # ═══════════════════════════════════════════════════════════════════════════
 _banner("7/7 — Post-training summary")
 
-# The train.py script handles best.pt renaming and Drive upload automatically
-# via DRIVE_UPLOAD_DIR environment variable.
-
 print(f"\n  📁 Training outputs: {DRIVE_RUNS}", flush=True)
-_run(f'du -sh "{DRIVE_RUNS}" | awk \'{{print "     Size: "$1}}\'')
+_run(f'du -sh "{DRIVE_RUNS}" 2>/dev/null | awk \'{{print "     Size: "$1}}\'', check=False)
 
 # List any best_*.pt files in upload dir
 best_files = glob.glob(os.path.join(DRIVE_UPLOAD, "best_*.pt"))
@@ -260,5 +300,13 @@ if best_files:
         print(f"     → {os.path.basename(bf)} ({size_mb:.1f} MB)")
 else:
     print(f"\n  ⚠️ No renamed best.pt found in {DRIVE_UPLOAD}")
+
+# List log files
+log_files = sorted(glob.glob(os.path.join(log_dir, "log_*.txt")))
+if log_files:
+    print(f"\n  📝 Training logs in {log_dir}:")
+    for lf in log_files[-5:]:  # Show last 5 logs
+        size_kb = os.path.getsize(lf) / 1024
+        print(f"     → {os.path.basename(lf)} ({size_kb:.0f} KB)")
 
 _banner("✅ Training complete — outputs saved to Google Drive")
