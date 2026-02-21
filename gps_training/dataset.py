@@ -5,6 +5,8 @@ import numpy as np
 import cv2
 import json
 import os
+import atexit
+from collections import OrderedDict
 from pathlib import Path
 from config import DATASETS_ROOT, TRAIN_CONFIG
 
@@ -12,6 +14,10 @@ class GPSDataset(Dataset):
     def __init__(self, audit_report_path, split="train", val_split=0.1):
         self.img_size = TRAIN_CONFIG["img_size"]
         self.samples = []
+        self._video_caps = {}
+        self._frame_cache = OrderedDict()
+        self._frame_cache_size = int(TRAIN_CONFIG.get("frame_cache_size", 256))
+        atexit.register(self._close_video_caps)
         
         with open(audit_report_path, "r") as f:
             report = json.load(f)
@@ -91,21 +97,84 @@ class GPSDataset(Dataset):
     def __len__(self):
         return len(self.samples)
 
+    def _cache_get(self, media_path, frame_idx):
+        key = (media_path, int(frame_idx))
+        cached = self._frame_cache.get(key)
+        if cached is None:
+            return None
+        # LRU touch
+        self._frame_cache.move_to_end(key)
+        return cached.copy()
+
+    def _cache_put(self, media_path, frame_idx, frame):
+        key = (media_path, int(frame_idx))
+        self._frame_cache[key] = frame.copy()
+        self._frame_cache.move_to_end(key)
+        while len(self._frame_cache) > self._frame_cache_size:
+            self._frame_cache.popitem(last=False)
+
+    def _get_video_cap(self, media_path):
+        cap = self._video_caps.get(media_path)
+        if cap is None or not cap.isOpened():
+            cap = cv2.VideoCapture(media_path)
+            self._video_caps[media_path] = cap
+        return cap
+
+    def _read_video_frame(self, media_path, frame_idx):
+        cached = self._cache_get(media_path, frame_idx)
+        if cached is not None:
+            return cached
+
+        cap = self._get_video_cap(media_path)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_idx))
+        ret, frame = cap.read()
+        if not ret:
+            # Re-open once in case decoder state is stale
+            try:
+                cap.release()
+            except Exception:
+                pass
+            self._video_caps.pop(media_path, None)
+            cap = self._get_video_cap(media_path)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_idx))
+            ret, frame = cap.read()
+            if not ret:
+                raise ValueError(f"Could not read frame {frame_idx} from {media_path}")
+
+        self._cache_put(media_path, frame_idx, frame)
+        return frame
+
+    def _read_video_pair(self, media_path, frame_idx_1, frame_idx_2):
+        cached_1 = self._cache_get(media_path, frame_idx_1)
+        cached_2 = self._cache_get(media_path, frame_idx_2)
+        if cached_1 is not None and cached_2 is not None:
+            return cached_1, cached_2
+
+        # Fast path for consecutive frames: one seek + two reads
+        if int(frame_idx_2) == int(frame_idx_1) + 1:
+            cap = self._get_video_cap(media_path)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_idx_1))
+            ret1, frame1 = cap.read()
+            ret2, frame2 = cap.read()
+            if ret1 and ret2:
+                self._cache_put(media_path, frame_idx_1, frame1)
+                self._cache_put(media_path, frame_idx_2, frame2)
+                return frame1, frame2
+
+            # Decoder state fallback
+            try:
+                cap.release()
+            except Exception:
+                pass
+            self._video_caps.pop(media_path, None)
+
+        frame1 = cached_1 if cached_1 is not None else self._read_video_frame(media_path, frame_idx_1)
+        frame2 = cached_2 if cached_2 is not None else self._read_video_frame(media_path, frame_idx_2)
+        return frame1, frame2
+
     def _load_image(self, media_path, media_type, frame_idx):
         if media_type == "video":
-            cap = cv2.VideoCapture(media_path)
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            ret, frame = cap.read()
-            cap.release()
-            if not ret:
-                # Retry once
-                cap = cv2.VideoCapture(media_path)
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-                ret, frame = cap.read()
-                cap.release()
-                if not ret:
-                    raise ValueError(f"Could not read frame {frame_idx} from {media_path}")
-            return frame
+            return self._read_video_frame(media_path, frame_idx)
         
         elif media_type == "images":
             # Robust file finding
@@ -135,8 +204,16 @@ class GPSDataset(Dataset):
         sample = self.samples[idx]
         
         try:
-            img1 = self._load_image(sample["media_path"], sample["media_type"], sample["frame_idx_1"])
-            img2 = self._load_image(sample["media_path"], sample["media_type"], sample["frame_idx_2"])
+            media_path = sample["media_path"]
+            media_type = sample["media_type"]
+            frame_idx_1 = sample["frame_idx_1"]
+            frame_idx_2 = sample["frame_idx_2"]
+
+            if media_type == "video":
+                img1, img2 = self._read_video_pair(media_path, frame_idx_1, frame_idx_2)
+            else:
+                img1 = self._load_image(media_path, media_type, frame_idx_1)
+                img2 = self._load_image(media_path, media_type, frame_idx_2)
             
             # Resize
             img1 = cv2.resize(img1, self.img_size)
@@ -159,3 +236,15 @@ class GPSDataset(Dataset):
             print(f"Error loading sample {idx}: {e}")
             # Recursively try next? Or return zeros.
             return torch.zeros((3, *self.img_size)), torch.zeros((3, *self.img_size)), torch.zeros(3)
+
+    def _close_video_caps(self):
+        for _, cap in list(self._video_caps.items()):
+            try:
+                cap.release()
+            except Exception:
+                pass
+        self._video_caps.clear()
+        self._frame_cache.clear()
+
+    def __del__(self):
+        self._close_video_caps()

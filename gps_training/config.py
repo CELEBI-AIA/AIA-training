@@ -21,4 +21,5 @@ TRAIN_CONFIG = {
     "lambda_traj": 0.1, # Weight for trajectory loss
     "mixed_precision": True, # Enable AMP
     "pin_memory": True,
+    "frame_cache_size": 256,
 }
