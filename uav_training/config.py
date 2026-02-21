@@ -136,6 +136,8 @@ def auto_detect_hardware() -> tuple:
         "mosaic": 1.0,
         "rect": False,
         "multi_scale": multi_scale,
+        "deterministic": False,   # ~30% faster — non-deterministic CUDA kernels
+        "save_period": 10,        # Checkpoint every 10 epochs (less I/O)
     }
 
     # Print detected hardware — flush=True so it appears instantly in Colab
@@ -163,8 +165,13 @@ def auto_detect_hardware() -> tuple:
 
 # ── Training Configuration ───────────────────────────────────────────────────
 
-# Training project dir can be overridden via env var (e.g. Colab -> Drive)
-_project_dir = os.environ.get("UAV_PROJECT_DIR", str(ARTIFACTS_DIR / "training_results"))
+# In Colab: train to LOCAL SSD for max speed, then copy results to Drive.
+# Google Drive FUSE is extremely slow for frequent small writes (checkpoints, plots)
+# which stalls the GPU between batches.
+if is_colab():
+    _project_dir = "/content/runs"  # Local SSD — fast I/O
+else:
+    _project_dir = os.environ.get("UAV_PROJECT_DIR", str(ARTIFACTS_DIR / "training_results"))
 
 # Default config (local / fallback)
 TRAIN_CONFIG = {

@@ -165,10 +165,15 @@ def print_training_config(train_args: dict):
 def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
     kill_gpu_hogs()
 
-    # Auto-optimize dataset if not resuming
-    if not resume:
+    # Auto-optimize dataset if not resuming AND not already built
+    yaml_path = DATASET_DIR / "dataset.yaml"
+    if not resume and not yaml_path.exists():
         print("🔄 Optimizing Dataset (Smart Downsampling)...", flush=True)
         build_dataset()
+    elif yaml_path.exists():
+        from config import is_colab
+        if is_colab():
+            print(f"⚡ Dataset already built ({yaml_path}) — skipping rebuild", flush=True)
 
     # Use config values if not provided
     epochs = epochs if epochs is not None else TRAIN_CONFIG['epochs']
@@ -242,7 +247,8 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
 
         # Add advanced params from config if they exist
         optional_params = ['patience', 'cos_lr', 'overlap_mask', 'mosaic',
-                           'rect', 'multi_scale', 'close_mosaic']
+                           'rect', 'multi_scale', 'close_mosaic',
+                           'deterministic', 'save_period']
         for p in optional_params:
             if p in TRAIN_CONFIG:
                 train_args[p] = TRAIN_CONFIG[p]
@@ -279,6 +285,17 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
         # Post-training: rename best.pt with scores and upload to Drive
         drive_dest = os.environ.get("DRIVE_UPLOAD_DIR")
         renamed = rename_and_export_best(results_dir, drive_dest)
+
+        # Copy full results from local SSD to Drive for persistence
+        drive_runs = os.environ.get("UAV_PROJECT_DIR")
+        if drive_runs and str(results_dir).startswith("/content/runs"):
+            drive_results = os.path.join(drive_runs, TRAIN_CONFIG['name'])
+            os.makedirs(drive_results, exist_ok=True)
+            print(f"\n☁️  Syncing results to Drive: {drive_results}", flush=True)
+            _sync_cmd = f'rsync -a --info=progress2 "{results_dir}/" "{drive_results}/"'
+            import subprocess
+            subprocess.run(_sync_cmd, shell=True, check=False)
+            print(f"  ✓ Results synced to Drive", flush=True)
 
         return {
             "mAP50": metrics.box.map50,

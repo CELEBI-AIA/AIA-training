@@ -22,10 +22,22 @@ from datetime import datetime
 os.environ["PYTHONUNBUFFERED"] = "1"
 
 def _run(cmd: str, *, check: bool = True, **kw):
-    """Run a shell command with real-time output streaming to Colab cell."""
+    """Run a shell command — capture output and print to Colab cell explicitly.
+
+    Colab's IPython stdout is NOT a real file descriptor, so subprocess.run()
+    without capture sends output to /dev/null. We capture + print instead.
+    """
     sys.stdout.flush()
     sys.stderr.flush()
-    return subprocess.run(cmd, shell=True, check=check, **kw)
+    r = subprocess.run(
+        cmd, shell=True, check=check,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, **kw
+    )
+    if r.stdout:
+        sys.stdout.write(r.stdout)
+        sys.stdout.flush()
+    return r
 
 def _banner(msg: str):
     print(f"\n{'='*60}\n  {msg}\n{'='*60}", flush=True)
@@ -34,9 +46,46 @@ print(f"\n🛰️  UAV Training Bootstrap v{VERSION}", flush=True)
 print(f"    Repo: {REPO_URL} ({REPO_BRANCH})\n", flush=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
+# 0. Pre-Flight Cleanup
+# ═══════════════════════════════════════════════════════════════════════════
+_banner("0/8 — Pre-flight cleanup")
+
+import gc
+
+# Kill leftover training processes
+print("  🧹 Killing stale processes …", flush=True)
+_run("pkill -9 -f 'uav_training/train.py' 2>/dev/null || true", check=False)
+_run("pkill -9 -f 'yolo' 2>/dev/null || true", check=False)
+_run("pkill -9 -f 'build_dataset.py' 2>/dev/null || true", check=False)
+
+# Free GPU memory
+try:
+    import torch
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        print("  🧹 GPU VRAM cache cleared", flush=True)
+except Exception:
+    pass
+
+# Python garbage collect
+gc.collect()
+
+# Clear __pycache__ in repo if it exists
+REPO_DIR = "/content/repo"
+if os.path.isdir(REPO_DIR):
+    _run(f'find {REPO_DIR} -type d -name __pycache__ -exec rm -rf {{}} + 2>/dev/null || true', check=False)
+    # Remove stale .cache files from previous dataset builds
+    _run(f'find {REPO_DIR}/artifacts -name "*.cache" -delete 2>/dev/null || true', check=False)
+    print("  🧹 Stale __pycache__ and label caches cleared", flush=True)
+
+# Clear /tmp junk
+_run("rm -rf /tmp/pip-* /tmp/torch_* 2>/dev/null || true", check=False)
+print("  ✓ Cleanup done\n", flush=True)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # 1. Mount Google Drive
 # ═══════════════════════════════════════════════════════════════════════════
-_banner("1/7 — Mounting Google Drive")
+_banner("1/8 — Mounting Google Drive")
 from google.colab import drive
 drive.mount("/content/drive", force_remount=False)
 
@@ -59,7 +108,7 @@ print(f"  ✓ Upload dir: {DRIVE_UPLOAD}")
 # ═══════════════════════════════════════════════════════════════════════════
 # 2. Clone or Pull Repository
 # ═══════════════════════════════════════════════════════════════════════════
-_banner("2/7 — Setting up repository")
+_banner("2/8 — Setting up repository")
 REPO_DIR = "/content/repo"
 
 if os.path.isdir(os.path.join(REPO_DIR, ".git")):
@@ -77,7 +126,7 @@ print("  ✓ Repo ready", flush=True)
 # ═══════════════════════════════════════════════════════════════════════════
 # 3. Install Requirements
 # ═══════════════════════════════════════════════════════════════════════════
-_banner("3/7 — Installing dependencies")
+_banner("3/8 — Installing dependencies")
 
 req_file = os.path.join(REPO_DIR, "requirements.txt")
 if os.path.isfile(req_file):
@@ -99,7 +148,7 @@ print("  ✓ Dependencies installed", flush=True)
 # ═══════════════════════════════════════════════════════════════════════════
 # 4. Dataset Extraction (Drive .tar.gz → Local SSD Cache)
 # ═══════════════════════════════════════════════════════════════════════════
-_banner("4/7 — Extracting dataset to local SSD (MAX SPEED)")
+_banner("4/8 — Extracting dataset to local SSD (MAX SPEED)")
 
 os.makedirs(LOCAL_CACHE, exist_ok=True)
 
@@ -195,15 +244,19 @@ _run(f"du -sh {LOCAL_CACHE} | awk '{{print \"     Dataset   — \"$1}}'")
 # ═══════════════════════════════════════════════════════════════════════════
 # 5. Auto Hardware Detection + Configure
 # ═══════════════════════════════════════════════════════════════════════════
-_banner("5/7 — Auto-detecting hardware & configuring")
+_banner("5/8 — Auto-detecting hardware & configuring")
 
 # Set environment variables BEFORE training script imports config.py
+# UAV_PROJECT_DIR = where to SYNC results on Drive after training
+# Training itself runs on local SSD (/content/runs/) for max I/O speed
 os.environ["UAV_PROJECT_DIR"] = DRIVE_RUNS
 os.environ["DRIVE_UPLOAD_DIR"] = DRIVE_UPLOAD
 
-_run(f'yolo settings runs_dir="{DRIVE_RUNS}"', check=False)
-print(f"  ✓ UAV_PROJECT_DIR → {DRIVE_RUNS}", flush=True)
-print(f"  ✓ DRIVE_UPLOAD_DIR → {DRIVE_UPLOAD}")
+# Point YOLO's runs dir to local SSD (NOT Drive — Drive FUSE stalls GPU)
+_run('yolo settings runs_dir="/content/runs"', check=False)
+print(f"  ✓ Training output → /content/runs/ (local SSD, max speed)", flush=True)
+print(f"  ✓ Post-training sync → {DRIVE_RUNS} (Google Drive)", flush=True)
+print(f"  ✓ Model export → {DRIVE_UPLOAD}", flush=True)
 
 # Full nvidia-smi output (visible in Colab)
 print("\n  📊 GPU Status:", flush=True)
@@ -225,7 +278,7 @@ except Exception as _e:
 # ═══════════════════════════════════════════════════════════════════════════
 # 6. Launch Training (with live log tee)
 # ═══════════════════════════════════════════════════════════════════════════
-_banner("6/7 — Starting training")
+_banner("6/8 — Starting training")
 
 # Search for the latest checkpoint in Drive runs
 def find_latest_checkpoint(runs_dir: str) -> str | None:
@@ -297,7 +350,7 @@ print(f"  📝 Full log saved: {log_path}", flush=True)
 # ═══════════════════════════════════════════════════════════════════════════
 # 7. Post-Training Summary
 # ═══════════════════════════════════════════════════════════════════════════
-_banner("7/7 — Post-training summary")
+_banner("7/8 — Post-training summary")
 
 print(f"\n  📁 Training outputs: {DRIVE_RUNS}", flush=True)
 _run(f'du -sh "{DRIVE_RUNS}" 2>/dev/null | awk \'{{print "     Size: "$1}}\'', check=False)
