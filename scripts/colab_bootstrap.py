@@ -3,7 +3,7 @@
 # Paste this entire cell into Colab and run.
 ##############################################################################
 
-VERSION = "0.7.2"
+VERSION = "0.7.3"
 
 # ── Configuration ───────────────────────────────────────────────────────────
 REPO_URL       = "https://github.com/CELEBI-AIA/AIA-training.git"

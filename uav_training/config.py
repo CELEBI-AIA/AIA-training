@@ -106,7 +106,7 @@ def auto_detect_hardware() -> tuple:
         print("!" * 60 + "\n", flush=True)
         # Fall back to CPU-like settings
         tier = "TPU (unsupported)"
-        model = "yolov8s.pt"
+        model = "yolo11m.pt"
         imgsz = 640
         batch = 8
         info["gpu_name"] = f"TPU ({os.environ.get('TPU_NAME', 'unknown')})"
@@ -114,39 +114,39 @@ def auto_detect_hardware() -> tuple:
     elif vram >= 70:
         # ── H100 80GB ──
         tier = "H100-80GB"
-        model = "yolov8s.pt"
+        model = "yolo11m.pt"
         imgsz = 640
-        batch = 128         # H100 is a beast — max throughput
+        batch = 96          # yolo11m uses more VRAM than v8s
     elif vram >= 35:
         # ── A100 40GB / A6000 48GB ──
         tier = "A100-40GB"
-        model = "yolov8s.pt"
+        model = "yolo11m.pt"
         imgsz = 640
-        batch = 64          # yolov8s@640 → ~8-10GB VRAM, max throughput
+        batch = 48           # yolo11m@640 → ~12-15GB VRAM
     elif vram >= 20:
         # ── L4 24GB ──
         tier = "L4-24GB"
-        model = "yolov8s.pt"
+        model = "yolo11m.pt"
         imgsz = 640
-        batch = 64          # yolov8s@640 → ~8-10GB VRAM
+        batch = 32           # yolo11m@640 → ~12-15GB VRAM
     elif vram >= 14:
         # ── T4 16GB / V100 16GB ──
         tier = "T4-16GB"
-        model = "yolov8s.pt"
+        model = "yolo11m.pt"
         imgsz = 640
-        batch = 32          # yolov8s@640 → ~5-6GB VRAM
+        batch = 16           # yolo11m@640 → ~10-12GB VRAM
     elif vram >= 7:
         # ── Various 8GB GPUs ──
         tier = "8GB GPU"
-        model = "yolov8s.pt"
+        model = "yolo11m.pt"
         imgsz = 640
-        batch = 16
+        batch = 8
     else:
         # ── Low VRAM / CPU ──
         tier = "Low VRAM / CPU"
-        model = "yolov8s.pt"
+        model = "yolo11m.pt"
         imgsz = 640
-        batch = 8
+        batch = 4
 
     # Workers: cap at 8 (more can cause Colab dataloader issues)
     workers = min(cpus, 8)
@@ -218,7 +218,7 @@ TRAIN_CONFIG = {
     "batch": 4,           # Conservative for local 6GB VRAM
     "imgsz": 640,
     "device": 0,
-    "model": "yolov8s.pt",
+    "model": "yolo11m.pt",
     "project": Path(_project_dir),
     "name": "uav_v3_optimized",
     "workers": 8,

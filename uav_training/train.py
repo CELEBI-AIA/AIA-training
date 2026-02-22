@@ -17,7 +17,7 @@ import csv
 import shutil
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.7.2"
+__version__ = "0.7.3"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -333,7 +333,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, help="Number of epochs")
     parser.add_argument("--batch", type=str, help="Batch size (int or -1 for autobatch)")
     parser.add_argument("--device", type=str, help="cuda device, i.e. 0 or 0,1,2,3 or cpu")
-    parser.add_argument("--model", type=str, help="Model path or size (e.g. yolov8s.pt)")
+    parser.add_argument("--model", type=str, help="Model path or size (e.g. yolo11m.pt)")
     parser.add_argument("--resume", action="store_true", help="Resume training from last checkpoint")
 
     args = parser.parse_args()
