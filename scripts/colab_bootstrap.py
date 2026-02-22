@@ -146,25 +146,88 @@ _run(f'{sys.executable} -c "import torch; print(f\'     torch: {{torch.__version
 print("  ✓ Dependencies installed", flush=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 4. Dataset: Download tar.gz → Local SSD → Extract → Verify → Cleanup
+# 4. Auto Hardware Detection + Configure (BEFORE dataset download!)
 # ═══════════════════════════════════════════════════════════════════════════
-_banner("4/8 — Dataset to local SSD (DOWNLOAD → EXTRACT → VERIFY)")
+_banner("4/8 — Auto-detecting hardware & configuring")
+
+# ── GPU/TPU Check — abort early if hardware is incompatible ──
+# YOLO requires CUDA GPU. If TPU is selected, stop NOW before wasting
+# time downloading 78 GB of data that can't be used.
+print("\n  📊 GPU/TPU Probe:", flush=True)
+_is_tpu = os.environ.get("TPU_NAME") is not None or \
+          os.environ.get("COLAB_TPU_ADDR") is not None or \
+          os.path.exists("/dev/accel0")
+
+try:
+    import torch as _t
+    _has_cuda = _t.cuda.is_available()
+    print(f"  CUDA available: {_has_cuda}", flush=True)
+    if _has_cuda:
+        _p = _t.cuda.get_device_properties(0)
+        print(f"  GPU: {_p.name}  |  VRAM: {_p.total_memory / 1024**3:.1f} GB", flush=True)
+        del _p
+    del _t
+except Exception as _e:
+    _has_cuda = False
+    print(f"  ⚠️ PyTorch probe failed: {_e}", flush=True)
+
+if _is_tpu and not _has_cuda:
+    print("\n" + "!" * 60, flush=True)
+    print("  ❌  TPU RUNTIME — YOLO EĞİTİMİ İÇİN UYGUN DEĞİL!")
+    print("  YOLO/Ultralytics CUDA (GPU) gerektirir, TPU/XLA desteklemez.")
+    print("  Lütfen runtime'ı GPU'ya çevirin:")
+    print("     Runtime → Change runtime type → GPU (T4/L4/A100/H100)")
+    print("!" * 60, flush=True)
+    raise RuntimeError(
+        "TPU runtime detected. YOLO requires a CUDA GPU. "
+        "Please change to: Runtime → Change runtime type → GPU"
+    )
+
+if not _has_cuda:
+    print("\n  ⚠️  CUDA GPU bulunamadı — CPU ile eğitim çok yavaş olacak!", flush=True)
+
+# Full nvidia-smi output
+print("\n  📊 GPU Status:", flush=True)
+_run("nvidia-smi", check=False)
+
+# Set environment variables BEFORE training script imports config.py
+os.environ["UAV_PROJECT_DIR"] = DRIVE_RUNS
+os.environ["DRIVE_UPLOAD_DIR"] = DRIVE_UPLOAD
+
+# --- DataLoader thread limiter ---
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["OPENCV_FOR_THREADS_NUM"] = "1"
+
+# Point YOLO settings to local SSD
+_run('yolo settings runs_dir="/content/runs"', check=False)
+_run('yolo settings datasets_dir="/content/datasets_local"', check=False)
+print(f"  ✓ Training output → /content/runs/ (local SSD)", flush=True)
+print(f"  ✓ Datasets dir → /content/datasets_local/ (local SSD)", flush=True)
+print(f"  ✓ Post-training sync → {DRIVE_RUNS} (Google Drive)", flush=True)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 5. Dataset: Download tar.gz → Local SSD → Extract → Verify → Cleanup
+# ═══════════════════════════════════════════════════════════════════════════
+_banner("5/8 — Dataset to local SSD (DOWNLOAD → EXTRACT → VERIFY)")
 
 os.makedirs(LOCAL_CACHE, exist_ok=True)
 
-# Install tools
+# Install extraction tools
 print("  📦 Installing extraction tools …", flush=True)
 _run("apt-get update -qq && apt-get install -y pigz pv 2>&1 | tail -3", check=False)
 
 CACHE_MARKER = os.path.join(LOCAL_CACHE, ".done")
 NCPU = os.cpu_count() or 2
-LOCAL_TAR = "/content/datasets.tar.gz"  # Local SSD copy of the archive
+LOCAL_TAR = "/content/datasets.tar.gz"
 
 existing = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
 t0 = time.time()
 
 if os.path.isfile(CACHE_MARKER):
-    # ═══ Already extracted — skip everything ═══
     print(f"  ⚡ Cache complete ({existing} files) — SKIP", flush=True)
 
 elif existing > 5000:
@@ -173,9 +236,7 @@ elif existing > 5000:
         f.write("1")
 
 else:
-    # ── PHASE 1: Download tar.gz from Drive FUSE → Local SSD ──
-    # Drive FUSE streaming is slow (~200 MB/s). Copying the whole file
-    # to local SSD first lets us extract at full NVMe speed (~3 GB/s).
+    # ── PHASE 1: Download tar.gz from Drive → Local SSD ──
     tar_size_gb = os.path.getsize(DRIVE_DATASET) / (1024**3)
 
     if os.path.isfile(LOCAL_TAR):
@@ -184,22 +245,20 @@ else:
         if local_size == drive_size:
             print(f"  ⚡ tar.gz already on local SSD ({tar_size_gb:.1f} GB) — skip download", flush=True)
         else:
-            print(f"  ♻️  Partial download ({local_size/(1024**3):.1f}/{tar_size_gb:.1f} GB) — re-downloading", flush=True)
+            print(f"  ♻️  Partial ({local_size/(1024**3):.1f}/{tar_size_gb:.1f} GB) — re-downloading", flush=True)
             os.remove(LOCAL_TAR)
             print(f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD …", flush=True)
-            # Use dd with large block size for max Drive FUSE throughput
             _run(f'dd if="{DRIVE_DATASET}" of="{LOCAL_TAR}" bs=64M status=progress 2>&1 | tail -5')
     else:
         print(f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD …", flush=True)
         print(f"     Source: {DRIVE_DATASET}", flush=True)
         print(f"     Target: {LOCAL_TAR}", flush=True)
-        # dd with 64M blocks saturates Drive FUSE bandwidth
         _run(f'dd if="{DRIVE_DATASET}" of="{LOCAL_TAR}" bs=64M status=progress 2>&1 | tail -5')
 
     dl_elapsed = time.time() - t0
     print(f"  ✓ Download done in {dl_elapsed:.0f}s ({tar_size_gb/max(dl_elapsed,1)*1024:.0f} MB/s)", flush=True)
 
-    # ── PHASE 2: Extract from LOCAL copy (full NVMe speed) ──
+    # ── PHASE 2: Extract from local copy (full NVMe speed) ──
     t1 = time.time()
     TAR_FAST = "--no-same-owner --no-same-permissions -b 512"
 
@@ -231,7 +290,6 @@ else:
         print(f"  ✅ Verification passed: {final_count} files on local SSD", flush=True)
         with open(CACHE_MARKER, 'w') as f:
             f.write("1")
-        # Delete local tar.gz to free ~78 GB of SSD space
         if os.path.isfile(LOCAL_TAR):
             os.remove(LOCAL_TAR)
             print(f"  🗑️  Deleted local tar.gz — freed {tar_size_gb:.1f} GB", flush=True)
@@ -253,52 +311,6 @@ print(f"  🔗 Symlinked {repo_datasets} → {LOCAL_CACHE}")
 print("\n  📊 Disk usage:", flush=True)
 _run(f"df -h /content | tail -1 | awk '{{print \"     /content  — used: \"$3\"  free: \"$4\"  (\"$5\" full)\"}}'")
 _run(f"du -sh {LOCAL_CACHE} | awk '{{print \"     Dataset   — \"$1}}'")
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 5. Auto Hardware Detection + Configure
-# ═══════════════════════════════════════════════════════════════════════════
-_banner("5/8 — Auto-detecting hardware & configuring")
-
-# Set environment variables BEFORE training script imports config.py
-# UAV_PROJECT_DIR = where to SYNC results on Drive after training
-# Training itself runs on local SSD (/content/runs/) for max I/O speed
-os.environ["UAV_PROJECT_DIR"] = DRIVE_RUNS
-os.environ["DRIVE_UPLOAD_DIR"] = DRIVE_UPLOAD
-
-# --- CRITICAL TWEAK FOR A100 / DATALOADER BOTTLENECKS ---
-# Prevent OpenCV and OpenMP from spawning threads inside DataLoader multiprocessing workers.
-# 8 workers * 12 default threads = 96 threads fighting for 12 CPU cores = 1.3 it/s thrashing.
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
-os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
-os.environ["NUMEXPR_NUM_THREADS"] = "1"
-os.environ["OPENCV_FOR_THREADS_NUM"] = "1"
-# ---------------------------------------------------------
-
-# Point YOLO's runs dir AND datasets dir to local SSD (NOT Drive)
-_run('yolo settings runs_dir="/content/runs"', check=False)
-_run('yolo settings datasets_dir="/content/datasets_local"', check=False)
-print(f"  ✓ Training output → /content/runs/ (local SSD, max speed)", flush=True)
-print(f"  ✓ Datasets dir → /content/datasets_local/ (local SSD)", flush=True)
-print(f"  ✓ Post-training sync → {DRIVE_RUNS} (Google Drive)", flush=True)
-print(f"  ✓ Model export → {DRIVE_UPLOAD}", flush=True)
-
-# Full nvidia-smi output (visible in Colab)
-print("\n  📊 GPU Status:", flush=True)
-_run("nvidia-smi", check=False)
-
-# Quick torch probe for verification
-print("\n  📊 PyTorch GPU Probe:", flush=True)
-try:
-    import torch as _t
-    print(f"  CUDA available: {_t.cuda.is_available()}", flush=True)
-    if _t.cuda.is_available():
-        _p = _t.cuda.get_device_properties(0)
-        print(f"  GPU: {_p.name}  |  VRAM: {_p.total_memory / 1024**3:.1f} GB", flush=True)
-    del _t, _p
-except Exception as _e:
-    print(f"  ⚠️ PyTorch probe failed: {_e}", flush=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
