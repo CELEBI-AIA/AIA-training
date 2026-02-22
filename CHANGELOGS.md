@@ -47,3 +47,11 @@
 - CI now enforces syntax-focused `flake8` checks (`E9,F63,F7,F82`) to catch parser/name-critical failures early.
 - Added `python -m compileall -q .` compile validation across the repository to surface syntax regressions before merge.
 - Removed heavy runtime dependency installation from CI path for faster, more reliable checks in a non-GPU runner context.
+
+## 0.0.10 - 2026-02-22
+- Updated `scripts/colab_bootstrap.py` version banner from `v0.7.3` to `v0.8.0` to align with current training module release and reduce operator confusion.
+- Reduced dependency-install log noise in Colab bootstrap by capturing pip output and printing concise install summaries (`updated packages` vs `already satisfied`).
+
+## 0.0.11 - 2026-02-22
+- Made bootstrap version banner dynamic in `scripts/colab_bootstrap.py` by reading `uav_training/__init__.py::__version__` instead of using a hard-coded `VERSION` string.
+- Added a post-repo-sync version refresh message to confirm the active bootstrap/module version in runtime logs.

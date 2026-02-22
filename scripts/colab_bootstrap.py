@@ -3,7 +3,7 @@
 # Paste this entire cell into Colab and run.
 ##############################################################################
 
-VERSION = "0.7.3"
+VERSION = "dev"
 
 # ── Configuration ───────────────────────────────────────────────────────────
 REPO_URL       = "https://github.com/CELEBI-AIA/AIA-training.git"
@@ -18,10 +18,29 @@ TRAIN_SCRIPT   = "uav_training/train.py"
 import subprocess, sys, os, glob, time
 from datetime import datetime
 
+
+def _read_repo_version(repo_dir: str) -> str:
+    """Read module version from uav_training/__init__.py if available."""
+    version_file = os.path.join(repo_dir, "uav_training", "__init__.py")
+    if not os.path.isfile(version_file):
+        return "dev"
+
+    try:
+        with open(version_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("__version__"):
+                    _, value = line.split("=", 1)
+                    return value.strip().strip("\"'")
+    except Exception:
+        pass
+
+    return "dev"
+
 # ── Force unbuffered output → ALL print/log lines appear in Colab INSTANTLY ──
 os.environ["PYTHONUNBUFFERED"] = "1"
 
-def _run(cmd: str, *, check: bool = True, **kw):
+def _run(cmd: str, *, check: bool = True, print_output: bool = True, **kw):
     """Run a shell command — capture output and print to Colab cell explicitly.
 
     Colab's IPython stdout is NOT a real file descriptor, so subprocess.run()
@@ -34,13 +53,16 @@ def _run(cmd: str, *, check: bool = True, **kw):
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, **kw
     )
-    if r.stdout:
+    if print_output and r.stdout:
         sys.stdout.write(r.stdout)
         sys.stdout.flush()
     return r
 
 def _banner(msg: str):
     print(f"\n{'='*60}\n  {msg}\n{'='*60}", flush=True)
+
+_bootstrap_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+VERSION = _read_repo_version(_bootstrap_root)
 
 print(f"\n🛰️  UAV Training Bootstrap v{VERSION}", flush=True)
 print(f"    Repo: {REPO_URL} ({REPO_BRANCH})\n", flush=True)
@@ -121,6 +143,8 @@ else:
 
 # Show repo info
 _run(f"git -C {REPO_DIR} log --oneline -1")
+VERSION = _read_repo_version(REPO_DIR)
+print(f"  ✓ Bootstrap version synced from repo: v{VERSION}", flush=True)
 print("  ✓ Repo ready", flush=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -131,7 +155,28 @@ _banner("3/8 — Installing dependencies")
 req_file = os.path.join(REPO_DIR, "requirements.txt")
 if os.path.isfile(req_file):
     print("  📦 Installing requirements.txt …", flush=True)
-    _run(f"{sys.executable} -m pip install --progress-bar on -r {req_file}")
+    install_result = _run(
+        f"{sys.executable} -m pip install --disable-pip-version-check --progress-bar off -r {req_file}",
+        print_output=False,
+    )
+
+    install_out = install_result.stdout or ""
+    updated_line = ""
+    for line in install_out.splitlines():
+        if line.startswith("Successfully installed "):
+            updated_line = line.replace("Successfully installed ", "").strip()
+            break
+
+    already_satisfied_count = sum(
+        1 for line in install_out.splitlines() if "Requirement already satisfied:" in line
+    )
+
+    if updated_line:
+        print(f"  ✓ Updated packages: {updated_line}", flush=True)
+    elif already_satisfied_count > 0:
+        print(f"  ✓ No package updates needed ({already_satisfied_count} requirements already satisfied)", flush=True)
+    else:
+        print("  ✓ Dependency check completed", flush=True)
 else:
     print("  ⚠ No requirements.txt found")
 
