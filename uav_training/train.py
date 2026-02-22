@@ -17,7 +17,7 @@ import csv
 import shutil
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -167,13 +167,30 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
 
     # Auto-optimize dataset if not resuming AND not already built
     yaml_path = DATASET_DIR / "dataset.yaml"
+    needs_build = False
+
     if not resume and not yaml_path.exists():
-        print("🔄 Optimizing Dataset (Smart Downsampling)...", flush=True)
+        needs_build = True
+    elif not resume and yaml_path.exists():
+        # Check if existing dataset uses symlinks (old format → Drive FUSE → slow)
+        train_imgs = DATASET_DIR / "train" / "images"
+        if train_imgs.exists():
+            sample = next(train_imgs.iterdir(), None)
+            if sample and sample.is_symlink():
+                print("⚠️  Dataset uses symlinks (old format) → rebuilding with copies...", flush=True)
+                import shutil as _shutil
+                _shutil.rmtree(DATASET_DIR, ignore_errors=True)
+                needs_build = True
+            else:
+                from config import is_colab
+                if is_colab():
+                    print(f"⚡ Dataset ready ({yaml_path}) — skipping rebuild", flush=True)
+        else:
+            needs_build = True
+
+    if needs_build:
+        print("🔄 Building dataset (hard-copy to local SSD)...", flush=True)
         build_dataset()
-    elif yaml_path.exists():
-        from config import is_colab
-        if is_colab():
-            print(f"⚡ Dataset already built ({yaml_path}) — skipping rebuild", flush=True)
 
     # Use config values if not provided
     epochs = epochs if epochs is not None else TRAIN_CONFIG['epochs']

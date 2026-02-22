@@ -3,7 +3,7 @@
 # Paste this entire cell into Colab and run.
 ##############################################################################
 
-VERSION = "0.6.1"
+VERSION = "0.7.0"
 
 # ── Configuration ───────────────────────────────────────────────────────────
 REPO_URL       = "https://github.com/CELEBI-AIA/AIA-training.git"
@@ -74,9 +74,9 @@ gc.collect()
 REPO_DIR = "/content/repo"
 if os.path.isdir(REPO_DIR):
     _run(f'find {REPO_DIR} -type d -name __pycache__ -exec rm -rf {{}} + 2>/dev/null || true', check=False)
-    # Remove stale .cache files from previous dataset builds
-    _run(f'find {REPO_DIR}/artifacts -name "*.cache" -delete 2>/dev/null || true', check=False)
-    print("  🧹 Stale __pycache__ and label caches cleared", flush=True)
+    # NOTE: Do NOT delete *.cache files — these are YOLO's label caches
+    # that store pre-scanned 30k+ labels. Deleting them costs 35+ seconds per run.
+    print("  🧹 Stale __pycache__ cleared", flush=True)
 
 # Clear /tmp junk
 _run("rm -rf /tmp/pip-* /tmp/torch_* 2>/dev/null || true", check=False)
@@ -263,9 +263,11 @@ os.environ["NUMEXPR_NUM_THREADS"] = "1"
 os.environ["OPENCV_FOR_THREADS_NUM"] = "1"
 # ---------------------------------------------------------
 
-# Point YOLO's runs dir to local SSD (NOT Drive — Drive FUSE stalls GPU)
+# Point YOLO's runs dir AND datasets dir to local SSD (NOT Drive)
 _run('yolo settings runs_dir="/content/runs"', check=False)
+_run('yolo settings datasets_dir="/content/datasets_local"', check=False)
 print(f"  ✓ Training output → /content/runs/ (local SSD, max speed)", flush=True)
+print(f"  ✓ Datasets dir → /content/datasets_local/ (local SSD)", flush=True)
 print(f"  ✓ Post-training sync → {DRIVE_RUNS} (Google Drive)", flush=True)
 print(f"  ✓ Model export → {DRIVE_UPLOAD}", flush=True)
 

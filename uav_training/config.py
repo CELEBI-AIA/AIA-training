@@ -10,7 +10,22 @@ ARTIFACTS_DIR = PROJECT_ROOT / "artifacts" / "uav_model"
 
 # Ensure directories exist
 ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-DATASET_DIR = ARTIFACTS_DIR / "dataset_uap_uai"
+
+
+def is_colab() -> bool:
+    """Detect if running inside Google Colab."""
+    return os.environ.get("COLAB_RELEASE_TAG") is not None or \
+           os.path.exists("/content")
+
+
+# On Colab: dataset lives entirely on LOCAL SSD for max I/O speed.
+# build_dataset.py copies images here (no symlinks!), YOLO reads from here.
+# On local dev: dataset stays in artifacts/ as usual.
+if is_colab():
+    DATASET_DIR = Path("/content/dataset_built")
+else:
+    DATASET_DIR = ARTIFACTS_DIR / "dataset_uap_uai"
+
 AUDIT_REPORT = ARTIFACTS_DIR / "audit_report.json"
 
 # Filter criteria for datasets
@@ -29,10 +44,7 @@ TARGET_CLASSES = {
 
 # ── Colab Auto Hardware Detection ────────────────────────────────────────────
 
-def is_colab() -> bool:
-    """Detect if running inside Google Colab."""
-    return os.environ.get("COLAB_RELEASE_TAG") is not None or \
-           os.path.exists("/content")
+# is_colab() is defined at top of file (needed early for DATASET_DIR)
 
 def auto_detect_hardware() -> tuple:
     """
