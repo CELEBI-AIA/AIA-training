@@ -38,3 +38,6 @@
 - Extended `documentation/TRAINING_AUDIT_SMALL_OBJECT_AND_LOSS_BALANCE.md` with `3.4 Effective Training Config Verification` and explicit unknown-key warning rule.
 - Added `3.5 Dataset Snapshot Artifacts` contract with required CSV paths and required columns/hist bins.
 - Added `4.4 Two-Phase Training Validation Logic` clarifying phase intent and required pre/post Phase-2 comparisons.
+
+## 0.0.08 - 2026-02-22
+- Prepended a non-technical Turkish summary to `documentation/TRAINING_AUDIT_SMALL_OBJECT_AND_LOSS_BALANCE.md` for broader team readability.

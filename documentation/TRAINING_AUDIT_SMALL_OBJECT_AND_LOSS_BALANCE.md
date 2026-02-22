@@ -1,3 +1,38 @@
+# Türkçe Özet (Teknik Olmayan Açıklama)
+
+Bu raporun amacı, eğitim sonuçlarının neden bazen güven vermediğini netleştirmek ve ölçülebilir hale getirmektir. Kısaca, modelin gerçekten iyi öğrenip öğrenmediğini daha doğru anlamak için yazıldı.
+
+Bu dokümanda iki ana konu inceleniyor:
+- Küçük nesneler (uzakta kalan, görüntüde çok az yer kaplayan hedefler)
+- Kayıp dengesi (modelin hangi hatalara ne kadar önem verdiği)
+
+Neden önemli? Çünkü bu iki ayar yanlış olursa, model kağıt üzerinde iyi görünse bile sahada kaçırdığı hedefler artabilir.
+
+Küçük nesne filtresi yanlış ayarlanırsa ne olur?
+- Filtre çok sert olursa, gerçekten önemli ama küçük görünen hedefler eğitimden silinir.
+- Bu da modelin “küçük hedefleri görmeyi” öğrenememesine yol açar.
+- Yani kamera görüntüsünde uzakta olan bir nesne, model için adeta hiç var olmamış gibi olur.
+
+Kayıp ağırlıkları yanlış olursa ne olur?
+- Model bazı hataları gereğinden fazla, bazılarını ise gereğinden az önemser.
+- Sonuç olarak toplam puan artıyor gibi görünürken kritik sınıflarda kalite düşebilir.
+- Basit benzetme: Sınavda sadece kolay sorulara puan verip zor ama önemli soruları yok saymak gibi.
+
+Doğrulama sonucu neden bazen “gerçek performansı” göstermeyebilir?
+- Eğitim verisi ile kontrol verisi birbirine fazla benzerse skor olduğundan iyi görünür.
+- Bu durumda model yeni görüntülerde aynı başarıyı vermez.
+- Yani prova iyi, gerçek maç zayıf olabilir.
+
+Bu dokümanda eklenen iyileştirmeler:
+- Eğitimde verilen ayarların gerçekten aktif çalıştığını doğrulama
+- Veri dağılımını ölçme (histogram mantığı): hangi boyutta kaç nesne var, sayısal olarak görmek
+- Deneyleri kontrollü yapma: her seferinde tek bir ayarı değiştirip sonucu karşılaştırma
+
+Son olarak bu metnin amacı net:
+- Bu bir refactor planı değildir.
+- Bu bir kalite güvence dokümanıdır.
+- Hedef, eğitim deneylerinin güvenilir, tekrarlanabilir ve ölçülebilir olmasıdır.
+
 # Training Audit: Small Object Threshold & Loss Balance
 
 ## 1. Current Implementation Summary
