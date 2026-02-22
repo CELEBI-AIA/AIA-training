@@ -250,7 +250,8 @@ def build_dataset():
                                             w = max(0.0, min(1.0, w))
                                             h = max(0.0, min(1.0, h))
                                             
-                                            if w > 0.001 and h > 0.001:
+                                            # Strict bounds: min 0.005 (~5px on 1024), max 1.0
+                                            if 0.005 < w <= 1.0 and 0.005 < h <= 1.0:
                                                 new_line = f"{target_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n"
                                                 if new_line not in _seen_lines:
                                                     _seen_lines.add(new_line)

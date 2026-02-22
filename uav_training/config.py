@@ -115,14 +115,14 @@ def auto_detect_hardware() -> tuple:
         # ── H100 80GB ──
         tier = "H100-80GB"
         model = "yolo11m.pt"
-        imgsz = 640
-        batch = 96          # yolo11m uses more VRAM than v8s
+        imgsz = 1024        # High-res for small objects
+        batch = 64          # Reduced from 96 due to 1024px
     elif vram >= 35:
         # ── A100 40GB / A6000 48GB ──
         tier = "A100-40GB"
         model = "yolo11m.pt"
-        imgsz = 640
-        batch = 48           # yolo11m@640 → ~12-15GB VRAM
+        imgsz = 1024        # High-res for small objects
+        batch = 32          # Reduced from 48 due to 1024px
     elif vram >= 20:
         # ── L4 24GB ──
         tier = "L4-24GB"
@@ -158,7 +158,7 @@ def auto_detect_hardware() -> tuple:
     cache = False
 
     config_overrides = {
-        "epochs": 100,
+        "epochs": 150,            # Increased for better convergence
         "batch": batch,
         "imgsz": imgsz,
         "device": 0,
@@ -167,16 +167,32 @@ def auto_detect_hardware() -> tuple:
         "amp": True,
         "cache": cache,
         "exist_ok": True,
-        "patience": 20,
+        "patience": 30,           # Extended early stopping tolerance
         "cos_lr": True,
-        "close_mosaic": 10,
+        "close_mosaic": 5,        # 10 is too long, reduced to 5 to prevent overfit
         "overlap_mask": True,
-        "mosaic": 1.0,
+        
+        # ── Augmentation (UAV & Small Object Optimized) ──
+        "mosaic": 1.0,            # Keep mosaic
+        "scale": 0.2,             # CRITICAL: Prevent over-shrinking small objects (was 0.5)
+        "copy_paste": 0.2,        # Inject minority classes (humans/vehicles) into background
+        "copy_paste_mode": "flip",
+        "flipud": 0.5,            # Top-down drone view: up/down flip is safe
+        "bgr": 0.05,              # Slight blur/noise resistance
+        
+        # ── Optimizer & Hyperparameters ──
+        "lr0": 0.01,              # Explicit initial learning rate
+        "lrf": 0.01,              # Final LR fraction
+        "warmup_epochs": 3.0,     # Prevent early gradient spikes
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.05,  # Soften penalty on complex backgrounds
+        
+        # ── Mechanics ──
         "rect": False,
         "multi_scale": multi_scale,
         "deterministic": False,   # ~30% faster — non-deterministic CUDA kernels
         "compile": True,          # torch.compile via YOLO's own pipeline (20-40% faster)
-        "save_period": 10,        # Checkpoint every 10 epochs (less I/O)
+        "save_period": 5,         # Reduced from 10 to 5 to prevent data loss on Colab interrupts
     }
 
     # Print detected hardware — flush=True so it appears instantly in Colab
@@ -225,13 +241,26 @@ TRAIN_CONFIG = {
     "amp": True,
     "cache": True,
     "exist_ok": True,
-    "patience": 50,
+    "patience": 30,
     "cos_lr": True,
-    "close_mosaic": 2,
+    "close_mosaic": 5,
     "overlap_mask": True,
-    "mosaic": 0.5,
+    "mosaic": 1.0,
+    "scale": 0.2,
+    "copy_paste": 0.2,
+    "copy_paste_mode": "flip",
+    "flipud": 0.5,
+    "bgr": 0.05,
+    "lr0": 0.01,
+    "lrf": 0.01,
+    "warmup_epochs": 3.0,
+    "weight_decay": 0.0005,
+    "label_smoothing": 0.05,
     "rect": False,
     "multi_scale": False,
+    "deterministic": False,
+    "compile": True,
+    "save_period": 5,
 }
 
 # Auto-override when running on Colab

@@ -97,17 +97,19 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 
 ### Model & Config
 
-| Parametre     | Değer                                    |
-|---------------|------------------------------------------|
-| Model         | `yolo11m.pt` (20.1M params, 68 GFLOPs)  |
-| Image Size    | 640                                      |
-| AMP (FP16)    | ✅ Enabled                                |
-| torch.compile | ✅ Enabled (YOLO built-in)                |
-| Cache         | ❌ Off (NVMe SSD'den oku)                 |
-| Deterministic | ❌ Off (hızlı CUDA kernels)               |
-| cos_lr        | ✅ Cosine annealing                       |
-| Patience      | 20 epoch early stopping                  |
-| Save Period   | Her 10 epoch checkpoint                  |
+| Parametre     | Değer                                      |
+|---------------|--------------------------------------------|
+| Model         | `yolo11m.pt` (20.1M params, 68 GFLOPs)    |
+| Image Size    | 1024 (A100/H100) / 640 (T4/L4)             |
+| Epochs        | 150 (Patience: 30)                         |
+| Optimizations | `lr0=0.01`, `bgr=0.05`, `close_mosaic=5`   |
+| Augmentations | `scale=0.2`, `copy_paste=0.2`, `flipud`    |
+| AMP (FP16)    | ✅ Enabled                                  |
+| torch.compile | ✅ Enabled (YOLO built-in)                  |
+| Cache         | ❌ Off (NVMe SSD'den oku, RAM şişmez)       |
+| Deterministic | ❌ Off (Hızlı CUDA kernels)                 |
+| Save Period   | Her 5 epoch checkpoint (Colab güvenliği)   |
+| Label Filter  | BBox < 0.005 tolerans ile filtrelenir      |
 
 ### Auto Hardware Detection (Colab)
 
