@@ -175,6 +175,7 @@ def auto_detect_hardware() -> tuple:
         "rect": False,
         "multi_scale": multi_scale,
         "deterministic": False,   # ~30% faster — non-deterministic CUDA kernels
+        "compile": True,          # torch.compile via YOLO's own pipeline (20-40% faster)
         "save_period": 10,        # Checkpoint every 10 epochs (less I/O)
     }
 

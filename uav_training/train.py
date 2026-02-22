@@ -236,17 +236,6 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
     # Load a model
     model = YOLO(model_path)
 
-    # Compile model for faster training (PyTorch 2.x)
-    # First epoch takes ~2-3 min to compile, but all subsequent epochs are 20-40% faster.
-    try:
-        import torch
-        if hasattr(torch, 'compile') and torch.cuda.is_available() and not resume:
-            print("⚡ Compiling model with torch.compile()...", flush=True)
-            model.model = torch.compile(model.model, mode="reduce-overhead")
-            print("  ✓ Model compiled", flush=True)
-    except Exception as e:
-        print(f"  ⚠️ torch.compile failed (non-fatal): {e}", flush=True)
-
     # Path to dataset config
     yaml_path = DATASET_DIR / "dataset.yaml"
 
@@ -276,7 +265,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
         # Add advanced params from config if they exist
         optional_params = ['patience', 'cos_lr', 'overlap_mask', 'mosaic',
                            'rect', 'multi_scale', 'close_mosaic',
-                           'deterministic', 'save_period']
+                           'deterministic', 'save_period', 'compile']
         for p in optional_params:
             if p in TRAIN_CONFIG:
                 train_args[p] = TRAIN_CONFIG[p]
