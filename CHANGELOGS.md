@@ -33,3 +33,8 @@
 - Added internal training audit documentation at `documentation/TRAINING_AUDIT_SMALL_OBJECT_AND_LOSS_BALANCE.md`.
 - Documented verified code paths for small-object thresholding (`min_bbox_norm`) and loss-weight forwarding (`box/cls/dfl`) with file-level references.
 - Added risk analysis for validation distortion, oversampling side effects, and observability gaps, plus acceptance criteria for scientific ablation tracking.
+
+## 0.0.07 - 2026-02-22
+- Extended `documentation/TRAINING_AUDIT_SMALL_OBJECT_AND_LOSS_BALANCE.md` with `3.4 Effective Training Config Verification` and explicit unknown-key warning rule.
+- Added `3.5 Dataset Snapshot Artifacts` contract with required CSV paths and required columns/hist bins.
+- Added `4.4 Two-Phase Training Validation Logic` clarifying phase intent and required pre/post Phase-2 comparisons.

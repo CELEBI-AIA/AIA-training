@@ -111,6 +111,46 @@
 - Current logs are enough to confirm many train args are active, but insufficient to explain why small-object AP changes.
 - No distributional evidence exists today to separate “cleaning effect” from “data loss effect.”
 
+### 3.4 Effective Training Config Verification
+
+- Printing `train_args` before `model.train(...)` is necessary but not sufficient: downstream defaults/overrides inside the trainer can still diverge from intended values.
+- Runtime must log the final effective configuration exactly as applied by Ultralytics for the current run.
+- Minimum expected runtime block:
+
+```text
+[CONFIG EFFECTIVE]
+epochs=100
+lr0=0.005
+lrf=0.01
+box=7.5
+cls=0.7
+dfl=1.5
+min_bbox_norm=0.004
+two_phase=True
+```
+
+> Any unknown config key must trigger a warning and not silently pass.
+
+### 3.5 Dataset Snapshot Artifacts
+
+- Standardized artifacts are required at:
+  - `artifacts/uav_model/dataset_stats_train.csv`
+  - `artifacts/uav_model/dataset_stats_val.csv`
+- Each file must contain:
+  - `image_count`
+  - `instance_count`
+  - per-class instance counts
+  - normalized bbox width histogram bins
+  - normalized bbox height histogram bins
+
+Minimal table shape (example):
+
+| split | image_count | instance_count | class_0_instances | class_1_instances | class_2_instances | class_3_instances | w_bin_lt_0.0025 | w_bin_0.0025_0.005 | w_bin_0.005_0.01 | w_bin_0.01_0.02 | w_bin_gt_0.02 | h_bin_lt_0.0025 | h_bin_0.0025_0.005 | h_bin_0.005_0.01 | h_bin_0.01_0.02 | h_bin_gt_0.02 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| train | 30625 | 182340 | 90500 | 74200 | 9300 | 8340 | 420 | 1830 | 9470 | 38420 | 132200 | 390 | 1760 | 9210 | 37680 | 133300 |
+
+> These artifacts are required before any ablation run is considered valid.
+
 ---
 
 ## 4. Recommended Action Plan
@@ -129,6 +169,18 @@ Scientific tuning criteria (instead of heuristic-only):
 - every change must include dataset distribution snapshot + class-wise AP deltas,
 - single-variable ablation table with fixed seed/split/config,
 - report both aggregate and minority-class outcomes.
+
+### 4.4 Two-Phase Training Validation Logic
+
+- Phase-1 is the generalization phase (baseline feature learning and robustness).
+- Phase-2 is the high-resolution refinement phase; `imgsz=896` is expected to improve small-object AP.
+- Before and after Phase-2, compare:
+  - `mAP50-95`
+  - `AP_small` (if available)
+  - class-wise AP for small-object-sensitive classes (for this repo: `uap`/`uai`)
+  - small bbox histogram distribution
+
+If Phase-2 increases overall mAP but decreases AP_small, the resolution gain is not translating into true small-object learning.
 
 ---
 
