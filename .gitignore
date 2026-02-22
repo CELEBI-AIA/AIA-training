@@ -30,6 +30,7 @@ datasets/
 # IDE
 # ──────────────────────────────────────────────
 .vscode/
+.agents/
 .idea/
 *.swp
 *.swo
