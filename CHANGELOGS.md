@@ -41,3 +41,9 @@
 
 ## 0.0.08 - 2026-02-22
 - Prepended a non-technical Turkish summary to `documentation/TRAINING_AUDIT_SMALL_OBJECT_AND_LOSS_BALANCE.md` for broader team readability.
+
+## 0.0.09 - 2026-02-22
+- Upgraded `.github/workflows/lint.yml` from lint-only to a broader CI quality gate on `push` and `pull_request` for `main`.
+- CI now enforces syntax-focused `flake8` checks (`E9,F63,F7,F82`) to catch parser/name-critical failures early.
+- Added `python -m compileall -q .` compile validation across the repository to surface syntax regressions before merge.
+- Removed heavy runtime dependency installation from CI path for faster, more reliable checks in a non-GPU runner context.

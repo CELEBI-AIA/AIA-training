@@ -1,4 +1,4 @@
-name: Lint
+name: CI
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  lint:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,15 +17,16 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install dependencies
+      - name: Install lint tooling
         run: |
           python -m pip install --upgrade pip
           pip install flake8
-          pip install -r requirements.txt
 
-      - name: Lint with flake8
+      - name: Lint (syntax-focused)
         run: |
-          # Stop on syntax errors or undefined names
+          # Block only for syntax/name errors
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          # Warnings (non-blocking)
-          flake8 . --count --exit-zero --max-complexity=15 --max-line-length=120 --statistics
+
+      - name: Compile check
+        run: |
+          python -m compileall -q .
