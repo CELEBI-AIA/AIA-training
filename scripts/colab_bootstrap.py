@@ -146,88 +146,101 @@ _run(f'{sys.executable} -c "import torch; print(f\'     torch: {{torch.__version
 print("  ✓ Dependencies installed", flush=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 4. Dataset Extraction (Drive .tar.gz → Local SSD Cache)
+# 4. Dataset: Download tar.gz → Local SSD → Extract → Verify → Cleanup
 # ═══════════════════════════════════════════════════════════════════════════
-_banner("4/8 — Extracting dataset to local SSD (MAX SPEED)")
+_banner("4/8 — Dataset to local SSD (DOWNLOAD → EXTRACT → VERIFY)")
 
 os.makedirs(LOCAL_CACHE, exist_ok=True)
 
-# Install tools with visible output
+# Install tools
 print("  📦 Installing extraction tools …", flush=True)
-_run("apt-get update -qq && apt-get install -y pigz mbuffer 2>&1 | tail -3", check=False)
+_run("apt-get update -qq && apt-get install -y pigz pv 2>&1 | tail -3", check=False)
 
-# Marker = extraction fully completed previously
 CACHE_MARKER = os.path.join(LOCAL_CACHE, ".done")
 NCPU = os.cpu_count() or 2
-HAS_MBUFFER = os.system("which mbuffer >/dev/null 2>&1") == 0
-
-# Smart cache detection:
-# 1. If .done marker exists → instant skip
-# 2. If no marker but directory has >5000 files → treat as complete (user put data there manually)
-# 3. If partial (100-5000 files) → incremental extraction
-# 4. If empty → full speed extraction
+LOCAL_TAR = "/content/datasets.tar.gz"  # Local SSD copy of the archive
 
 existing = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
-
 t0 = time.time()
 
 if os.path.isfile(CACHE_MARKER):
-    # ═══ TIER 1: Fully cached — instant skip ═══
-    print(f"  ⚡ Cache complete ({existing} files) — skipping extraction entirely", flush=True)
+    # ═══ Already extracted — skip everything ═══
+    print(f"  ⚡ Cache complete ({existing} files) — SKIP", flush=True)
 
 elif existing > 5000:
-    # ═══ TIER 1b: No marker but lots of files — assume complete, create marker ═══
-    print(f"  ⚡ Dataset already in local cache ({existing} files) — skipping extraction", flush=True)
+    print(f"  ⚡ Dataset detected ({existing} files) — SKIP", flush=True)
     with open(CACHE_MARKER, 'w') as f:
         f.write("1")
 
 else:
-    # Common tar flags for maximum speed:
+    # ── PHASE 1: Download tar.gz from Drive FUSE → Local SSD ──
+    # Drive FUSE streaming is slow (~200 MB/s). Copying the whole file
+    # to local SSD first lets us extract at full NVMe speed (~3 GB/s).
+    tar_size_gb = os.path.getsize(DRIVE_DATASET) / (1024**3)
+
+    if os.path.isfile(LOCAL_TAR):
+        local_size = os.path.getsize(LOCAL_TAR)
+        drive_size = os.path.getsize(DRIVE_DATASET)
+        if local_size == drive_size:
+            print(f"  ⚡ tar.gz already on local SSD ({tar_size_gb:.1f} GB) — skip download", flush=True)
+        else:
+            print(f"  ♻️  Partial download ({local_size/(1024**3):.1f}/{tar_size_gb:.1f} GB) — re-downloading", flush=True)
+            os.remove(LOCAL_TAR)
+            print(f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD …", flush=True)
+            # Use dd with large block size for max Drive FUSE throughput
+            _run(f'dd if="{DRIVE_DATASET}" of="{LOCAL_TAR}" bs=64M status=progress 2>&1 | tail -5')
+    else:
+        print(f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD …", flush=True)
+        print(f"     Source: {DRIVE_DATASET}", flush=True)
+        print(f"     Target: {LOCAL_TAR}", flush=True)
+        # dd with 64M blocks saturates Drive FUSE bandwidth
+        _run(f'dd if="{DRIVE_DATASET}" of="{LOCAL_TAR}" bs=64M status=progress 2>&1 | tail -5')
+
+    dl_elapsed = time.time() - t0
+    print(f"  ✓ Download done in {dl_elapsed:.0f}s ({tar_size_gb/max(dl_elapsed,1)*1024:.0f} MB/s)", flush=True)
+
+    # ── PHASE 2: Extract from LOCAL copy (full NVMe speed) ──
+    t1 = time.time()
     TAR_FAST = "--no-same-owner --no-same-permissions -b 512"
 
     if existing > 100:
-        # ═══ TIER 2: Partial cache — incremental, skip existing files ═══
-        print(f"  ♻️  Partial cache ({existing} files) — incremental mode …", flush=True)
-        extract_cmd = (
-            f'pigz -d -c -p {NCPU} "{DRIVE_DATASET}" '
+        print(f"  ♻️  Incremental extraction ({existing} existing files) …", flush=True)
+        _run(
+            f'pigz -d -c -p {NCPU} "{LOCAL_TAR}" '
+            f'| tar -xf - -C "{LOCAL_CACHE}" '
+            f'{TAR_FAST} --skip-old-files '
+            f'--checkpoint=10000 '
+            f'--checkpoint-action=echo="  %u files checked…"'
+        )
+    else:
+        print(f"  🚀 Full extraction → {LOCAL_CACHE} (pigz {NCPU} cores, local SSD)", flush=True)
+        _run(
+            f'pigz -d -c -p {NCPU} "{LOCAL_TAR}" '
             f'| tar -xf - -C "{LOCAL_CACHE}" '
             f'{TAR_FAST} '
-            f'--skip-old-files '
             f'--checkpoint=10000 '
-            f'--checkpoint-action=echo="  %u dosya kontrol edildi…"'
+            f'--checkpoint-action=echo="  %u files extracted…"'
         )
-        _run(extract_cmd)
-    else:
-        # ═══ TIER 3: Fresh extraction — maximum speed pipeline ═══
-        if HAS_MBUFFER:
-            print(f"  🚀 Max-speed extraction → {LOCAL_CACHE}", flush=True)
-            print(f"     Pipeline: Drive → mbuffer(64MB) → pigz({NCPU} cores) → tar(fast)")
-            extract_cmd = (
-                f'mbuffer -i "{DRIVE_DATASET}" -m 64M -q '
-                f'| pigz -d -c -p {NCPU} '
-                f'| tar -xf - -C "{LOCAL_CACHE}" '
-                f'{TAR_FAST} '
-                f'--checkpoint=10000 '
-                f'--checkpoint-action=echo="  %u dosya çıkarıldı…"'
-            )
-        else:
-            print(f"  🚀 Fast extraction → {LOCAL_CACHE} (pigz {NCPU} cores)", flush=True)
-            extract_cmd = (
-                f'pigz -d -c -p {NCPU} "{DRIVE_DATASET}" '
-                f'| tar -xf - -C "{LOCAL_CACHE}" '
-                f'{TAR_FAST} '
-                f'--checkpoint=10000 '
-                f'--checkpoint-action=echo="  %u dosya çıkarıldı…"'
-            )
-        _run(extract_cmd)
 
-    # Write marker = fully extracted
-    with open(CACHE_MARKER, 'w') as f:
-        f.write("1")
+    ext_elapsed = time.time() - t1
+    final_count = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
+    print(f"  ✓ Extracted in {ext_elapsed:.0f}s — {final_count} files", flush=True)
+
+    # ── PHASE 3: Verify & Cleanup ──
+    if final_count > 5000:
+        print(f"  ✅ Verification passed: {final_count} files on local SSD", flush=True)
+        with open(CACHE_MARKER, 'w') as f:
+            f.write("1")
+        # Delete local tar.gz to free ~78 GB of SSD space
+        if os.path.isfile(LOCAL_TAR):
+            os.remove(LOCAL_TAR)
+            print(f"  🗑️  Deleted local tar.gz — freed {tar_size_gb:.1f} GB", flush=True)
+    else:
+        print(f"  ⚠️  Only {final_count} files extracted — keeping tar.gz for retry", flush=True)
 
 elapsed = time.time() - t0
 final_count = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
-print(f"\n  ✓ Done in {elapsed:.1f}s — {final_count} files ready", flush=True)
+print(f"\n  ✓ Total time: {elapsed:.0f}s — {final_count} files ready on SSD", flush=True)
 
 # Symlink repo's datasets/ → local cache so training scripts find it
 repo_datasets = os.path.join(REPO_DIR, "datasets")

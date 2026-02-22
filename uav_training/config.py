@@ -91,21 +91,47 @@ def auto_detect_hardware() -> tuple:
     ram  = float(info["ram_gb"])
     cpus = int(info["cpu_count"])
 
-    if vram >= 35:
+    # ── TPU Detection ──
+    # YOLO/Ultralytics requires CUDA. TPUs (v6e-1, v5e-1) use XLA which
+    # is NOT compatible with YOLO's training loop. Detect and warn.
+    is_tpu = os.environ.get("TPU_NAME") is not None or \
+             os.environ.get("COLAB_TPU_ADDR") is not None or \
+             os.path.exists("/dev/accel0")
+    if is_tpu and vram == 0:
+        print("\n" + "!" * 60, flush=True)
+        print("  ⚠️  TPU RUNTIME DETECTED — YOLO EĞİTİMİ İÇİN UYGUN DEĞİL!")
+        print("  YOLO/Ultralytics CUDA (GPU) gerektirir, TPU/XLA desteklemez.")
+        print("  Lütfen runtime'ı GPU'ya değiştirin:")
+        print("     Runtime → Change runtime type → GPU (T4/L4/A100/H100)")
+        print("!" * 60 + "\n", flush=True)
+        # Fall back to CPU-like settings
+        tier = "TPU (unsupported)"
+        model = "yolov8s.pt"
+        imgsz = 640
+        batch = 8
+        info["gpu_name"] = f"TPU ({os.environ.get('TPU_NAME', 'unknown')})"
+
+    elif vram >= 70:
+        # ── H100 80GB ──
+        tier = "H100-80GB"
+        model = "yolov8s.pt"
+        imgsz = 640
+        batch = 128         # H100 is a beast — max throughput
+    elif vram >= 35:
         # ── A100 40GB / A6000 48GB ──
         tier = "A100-40GB"
         model = "yolov8s.pt"
         imgsz = 640
         batch = 64          # yolov8s@640 → ~8-10GB VRAM, max throughput
     elif vram >= 20:
-        # ── A100 24GB / L4 24GB ──
-        tier = "A100-24GB / L4"
+        # ── L4 24GB ──
+        tier = "L4-24GB"
         model = "yolov8s.pt"
         imgsz = 640
         batch = 64          # yolov8s@640 → ~8-10GB VRAM
     elif vram >= 14:
         # ── T4 16GB / V100 16GB ──
-        tier = "T4-16GB / V100"
+        tier = "T4-16GB"
         model = "yolov8s.pt"
         imgsz = 640
         batch = 32          # yolov8s@640 → ~5-6GB VRAM
@@ -114,10 +140,10 @@ def auto_detect_hardware() -> tuple:
         tier = "8GB GPU"
         model = "yolov8s.pt"
         imgsz = 640
-        batch = 16          # yolov8s@640 → ~3-4GB VRAM
+        batch = 16
     else:
         # ── Low VRAM / CPU ──
-        tier = "Low VRAM"
+        tier = "Low VRAM / CPU"
         model = "yolov8s.pt"
         imgsz = 640
         batch = 8
@@ -128,9 +154,7 @@ def auto_detect_hardware() -> tuple:
     # Multi-scale OFF — variable sizes cause OOM with large batches
     multi_scale = False
 
-    # Cache OFF — Colab NVMe SSD is fast enough (read: ~800MB/s).
-    # RAM cache currently takes >30GB RAM which maxes out the A100 system RAM 
-    # when DataLoaders spin up, causing massive OS swapping and 2.7 it/s thrashing.
+    # Cache OFF — read directly from NVMe SSD
     cache = False
 
     config_overrides = {
