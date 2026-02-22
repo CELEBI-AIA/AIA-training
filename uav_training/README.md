@@ -18,7 +18,7 @@ YOLO (Ultralytics) tabanlı İHA görüntülerinden nesne tespit modülü.
 | `config.py` | All paths, class definitions, and training hyperparameters |
 | `audit.py` | Scans `datasets/` directory, validates format, generates `audit_report.json` |
 | `build_dataset.py` | Merges multiple datasets → unified YOLO format with class remapping |
-| `train.py` | YOLOv8 training with auto-resume support |
+| `train.py` | YOLO11 training with auto-resume and optional two-phase profile |
 | `inference.py` | Quick inference smoke test on sample images |
 | `visualize_dataset.py` | Draws bounding boxes on random samples for visual verification |
 
@@ -31,8 +31,11 @@ python audit.py
 # 2. Build unified dataset
 python build_dataset.py
 
-# 3. Train
-python train.py --epochs 50 --batch 4 --device 0
+# 3. Train (single phase)
+python train.py --epochs 100 --batch 4 --device 0
+
+# 3b. Train (recommended two-phase profile: 85 + 15)
+python train.py --two-phase --batch 4 --device 0
 
 # 4. Resume
 python train.py --resume
@@ -45,17 +48,26 @@ python inference.py --model path/to/best.pt --source path/to/images
 
 ```python
 TRAIN_CONFIG = {
-    "epochs": 10,
+    "epochs": 100,
+    "phase1_epochs": 85,
+    "phase2_epochs": 15,
     "batch": 4,           # Optimized for 6GB VRAM
     "imgsz": 640,
     "device": 0,
-    "model": "yolov8s.pt",
+    "model": "yolo11m.pt",
     "workers": 8,
-    "amp": True,           # Mixed precision
+    "amp": True,          # Mixed precision
     "cache": True,         # RAM cache
-    "patience": 50,        # Early stopping
+    "patience": 30,        # Early stopping
     "cos_lr": True,        # Cosine LR scheduler
-    "mosaic": 0.5,         # Mosaic augmentation
+    "lr0": 0.005,
+    "lrf": 0.01,
+    "warmup_epochs": 3.0,
+    "weight_decay": 0.0005,
+    "mosaic": 1.0,         # Phase-1 augmentation
+    "close_mosaic": 15,
+    "box": 7.5, "cls": 0.7, "dfl": 1.5,
+    "min_bbox_norm": 0.004,
 }
 ```
 
@@ -77,4 +89,6 @@ artifacts/uav_model/dataset_uap_uai/
 For large datasets (e.g., `megaset` with 24k images):
 - **100%** of images with `human` annotations are kept
 - **10%** of vehicle-only images are kept
-- This balances class distribution without manual curation
+- Oversampling is applied only to `train`, not `val`
+- `test` split is not merged into `val` by default (`include_test_in_val=False`)
+- This balances class distribution without leaking validation quality

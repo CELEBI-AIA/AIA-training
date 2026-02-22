@@ -158,7 +158,13 @@ def auto_detect_hardware() -> tuple:
     cache = False
 
     config_overrides = {
-        "epochs": 150,            # Increased for better convergence
+        "epochs": 100,            # 85 + 15 two-phase profile
+        "phase1_epochs": 85,
+        "phase2_epochs": 15,
+        "phase2_imgsz": 896,
+        "phase2_mosaic": 0.2,
+        "phase2_close_mosaic": 10,
+        "phase2_lr0": 0.0015,
         "batch": batch,
         "imgsz": imgsz,
         "device": 0,
@@ -169,7 +175,7 @@ def auto_detect_hardware() -> tuple:
         "exist_ok": True,
         "patience": 30,           # Extended early stopping tolerance
         "cos_lr": True,
-        "close_mosaic": 5,        # 10 is too long, reduced to 5 to prevent overfit
+        "close_mosaic": 15,       # Keep mosaic longer in phase-1 for stronger generalization
         "overlap_mask": True,
         
         # ── Augmentation (UAV & Small Object Optimized) ──
@@ -181,11 +187,14 @@ def auto_detect_hardware() -> tuple:
         "bgr": 0.05,              # Slight blur/noise resistance
         
         # ── Optimizer & Hyperparameters ──
-        "lr0": 0.01,              # Explicit initial learning rate
+        "lr0": 0.005,             # Lower start for stable 100-epoch convergence
         "lrf": 0.01,              # Final LR fraction
         "warmup_epochs": 3.0,     # Prevent early gradient spikes
         "weight_decay": 0.0005,
         "label_smoothing": 0.05,  # Soften penalty on complex backgrounds
+        "box": 7.5,
+        "cls": 0.7,
+        "dfl": 1.5,
         
         # ── Mechanics ──
         "rect": False,
@@ -211,7 +220,7 @@ def auto_detect_hardware() -> tuple:
     print(f"  Workers    : {workers}")
     print(f"  Cache      : {cache}")
     print(f"  Multi-Scale: {multi_scale}")
-    print(f"  Epochs     : 100")
+    print(f"  Epochs     : 100 (phase1=85, phase2=15)")
     print(f"  AMP (FP16) : True")
     print(f"{'='*60}\n", flush=True)
 
@@ -230,7 +239,13 @@ else:
 
 # Default config (local / fallback)
 TRAIN_CONFIG = {
-    "epochs": 10,
+    "epochs": 100,
+    "phase1_epochs": 85,
+    "phase2_epochs": 15,
+    "phase2_imgsz": 896,
+    "phase2_mosaic": 0.2,
+    "phase2_close_mosaic": 10,
+    "phase2_lr0": 0.0015,
     "batch": 4,           # Conservative for local 6GB VRAM
     "imgsz": 640,
     "device": 0,
@@ -243,7 +258,7 @@ TRAIN_CONFIG = {
     "exist_ok": True,
     "patience": 30,
     "cos_lr": True,
-    "close_mosaic": 5,
+    "close_mosaic": 15,
     "overlap_mask": True,
     "mosaic": 1.0,
     "scale": 0.2,
@@ -251,11 +266,16 @@ TRAIN_CONFIG = {
     "copy_paste_mode": "flip",
     "flipud": 0.5,
     "bgr": 0.05,
-    "lr0": 0.01,
+    "lr0": 0.005,
     "lrf": 0.01,
     "warmup_epochs": 3.0,
     "weight_decay": 0.0005,
     "label_smoothing": 0.05,
+    "box": 7.5,
+    "cls": 0.7,
+    "dfl": 1.5,
+    "min_bbox_norm": 0.004,
+    "include_test_in_val": False,
     "rect": False,
     "multi_scale": False,
     "deterministic": False,

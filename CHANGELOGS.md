@@ -20,3 +20,11 @@
 - Added pair-read fast path for consecutive frames (`t`, `t+1`) to prefetch both frames in one decode flow.
 - Added safe resource cleanup (`VideoCapture.release`) via `atexit` and dataset destructor to prevent handle leaks when worker processes exit.
 - Added `frame_cache_size` to `gps_training/config.py` for cache tuning.
+
+## 0.0.05 - 2026-02-22
+- Training config now defaults to a 100-epoch profile with explicit phase settings (`phase1=85`, `phase2=15`) and tuned optimizer/loss parameters (`lr0`, `lrf`, `warmup_epochs`, `weight_decay`, `box/cls/dfl`).
+- `uav_training/train.py` now forwards all key hyperparameters/augment settings from `TRAIN_CONFIG` to `model.train(...)`, removing silent config no-op risk.
+- Added `--two-phase` flag in `uav_training/train.py` to run a short two-stage training flow (85+15) with high-resolution phase-2 fine-tune.
+- `uav_training/build_dataset.py` now enforces cleaner validation data: oversampling/smart sampling are train-only, and `test->val` merge is disabled by default.
+- Added configurable small-object bbox threshold via `min_bbox_norm` (default `0.004`) instead of hard-coded `0.005`.
+- Updated documentation (`README.md`, `uav_training/README.md`) and module version to `0.8.0`.
