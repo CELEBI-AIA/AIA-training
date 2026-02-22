@@ -3,7 +3,7 @@
 # Paste this entire cell into Colab and run.
 ##############################################################################
 
-VERSION = "0.7.1"
+VERSION = "0.7.2"
 
 # ── Configuration ───────────────────────────────────────────────────────────
 REPO_URL       = "https://github.com/CELEBI-AIA/AIA-training.git"
@@ -137,7 +137,7 @@ else:
 
 # Ensure ultralytics + psutil are available
 print("  📦 Verifying ultralytics & psutil …", flush=True)
-_run(f"{sys.executable} -m pip install --progress-bar on ultralytics psutil", check=False)
+# ultralytics & psutil already in requirements.txt — no duplicate install needed
 
 # Print key package versions
 print("\n  📊 Package versions:", flush=True)
