@@ -3,7 +3,7 @@
 # Paste this entire cell into Colab and run.
 ##############################################################################
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 
 # ── Configuration ───────────────────────────────────────────────────────────
 REPO_URL       = "https://github.com/CELEBI-AIA/AIA-training.git"
@@ -236,35 +236,82 @@ elif existing > 5000:
         f.write("1")
 
 else:
-    # ── PHASE 1: Download tar.gz from Drive → Local SSD ──
-    tar_size_gb = os.path.getsize(DRIVE_DATASET) / (1024**3)
-
+    # ── Disk cleanup before download ──
+    # Colab SSD is ~200GB. We need ~78GB for tar.gz + ~78GB for extracted files.
+    # Clean up leftovers from previous runs to prevent disk overflow.
     if os.path.isfile(LOCAL_TAR):
-        local_size = os.path.getsize(LOCAL_TAR)
-        drive_size = os.path.getsize(DRIVE_DATASET)
-        if local_size == drive_size:
+        _old_tar_gb = os.path.getsize(LOCAL_TAR) / (1024**3)
+        os.remove(LOCAL_TAR)
+        print(f"  🗑️  Removed old tar.gz — freed {_old_tar_gb:.1f} GB", flush=True)
+    if existing > 0 and existing <= 5000:
+        # Partial/broken old extraction — remove it
+        import shutil as _shutil
+        _shutil.rmtree(LOCAL_CACHE, ignore_errors=True)
+        os.makedirs(LOCAL_CACHE, exist_ok=True)
+        existing = 0
+        print(f"  🗑️  Removed incomplete old dataset", flush=True)
+
+    # Show disk space before we start
+    _run(f"df -h /content | tail -1 | awk '{{print \"  📊 Disk: used \"$3\"  free \"$4\"  (\"$5\" full)\"}}'")
+
+    # ── PHASE 1: Download tar.gz from Drive → Local SSD ──
+    # Uses Python file I/O with real-time progress — dd/pv output is
+    # invisible in Colab because it goes to stderr which Colab swallows.
+    tar_size_bytes = os.path.getsize(DRIVE_DATASET)
+    tar_size_gb = tar_size_bytes / (1024**3)
+
+    _need_download = True
+    if os.path.isfile(LOCAL_TAR):
+        if os.path.getsize(LOCAL_TAR) == tar_size_bytes:
             print(f"  ⚡ tar.gz already on local SSD ({tar_size_gb:.1f} GB) — skip download", flush=True)
+            _need_download = False
         else:
-            print(f"  ♻️  Partial ({local_size/(1024**3):.1f}/{tar_size_gb:.1f} GB) — re-downloading", flush=True)
+            print(f"  ♻️  Partial file — re-downloading", flush=True)
             os.remove(LOCAL_TAR)
-            print(f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD …", flush=True)
-            _run(f'dd if="{DRIVE_DATASET}" of="{LOCAL_TAR}" bs=64M status=progress 2>&1 | tail -5')
-    else:
+
+    if _need_download:
         print(f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD …", flush=True)
-        print(f"     Source: {DRIVE_DATASET}", flush=True)
-        print(f"     Target: {LOCAL_TAR}", flush=True)
-        _run(f'dd if="{DRIVE_DATASET}" of="{LOCAL_TAR}" bs=64M status=progress 2>&1 | tail -5')
+        print(f"     {DRIVE_DATASET} → {LOCAL_TAR}", flush=True)
+        CHUNK = 64 * 1024 * 1024  # 64 MB chunks
+        copied = 0
+        _dl_start = time.time()
+        _last_print = _dl_start
+        with open(DRIVE_DATASET, 'rb') as src, open(LOCAL_TAR, 'wb') as dst:
+            while True:
+                buf = src.read(CHUNK)
+                if not buf:
+                    break
+                dst.write(buf)
+                copied += len(buf)
+                now = time.time()
+                # Print progress every 2 seconds
+                if now - _last_print >= 2.0 or copied == tar_size_bytes:
+                    elapsed = now - _dl_start
+                    pct = copied / tar_size_bytes * 100
+                    speed_mb = (copied / (1024**2)) / max(elapsed, 0.1)
+                    remaining = (tar_size_bytes - copied) / max(copied / max(elapsed, 0.1), 1)
+                    mins, secs = divmod(int(remaining), 60)
+                    sys.stdout.write(
+                        f"\r  📥  {pct:5.1f}%  |  "
+                        f"{copied/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
+                        f"{speed_mb:.0f} MB/s  |  "
+                        f"ETA {mins}m {secs}s   "
+                    )
+                    sys.stdout.flush()
+                    _last_print = now
+        print(flush=True)  # newline after \r progress
 
     dl_elapsed = time.time() - t0
     print(f"  ✓ Download done in {dl_elapsed:.0f}s ({tar_size_gb/max(dl_elapsed,1)*1024:.0f} MB/s)", flush=True)
 
     # ── PHASE 2: Extract from local copy (full NVMe speed) ──
+    # Using Popen + os.read for real-time output in Colab
     t1 = time.time()
     TAR_FAST = "--no-same-owner --no-same-permissions -b 512"
 
     if existing > 100:
         print(f"  ♻️  Incremental extraction ({existing} existing files) …", flush=True)
-        _run(
+        _ext_cmd = (
             f'pigz -d -c -p {NCPU} "{LOCAL_TAR}" '
             f'| tar -xf - -C "{LOCAL_CACHE}" '
             f'{TAR_FAST} --skip-old-files '
@@ -273,7 +320,7 @@ else:
         )
     else:
         print(f"  🚀 Full extraction → {LOCAL_CACHE} (pigz {NCPU} cores, local SSD)", flush=True)
-        _run(
+        _ext_cmd = (
             f'pigz -d -c -p {NCPU} "{LOCAL_TAR}" '
             f'| tar -xf - -C "{LOCAL_CACHE}" '
             f'{TAR_FAST} '
@@ -281,20 +328,37 @@ else:
             f'--checkpoint-action=echo="  %u files extracted…"'
         )
 
+    # Stream extraction output in real-time (not buffered like _run)
+    _ext_proc = subprocess.Popen(
+        _ext_cmd, shell=True,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+    )
+    _ext_fd = _ext_proc.stdout.fileno()
+    while True:
+        _chunk = os.read(_ext_fd, 4096)
+        if not _chunk:
+            break
+        sys.stdout.write(_chunk.decode('utf-8', errors='replace'))
+        sys.stdout.flush()
+    _ext_proc.wait()
+
     ext_elapsed = time.time() - t1
     final_count = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
     print(f"  ✓ Extracted in {ext_elapsed:.0f}s — {final_count} files", flush=True)
 
-    # ── PHASE 3: Verify & Cleanup ──
+    # ── PHASE 3: Always delete tar.gz, then verify ──
+    # Must free ~78GB immediately — disk can't hold tar.gz + extracted files.
+    # Drive still has the original if we need to retry.
+    if os.path.isfile(LOCAL_TAR):
+        os.remove(LOCAL_TAR)
+        print(f"  🗑️  Deleted local tar.gz — freed {tar_size_gb:.1f} GB", flush=True)
+
     if final_count > 5000:
         print(f"  ✅ Verification passed: {final_count} files on local SSD", flush=True)
         with open(CACHE_MARKER, 'w') as f:
             f.write("1")
-        if os.path.isfile(LOCAL_TAR):
-            os.remove(LOCAL_TAR)
-            print(f"  🗑️  Deleted local tar.gz — freed {tar_size_gb:.1f} GB", flush=True)
     else:
-        print(f"  ⚠️  Only {final_count} files extracted — keeping tar.gz for retry", flush=True)
+        print(f"  ⚠️  Only {final_count} files extracted — re-run to retry from Drive", flush=True)
 
 elapsed = time.time() - t0
 final_count = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
