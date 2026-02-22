@@ -10,7 +10,7 @@ import atexit
 import fcntl
 
 # Use configuration from config.py if needed, or define constants here for standalone utility
-from config import PROJECT_ROOT, DATASET_DIR, ARTIFACTS_DIR
+from config import PROJECT_ROOT, DATASET_DIR, ARTIFACTS_DIR, TRAIN_CONFIG
 
 # Using the optimized MAPPINGS from the successful unify_datasets.py
 # Updated MAPPINGS for "TRAIN" folder
@@ -73,6 +73,8 @@ MAPPINGS = {
 }
 
 DATASETS_DIR = PROJECT_ROOT / "datasets" / "TRAIN"
+MIN_BBOX_NORM = float(TRAIN_CONFIG.get("min_bbox_norm", 0.004))
+INCLUDE_TEST_IN_VAL = bool(TRAIN_CONFIG.get("include_test_in_val", False))
 
 
 def _acquire_file_lock(lock_path: Path) -> int:
@@ -114,26 +116,33 @@ def build_dataset():
             print(f"Dataset {dataset_name} not found, skipping.")
             continue
             
-        oversample_count = config.get("oversample", 1)
+        base_oversample_count = config.get("oversample", 1)
         sampling_rate = config.get("sampling_rate", 1.0)
         smart_sample = config.get("smart_sample", False)
         
-        print(f"Processing {dataset_name} (Sample: {sampling_rate*100}%, Oversample: {oversample_count}x, SmartSample: {smart_sample})...")
+        print(f"Processing {dataset_name} (Sample: {sampling_rate*100}%, Oversample(train): {base_oversample_count}x, SmartSample: {smart_sample})...")
         
-        for split in ["train", "valid", "val", "test"]: 
+        source_splits = ["train", "valid", "val"]
+        if INCLUDE_TEST_IN_VAL:
+            source_splits.append("test")
+
+        for split in source_splits:
                 src_split_path = dataset_path / split
                 
                 # Special handling for datasets that might be named differently or missing splits
                 if not src_split_path.exists():
                     # specific overrides if needed, or just skip
-                    if dataset_name == "megaset" and split == "val":
-                         # Megaset only has train and test. Try test as val.
+                    if dataset_name == "megaset" and split == "val" and INCLUDE_TEST_IN_VAL:
+                         # Megaset can use test as val only when explicitly enabled.
                          src_split_path = dataset_path / "test"
-                         if not src_split_path.exists(): continue
+                         if not src_split_path.exists():
+                             continue
                     else:
                         continue
 
                 target_split = "train" if split == "train" else "val"
+                oversample_count = base_oversample_count if target_split == "train" else 1
+                split_smart_sample = smart_sample and target_split == "train"
                 
                 # Check for images dir vs flat structure
                 images_dir = src_split_path / "images"
@@ -151,7 +160,7 @@ def build_dataset():
 
                 # Downsampling Logic (Only if NOT smart_sample)
                 random.seed(42) 
-                if not smart_sample and sampling_rate < 1.0:
+                if not split_smart_sample and sampling_rate < 1.0:
                     original_count = len(image_files)
                     k = int(original_count * sampling_rate)
                     if k > 0:
@@ -160,7 +169,7 @@ def build_dataset():
                 else:
                     print(f"  Found {len(image_files)} images in {split}")
                 
-                if smart_sample:
+                if split_smart_sample:
                     print(f"  Applying Smart Sampling for {dataset_name}...")
                 
                 # Counters for smart stats
@@ -250,8 +259,8 @@ def build_dataset():
                                             w = max(0.0, min(1.0, w))
                                             h = max(0.0, min(1.0, h))
                                             
-                                            # Strict bounds: min 0.005 (~5px on 1024), max 1.0
-                                            if 0.005 < w <= 1.0 and 0.005 < h <= 1.0:
+                                            # Strict bounds: configurable min size, max 1.0
+                                            if MIN_BBOX_NORM < w <= 1.0 and MIN_BBOX_NORM < h <= 1.0:
                                                 new_line = f"{target_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n"
                                                 if new_line not in _seen_lines:
                                                     _seen_lines.add(new_line)
@@ -261,7 +270,7 @@ def build_dataset():
                                         continue
                             
                             # SMART SAMPLING DECISION
-                            if smart_sample:
+                            if split_smart_sample:
                                 keep = False
                                 if has_human:
                                     keep = True # Keep 100% of humans
@@ -298,7 +307,7 @@ def build_dataset():
                             print(f"Error processing {img_path}: {e}")
                             continue
                 
-                if smart_sample:
+                if split_smart_sample:
                     print(f"  Smart Sampling Stats ({split}): Kept Humans: {kept_humans}, Kept Vehicles: {kept_vehicles}, Skipped: {skipped_smart}")
 
     # Generate data.yaml

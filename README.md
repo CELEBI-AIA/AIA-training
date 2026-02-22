@@ -1,4 +1,4 @@
-# 🛩️ UAV Training Pipeline — v0.7.3
+# 🛩️ UAV Training Pipeline — v0.8.0
 
 YOLO11m tabanlı İHA (UAV) tespit ve GPS tabanlı konum takibi eğitim altyapısı.
 Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücre ile çalışır.
@@ -11,7 +11,7 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 .
 ├── uav_training/              # YOLO object detection module
 │   ├── config.py              # Auto hardware detection & hyperparameters
-│   ├── train.py               # Training entrypoint (v0.7.3)
+│   ├── train.py               # Training entrypoint (v0.8.0)
 │   ├── build_dataset.py       # Dataset unification, smart sampling & dedup
 │   ├── audit.py               # Dataset audit & validation
 │   ├── inference.py           # Smoke test inference
@@ -25,7 +25,7 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 │   └── audit_gps.py           # Trajectory CSV scanner & validator
 │
 ├── scripts/
-│   ├── colab_bootstrap.py     # One-cell Colab training launcher (v0.7.3)
+│   ├── colab_bootstrap.py     # One-cell Colab training launcher
 │   └── cleanup.sh             # GPU memory & process cleanup
 │
 ├── notebooks/
@@ -72,7 +72,10 @@ pip install -r requirements.txt
 
 # Train (UAV Detection)
 cd uav_training
-python train.py --epochs 50 --batch 4 --device 0
+python train.py --epochs 100 --batch 4 --device 0
+
+# Recommended two-phase profile (85 + 15)
+python train.py --two-phase --batch 4 --device 0
 
 # Resume from checkpoint
 python train.py --resume
@@ -101,15 +104,15 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 |---------------|--------------------------------------------|
 | Model         | `yolo11m.pt` (20.1M params, 68 GFLOPs)    |
 | Image Size    | 1024 (A100/H100) / 640 (T4/L4)             |
-| Epochs        | 150 (Patience: 30)                         |
-| Optimizations | `lr0=0.01`, `bgr=0.05`, `close_mosaic=5`   |
+| Epochs        | 100 (Phase1: 85 + Phase2: 15, Patience: 30) |
+| Optimizations | `lr0=0.005`, `bgr=0.05`, `close_mosaic=15`  |
 | Augmentations | `scale=0.2`, `copy_paste=0.2`, `flipud`    |
 | AMP (FP16)    | ✅ Enabled                                  |
 | torch.compile | ✅ Enabled (YOLO built-in)                  |
 | Cache         | ❌ Off (NVMe SSD'den oku, RAM şişmez)       |
 | Deterministic | ❌ Off (Hızlı CUDA kernels)                 |
 | Save Period   | Her 5 epoch checkpoint (Colab güvenliği)   |
-| Label Filter  | BBox < 0.005 tolerans ile filtrelenir      |
+| Label Filter  | `min_bbox_norm=0.004` ile filtrelenir       |
 
 ### Auto Hardware Detection (Colab)
 

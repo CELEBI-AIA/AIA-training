@@ -17,7 +17,7 @@ import csv
 import shutil
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.7.3"
+__version__ = "0.8.0"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -162,7 +162,85 @@ def print_training_config(train_args: dict):
     print(f"{'─'*60}\n", flush=True)
 
 
-def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
+def _sync_results_to_drive(results_dir: Path, run_name: str):
+    """Best-effort sync from local SSD runs to Drive."""
+    drive_runs = os.environ.get("UAV_PROJECT_DIR")
+    if drive_runs and str(results_dir).startswith("/content/runs"):
+        drive_results = os.path.join(drive_runs, run_name)
+        os.makedirs(drive_results, exist_ok=True)
+        print(f"\n☁️  Syncing results to Drive: {drive_results}", flush=True)
+        _sync_cmd = f'rsync -a --info=progress2 "{results_dir}/" "{drive_results}/"'
+        import subprocess
+        subprocess.run(_sync_cmd, shell=True, check=False)
+        print(f"  ✓ Results synced to Drive", flush=True)
+
+
+def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=None, resume=False, phase_overrides=None):
+    """Run one YOLO training phase and return summary metrics."""
+    # Load model for this phase
+    model = YOLO(model_path)
+
+    yaml_path = DATASET_DIR / "dataset.yaml"
+    if not yaml_path.exists():
+        print(f"Error: Dataset config not found at {yaml_path}", flush=True)
+        print("Please run build_dataset.py first.")
+        sys.exit(1)
+
+    train_args = {
+        "data": str(yaml_path),
+        "epochs": epochs,
+        "batch": batch,
+        "imgsz": imgsz if imgsz is not None else TRAIN_CONFIG["imgsz"],
+        "device": device,
+        "project": str(TRAIN_CONFIG["project"]),
+        "name": run_name,
+        "exist_ok": True,
+        "verbose": True,
+        "workers": TRAIN_CONFIG["workers"],
+        "amp": TRAIN_CONFIG["amp"],
+        "cache": TRAIN_CONFIG["cache"],
+        "resume": resume,
+    }
+
+    optional_params = [
+        "patience", "cos_lr", "overlap_mask", "mosaic", "rect", "multi_scale",
+        "close_mosaic", "deterministic", "save_period", "compile",
+        "lr0", "lrf", "warmup_epochs", "weight_decay", "label_smoothing",
+        "scale", "copy_paste", "copy_paste_mode", "flipud", "bgr",
+        "box", "cls", "dfl",
+    ]
+    for p in optional_params:
+        if p in TRAIN_CONFIG:
+            train_args[p] = TRAIN_CONFIG[p]
+
+    if phase_overrides:
+        train_args.update(phase_overrides)
+
+    print_training_config(train_args)
+    results = model.train(**train_args)
+
+    print("\n✅ Training completed.", flush=True)
+    print(f"\n{'='*60}", flush=True)
+    print(f"  📊 FINAL RESULTS ({run_name})")
+    print(f"{'='*60}")
+    print(f"  mAP50     : {results.box.map50:.4f}")
+    print(f"  mAP50-95  : {results.box.map:.4f}")
+    print(f"{'='*60}\n", flush=True)
+
+    results_dir = Path(str(TRAIN_CONFIG["project"])) / run_name
+    drive_dest = os.environ.get("DRIVE_UPLOAD_DIR")
+    renamed = rename_and_export_best(results_dir, drive_dest)
+    _sync_results_to_drive(results_dir, run_name)
+
+    return {
+        "mAP50": results.box.map50,
+        "mAP50-95": results.box.map,
+        "results_dir": str(results_dir),
+        "best_pt": str(renamed) if renamed else None,
+    }
+
+
+def train(epochs=None, batch=None, device=None, model_path=None, resume=False, two_phase=False):
     kill_gpu_hogs()
 
     # Auto-optimize dataset if not resuming AND not already built
@@ -193,15 +271,19 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
         build_dataset()
 
     # Use config values if not provided
-    epochs = epochs if epochs is not None else TRAIN_CONFIG['epochs']
-    batch = batch if batch is not None else TRAIN_CONFIG['batch']
-    device = device if device is not None else TRAIN_CONFIG['device']
-    model_path = model_path if model_path is not None else TRAIN_CONFIG['model']
+    epochs = epochs if epochs is not None else TRAIN_CONFIG["epochs"]
+    batch = batch if batch is not None else TRAIN_CONFIG["batch"]
+    device = device if device is not None else TRAIN_CONFIG["device"]
+    model_path = model_path if model_path is not None else TRAIN_CONFIG["model"]
+
+    if two_phase and resume:
+        print("Error: --two-phase and --resume cannot be used together.", flush=True)
+        sys.exit(1)
 
     # Resume logic
     if resume:
         # Auto-detect latest checkpoint
-        project_results = TRAIN_CONFIG['project']
+        project_results = TRAIN_CONFIG["project"]
         if not project_results.exists():
              print(f"Error: Project directory {project_results} not found.", flush=True)
              sys.exit(1)
@@ -233,94 +315,63 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False):
     except Exception:
         pass
 
-    # Load a model
-    model = YOLO(model_path)
-
-    # Path to dataset config
-    yaml_path = DATASET_DIR / "dataset.yaml"
-
-    if not yaml_path.exists():
-        print(f"Error: Dataset config not found at {yaml_path}", flush=True)
-        print("Please run build_dataset.py first.")
-        sys.exit(1)
-
-    # Train the model
     try:
-        train_args = {
-            "data": str(yaml_path),
-            "epochs": epochs,
-            "batch": batch,
-            "imgsz": TRAIN_CONFIG['imgsz'],
-            "device": device,
-            "project": str(TRAIN_CONFIG['project']),
-            "name": TRAIN_CONFIG['name'],
-            "exist_ok": True,
-            "verbose": True,
-            "workers": TRAIN_CONFIG['workers'],
-            "amp": TRAIN_CONFIG['amp'],
-            "cache": TRAIN_CONFIG['cache'],
-            "resume": resume
+        if not two_phase:
+            return _train_single_phase(
+                model_path,
+                run_name=TRAIN_CONFIG["name"],
+                epochs=epochs,
+                batch=batch,
+                device=device,
+                resume=resume,
+            )
+
+        phase1_epochs = int(TRAIN_CONFIG.get("phase1_epochs", 85))
+        phase2_epochs = int(TRAIN_CONFIG.get("phase2_epochs", 15))
+        if epochs is not None and int(epochs) > 1:
+            # Keep phase-2 length stable, assign the remainder to phase-1.
+            phase2_epochs = min(phase2_epochs, int(epochs) - 1)
+            phase1_epochs = int(epochs) - phase2_epochs
+
+        phase1_name = f"{TRAIN_CONFIG['name']}_phase1"
+        phase2_name = f"{TRAIN_CONFIG['name']}_phase2"
+        print(f"\n🚀 Two-phase training active (phase1={phase1_epochs}, phase2={phase2_epochs})", flush=True)
+
+        phase1_result = _train_single_phase(
+            model_path,
+            run_name=phase1_name,
+            epochs=phase1_epochs,
+            batch=batch,
+            device=device,
+            resume=False,
+        )
+
+        phase2_model_path = phase1_result.get("best_pt")
+        if not phase2_model_path:
+            phase2_model_path = str(Path(phase1_result["results_dir"]) / "weights" / "best.pt")
+
+        phase2_batch = batch
+        if isinstance(batch, int):
+            phase2_batch = max(1, batch // 2)
+
+        phase2_overrides = {
+            "mosaic": TRAIN_CONFIG.get("phase2_mosaic", 0.2),
+            "close_mosaic": TRAIN_CONFIG.get("phase2_close_mosaic", 10),
+            "lr0": TRAIN_CONFIG.get("phase2_lr0", TRAIN_CONFIG.get("lr0", 0.0015)),
         }
 
-        # Add advanced params from config if they exist
-        optional_params = ['patience', 'cos_lr', 'overlap_mask', 'mosaic',
-                           'rect', 'multi_scale', 'close_mosaic',
-                           'deterministic', 'save_period', 'compile']
-        for p in optional_params:
-            if p in TRAIN_CONFIG:
-                train_args[p] = TRAIN_CONFIG[p]
+        phase2_result = _train_single_phase(
+            phase2_model_path,
+            run_name=phase2_name,
+            epochs=phase2_epochs,
+            batch=phase2_batch,
+            device=device,
+            imgsz=int(TRAIN_CONFIG.get("phase2_imgsz", 896)),
+            resume=False,
+            phase_overrides=phase2_overrides,
+        )
 
-        # Print full config so it appears in logs
-        print_training_config(train_args)
-
-        results = model.train(**train_args)
-
-        print("\n✅ Training completed.", flush=True)
-
-        # Print GPU usage after training
-        try:
-            import torch
-            if torch.cuda.is_available():
-                vram_used = torch.cuda.max_memory_allocated(0) / (1024**3)
-                print(f"  Peak GPU VRAM used: {vram_used:.1f} GB", flush=True)
-        except Exception:
-            pass
-
-        # Use results from training's final validation (no redundant model.val())
-        # YOLO already validates on the last epoch — calling model.val() again
-        # would re-run 12k+ images for ~6 minutes with zero benefit.
-        metrics = results
-        print(f"\n{'='*60}", flush=True)
-        print(f"  📊 FINAL RESULTS")
-        print(f"{'='*60}")
-        print(f"  mAP50     : {metrics.box.map50:.4f}")
-        print(f"  mAP50-95  : {metrics.box.map:.4f}")
-        print(f"{'='*60}\n", flush=True)
-
-        # Determine results directory
-        results_dir = Path(str(TRAIN_CONFIG['project'])) / TRAIN_CONFIG['name']
-
-        # Post-training: rename best.pt with scores and upload to Drive
-        drive_dest = os.environ.get("DRIVE_UPLOAD_DIR")
-        renamed = rename_and_export_best(results_dir, drive_dest)
-
-        # Copy full results from local SSD to Drive for persistence
-        drive_runs = os.environ.get("UAV_PROJECT_DIR")
-        if drive_runs and str(results_dir).startswith("/content/runs"):
-            drive_results = os.path.join(drive_runs, TRAIN_CONFIG['name'])
-            os.makedirs(drive_results, exist_ok=True)
-            print(f"\n☁️  Syncing results to Drive: {drive_results}", flush=True)
-            _sync_cmd = f'rsync -a --info=progress2 "{results_dir}/" "{drive_results}/"'
-            import subprocess
-            subprocess.run(_sync_cmd, shell=True, check=False)
-            print(f"  ✓ Results synced to Drive", flush=True)
-
-        return {
-            "mAP50": metrics.box.map50,
-            "mAP50-95": metrics.box.map,
-            "results_dir": str(results_dir),
-            "best_pt": str(renamed) if renamed else None,
-        }
+        return {"phase1": phase1_result, "phase2": phase2_result}
 
     except Exception as e:
         print(f"\n❌ An error occurred during training: {e}", flush=True)
@@ -335,6 +386,7 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, help="cuda device, i.e. 0 or 0,1,2,3 or cpu")
     parser.add_argument("--model", type=str, help="Model path or size (e.g. yolo11m.pt)")
     parser.add_argument("--resume", action="store_true", help="Resume training from last checkpoint")
+    parser.add_argument("--two-phase", action="store_true", help="Run 85+15 two-phase training profile")
 
     args = parser.parse_args()
 
@@ -346,4 +398,11 @@ if __name__ == "__main__":
         except ValueError:
             pass # Keep as string if it's something like 'auto' or '-1'
 
-    train(epochs=args.epochs, batch=batch_val, device=args.device, model_path=args.model, resume=args.resume)
+    train(
+        epochs=args.epochs,
+        batch=batch_val,
+        device=args.device,
+        model_path=args.model,
+        resume=args.resume,
+        two_phase=args.two_phase,
+    )
