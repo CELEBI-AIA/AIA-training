@@ -76,3 +76,7 @@
 - `uav_training/train.py`, `gps_training/train.py`: Implemented `_is_checkpoint_valid` guard to prevent `EOFError` when resuming from corrupted checkpoints.
 - `uav_training/train.py`: Added fallback mechanism for phase 2 transition to load `last.pt` if `best.pt` is missing.
 - `uav_training/build_dataset.py`: Replaced `shutil.copy2` with `os.link` to eliminate disk overhead and accelerate I/O in Colab VMs.
+
+## 0.0.16 - 2026-02-23
+- Added Drive path resolution in `scripts/colab_bootstrap.py` to recover from dangling `MyDrive` shortcuts by resolving symlink targets automatically.
+- Added periodic in-training sync (`rsync` every 3 minutes) from `/content/runs` to Drive to reduce checkpoint loss risk on Colab disconnects/restarts.

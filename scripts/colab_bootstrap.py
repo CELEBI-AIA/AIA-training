@@ -15,7 +15,7 @@ DRIVE_UPLOAD   = "/content/drive/MyDrive/AIA"     # best.pt upload destination
 TRAIN_SCRIPT   = "uav_training/train.py"
 # ────────────────────────────────────────────────────────────────────────────
 
-import subprocess, sys, os, glob, time
+import subprocess, sys, os, glob, time, threading
 from datetime import datetime
 
 
@@ -57,6 +57,18 @@ def _run(cmd: str, *, check: bool = True, print_output: bool = True, **kw):
         sys.stdout.write(r.stdout)
         sys.stdout.flush()
     return r
+
+
+def _resolve_drive_path(path: str) -> str:
+    """Resolve dangling MyDrive shortcuts to actual target path when available."""
+    if os.path.exists(path):
+        return path
+    if os.path.islink(path):
+        target = os.path.realpath(path)
+        if os.path.exists(target):
+            print(f"  🔗 Resolved shortcut path: {path} -> {target}", flush=True)
+            return target
+    return path
 
 def _banner(msg: str):
     print(f"\n{'='*60}\n  {msg}\n{'='*60}", flush=True)
@@ -110,6 +122,10 @@ print("  ✓ Cleanup done\n", flush=True)
 _banner("1/8 — Mounting Google Drive")
 from google.colab import drive
 drive.mount("/content/drive", force_remount=False)
+
+DRIVE_UPLOAD = _resolve_drive_path(DRIVE_UPLOAD)
+DRIVE_RUNS = _resolve_drive_path(DRIVE_RUNS)
+DRIVE_DATASET = _resolve_drive_path(DRIVE_DATASET)
 
 if not os.path.isfile(DRIVE_DATASET):
     raise FileNotFoundError(
@@ -472,6 +488,28 @@ proc = subprocess.Popen(
     env={**os.environ, "PYTHONUNBUFFERED": "1"}
 )
 
+
+def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 180):
+    """
+    Periodically sync /content/runs to Drive during training to avoid
+    checkpoint loss when Colab runtime disconnects/restarts.
+    """
+    runs_dir = "/content/runs"
+    if not os.path.isdir(DRIVE_RUNS):
+        print(f"  ⚠️  Periodic sync disabled (Drive runs path unavailable): {DRIVE_RUNS}", flush=True)
+        return
+
+    while not stop_event.wait(interval_sec):
+        if os.path.isdir(runs_dir):
+            _run(f'rsync -a "{runs_dir}/" "{DRIVE_RUNS}/"', check=False, print_output=False)
+            now = datetime.now().strftime("%H:%M:%S")
+            print(f"\n  ☁️  [{now}] Periodic checkpoint sync completed", flush=True)
+
+
+_sync_stop = threading.Event()
+_sync_thread = threading.Thread(target=_periodic_runs_sync, args=(_sync_stop,), daemon=True)
+_sync_thread.start()
+
 with open(log_path, 'wb') as lf:
     fd = proc.stdout.fileno()
     while True:
@@ -486,6 +524,8 @@ with open(log_path, 'wb') as lf:
         lf.flush()
 
 exit_code = proc.wait()
+_sync_stop.set()
+_sync_thread.join(timeout=5)
 print(f"\n{'─'*60}", flush=True)
 
 if exit_code != 0:
