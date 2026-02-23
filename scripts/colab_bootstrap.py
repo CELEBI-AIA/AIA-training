@@ -256,12 +256,15 @@ os.environ["UAV_PROJECT_DIR"] = DRIVE_RUNS
 os.environ["DRIVE_UPLOAD_DIR"] = DRIVE_UPLOAD
 
 # --- DataLoader thread limiter ---
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
 os.environ["OPENCV_FOR_THREADS_NUM"] = "1"
+
+# Force inter/intra op threads for PyTorch 
+_run(f'{sys.executable} -c "import torch; torch.set_num_threads(1); torch.set_num_interop_threads(1)"', check=False)
 
 # Point YOLO settings to local SSD
 _run('yolo settings runs_dir="/content/runs"', check=False)

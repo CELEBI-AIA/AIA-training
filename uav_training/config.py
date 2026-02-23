@@ -148,8 +148,23 @@ def auto_detect_hardware() -> tuple:
         imgsz = 640
         batch = 4
 
-    # Workers: cap at 8 (more can cause Colab dataloader issues)
+    # ── CPU Worker & Thread Configuration ──
+    # DO NOT restrict DataLoader workers with OMP. Just limit torch inter-ops.
+    torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
+    os.environ["OMP_NUM_THREADS"] = "2"
+    os.environ["OPENBLAS_NUM_THREADS"] = "2"
+    os.environ["MKL_NUM_THREADS"] = "1"
+
     workers = min(cpus, 8)
+
+    # ── Safe VRAM Batch Sizing (Target ~80% Capacity) ──
+    usable_vram = vram * 0.80
+    model_overhead_gb = 3.5
+    available = max(0.0, usable_vram - model_overhead_gb)
+    gb_per_sample = 0.72 if imgsz == 1024 else ((imgsz / 640) ** 2 * 0.28)
+    safe_batch = int(available / gb_per_sample)
+    batch = max(8, (safe_batch // 8) * 8)
 
     # Multi-scale OFF — variable sizes cause OOM with large batches
     multi_scale = False
@@ -157,41 +172,53 @@ def auto_detect_hardware() -> tuple:
     # Cache OFF — read directly from NVMe SSD
     cache = False
 
+    # ── Linear LR Scaling ──
+    # Scaled properly to match new dynamic batch sizing
+    base_batch = 16
+    base_lr = 0.01
+    scaled_lr0 = base_lr * (batch / base_batch)
+    warmup_epochs = 5.0 # Increased for larger batch sizes
+
     config_overrides = {
-        "epochs": 100,            # 85 + 15 two-phase profile
-        "phase1_epochs": 85,
+        "epochs": 65,            # 50 + 15 two-phase profile
+        "phase1_epochs": 50,
         "phase2_epochs": 15,
         "phase2_imgsz": 896,
         "phase2_mosaic": 0.2,
-        "phase2_close_mosaic": 10,
-        "phase2_lr0": 0.0015,
+        "phase2_close_mosaic": 5,
+        "phase2_lr0": scaled_lr0 * 0.1,  # Reduced LR in phase 2
         "batch": batch,
         "imgsz": imgsz,
         "device": 0,
         "model": model,
         "workers": workers,
         "amp": True,
+        "amp_dtype": "bf16",
         "cache": cache,
         "exist_ok": True,
         "patience": 30,           # Extended early stopping tolerance
         "cos_lr": True,
-        "close_mosaic": 15,       # Keep mosaic longer in phase-1 for stronger generalization
+        "close_mosaic": 5,       # Keep clean samples for the final epochs
         "overlap_mask": True,
         
         # ── Augmentation (UAV & Small Object Optimized) ──
-        "mosaic": 1.0,            # Keep mosaic
-        "scale": 0.05,            # CRITICAL: Prevent over-shrinking small objects (was 0.2)
-        "copy_paste": 0.2,        # Inject minority classes (humans/vehicles) into background
+        "mosaic": 1.0,            
+        "scale": 0.4,             # Increased for better scale variation for small objects
+        "copy_paste": 0.3,        # Increased context simulation
         "copy_paste_mode": "flip",
-        "flipud": 0.5,            # Top-down drone view: up/down flip is safe
-        "bgr": 0.05,              # Slight blur/noise resistance
+        "flipud": 0.5,            
+        "fliplr": 0.5,            # Added symmetric flips
+        "hsv_h": 0.015,           # Adding slight color variation
+        "hsv_s": 0.7,             # Sunset/fog simulation
+        "hsv_v": 0.4,             # Day/night transitions
+        "bgr": 0.05,              
         
         # ── Optimizer & Hyperparameters ──
-        "lr0": 0.005,             # Lower start for stable 100-epoch convergence
+        "lr0": scaled_lr0,        # Linearly scaled 
         "lrf": 0.01,              # Final LR fraction
-        "warmup_epochs": 3.0,     # Prevent early gradient spikes
+        "warmup_epochs": warmup_epochs, 
         "weight_decay": 0.0005,
-        "label_smoothing": 0.05,  # Soften penalty on complex backgrounds
+        "label_smoothing": 0.05,  
         "box": 7.5,
         "cls": 0.7,
         "dfl": 1.5,
@@ -220,8 +247,8 @@ def auto_detect_hardware() -> tuple:
     print(f"  Workers    : {workers}")
     print(f"  Cache      : {cache}")
     print(f"  Multi-Scale: {multi_scale}")
-    print(f"  Epochs     : 100 (phase1=85, phase2=15)")
-    print(f"  AMP (FP16) : True")
+    print(f"  Epochs     : 65 (phase1=50, phase2=15)")
+    print(f"  AMP (BF16 tgt) : True")
     print(f"{'='*60}\n", flush=True)
 
     return config_overrides, info
@@ -239,8 +266,8 @@ else:
 
 # Default config (local / fallback)
 TRAIN_CONFIG = {
-    "epochs": 100,
-    "phase1_epochs": 85,
+    "epochs": 65,
+    "phase1_epochs": 50,
     "phase2_epochs": 15,
     "phase2_imgsz": 896,
     "phase2_mosaic": 0.2,
@@ -258,17 +285,21 @@ TRAIN_CONFIG = {
     "exist_ok": True,
     "patience": 30,
     "cos_lr": True,
-    "close_mosaic": 15,
+    "close_mosaic": 5,
     "overlap_mask": True,
     "mosaic": 1.0,
-    "scale": 0.05,
-    "copy_paste": 0.2,
+    "scale": 0.4,
+    "copy_paste": 0.3,
     "copy_paste_mode": "flip",
     "flipud": 0.5,
+    "fliplr": 0.5,
+    "hsv_h": 0.015,
+    "hsv_s": 0.7,
+    "hsv_v": 0.4,
     "bgr": 0.05,
-    "lr0": 0.005,
+    "lr0": 0.02,
     "lrf": 0.01,
-    "warmup_epochs": 3.0,
+    "warmup_epochs": 5.0,
     "weight_decay": 0.0005,
     "label_smoothing": 0.05,
     "box": 7.5,

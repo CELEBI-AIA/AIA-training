@@ -1,7 +1,10 @@
 import argparse
 import sys
 from pathlib import Path
+import torch
 
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
 try:
     from ultralytics import YOLO
 except ImportError:
@@ -15,6 +18,29 @@ import os
 import time
 import csv
 import shutil
+import threading
+from pathlib import Path
+
+# Enable V8 cuDNN API for better A100 performance
+os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
+
+# ── BF16 Autocast Patch for Ultralytics ──
+import torch
+import ultralytics.utils.torch_utils as _tu
+
+_orig_ac = _tu.torch.amp.autocast
+def _bf16_autocast(*a, **kw):
+    kw.setdefault("dtype", torch.bfloat16)
+    return _orig_ac(a[0] if a else "cuda", **kw)
+_tu.torch.amp.autocast = _bf16_autocast
+
+# Disable GradScaler for BF16 safely
+_orig_gs = torch.cuda.amp.GradScaler.__init__
+def _noop_gs(self, *a, **kw):
+    kw["enabled"] = False
+    _orig_gs(self, *a, **kw)
+torch.cuda.amp.GradScaler.__init__ = _noop_gs
+
 
 # Version — keep in sync with uav_training/__init__.py
 __version__ = "0.8.3"
@@ -176,17 +202,34 @@ def print_training_config(train_args: dict):
     print(f"{'─'*60}\n", flush=True)
 
 
+DRIVE_CP = Path(os.environ.get("UAV_PROJECT_DIR", "/content/drive/MyDrive/AIA/checkpoints"))
+
+def _sync_to_drive(save_dir, run_name):
+    """Non-blocking Drive sync — checkpoint kaybını önler."""
+    try:
+        target_dir = DRIVE_CP / run_name
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for f in ["weights/best.pt", "weights/last.pt"]:
+            src = Path(save_dir) / f
+            if src.exists():
+                dst = target_dir / Path(f).name
+                shutil.copy2(src, dst)
+    except Exception as e:
+        print(f"[DRIVE WARN] {e}", flush=True)
+
+def checkpoint_guard(trainer):
+    """Her 5 epoch'ta Drive'a async sync — GPU pipeline'ı bloklamaz."""
+    if trainer.epoch > 0 and trainer.epoch % 5 == 0:
+        threading.Thread(
+            target=_sync_to_drive,
+            args=(trainer.save_dir, trainer.save_dir.name),
+            daemon=True
+        ).start()
+
 def _sync_results_to_drive(results_dir: Path, run_name: str):
-    """Best-effort sync from local SSD runs to Drive."""
-    drive_runs = os.environ.get("UAV_PROJECT_DIR")
-    if drive_runs and str(results_dir).startswith("/content/runs"):
-        drive_results = os.path.join(drive_runs, run_name)
-        os.makedirs(drive_results, exist_ok=True)
-        print(f"\n☁️  Syncing results to Drive: {drive_results}", flush=True)
-        _sync_cmd = f'rsync -a --info=progress2 "{results_dir}/" "{drive_results}/"'
-        import subprocess
-        subprocess.run(_sync_cmd, shell=True, check=False)
-        print(f"  ✓ Results synced to Drive", flush=True)
+    """Final sync from local SSD runs to Drive."""
+    _sync_to_drive(results_dir, run_name)
+    print(f"\n☁️  Final sync to Drive completed", flush=True)
 
 
 def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=None, resume=False, phase_overrides=None):
@@ -231,6 +274,8 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         train_args.update(phase_overrides)
 
     print_training_config(train_args)
+    # Register the syncing callback before training starts
+    model.add_callback("on_fit_epoch_end", checkpoint_guard)
     results = model.train(**train_args)
 
     print("\n✅ Training completed.", flush=True)
@@ -254,7 +299,22 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
     }
 
 
+def setup_seed(seed=42):
+    import random
+    import numpy as np
+    import torch
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
 def train(epochs=None, batch=None, device=None, model_path=None, resume=False, two_phase=False):
+    setup_seed(42)
     kill_gpu_hogs()
 
     # Auto-optimize dataset if not resuming AND not already built

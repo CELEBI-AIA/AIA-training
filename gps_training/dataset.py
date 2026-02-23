@@ -240,8 +240,7 @@ class GPSDataset(Dataset):
         except Exception as e:
             # Return dummy or fail (better to skip in collation, but simplified here)
             print(f"Error loading sample {idx}: {e}")
-            # Recursively try next? Or return zeros.
-            return torch.zeros((3, *self.img_size)), torch.zeros((3, *self.img_size)), torch.zeros(3)
+            return None
 
     def _close_video_caps(self):
         for _, cap in list(self._video_caps.items()):

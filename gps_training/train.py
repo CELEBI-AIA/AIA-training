@@ -11,7 +11,9 @@ from dataset import GPSDataset
 from model import SiameseTracker
 from config import ARTIFACTS_DIR, TRAIN_CONFIG
 
-# Enable CuDNN benchmark for speed
+# PyTorch 2.x A100 Accelerators
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.benchmark = True
 
 import argparse
@@ -103,13 +105,33 @@ def train(epochs=None, batch=None, device=None, resume=False):
     train_ds = GPSDataset(audit_report, split="train")
     val_ds = GPSDataset(audit_report, split="val")
     
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2**32
+        import numpy as np
+        np.random.seed(worker_seed)
+        import random
+        random.seed(worker_seed)
+
+    def collate_drop_none(batch):
+        batch = [b for b in batch if b is not None]
+        if not batch:
+            raise RuntimeError("All samples in batch failed to load (empty batch).")
+        img1, img2, delta = zip(*batch)
+        import torch
+        return torch.stack(img1, 0), torch.stack(img2, 0), torch.stack(delta, 0)
+
+    w_count = TRAIN_CONFIG["num_workers"]
     train_loader = DataLoader(
         train_ds, 
         batch_size=TRAIN_CONFIG["batch_size"], 
         shuffle=True, 
-        num_workers=TRAIN_CONFIG["num_workers"],
+        num_workers=w_count,
         pin_memory=True,
-        persistent_workers=True
+        persistent_workers=True if w_count > 0 else False,
+        prefetch_factor=4 if w_count > 0 else None,
+        drop_last=True,
+        worker_init_fn=seed_worker,
+        collate_fn=collate_drop_none
     )
     
     val_loader = DataLoader(
@@ -117,7 +139,8 @@ def train(epochs=None, batch=None, device=None, resume=False):
         batch_size=TRAIN_CONFIG["batch_size"], 
         shuffle=False, 
         num_workers=TRAIN_CONFIG["num_workers"],
-        pin_memory=True
+        pin_memory=True,
+        collate_fn=collate_drop_none
     )
     
     # Model Init
@@ -158,7 +181,6 @@ def train(epochs=None, batch=None, device=None, resume=False):
     optimizer = optim.AdamW(model.parameters(), lr=TRAIN_CONFIG["learning_rate"])
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1e-3, steps_per_epoch=len(train_loader), epochs=TRAIN_CONFIG["epochs"])
     criterion = nn.MSELoss()
-    scaler = torch.cuda.amp.GradScaler(enabled=TRAIN_CONFIG["mixed_precision"])
 
     # Load optimizer/scheduler state if resuming.
     # Older checkpoints may not contain every key.
@@ -194,15 +216,18 @@ def train(epochs=None, batch=None, device=None, resume=False):
             
             optimizer.zero_grad(set_to_none=True)
             
-            # AMP (Mixed Precision)
-            with torch.cuda.amp.autocast(enabled=TRAIN_CONFIG["mixed_precision"]):
+            # A100 Native BFloat16 without GradScaler
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=TRAIN_CONFIG["mixed_precision"]):
                 output = model(img1, img2)
                 loss = criterion(output, target)
             
-            # Scaler for backprop
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            if not torch.isfinite(loss):
+                raise RuntimeError(f"Non-finite loss detected: {loss.item()}")
+
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
+            optimizer.step()
             scheduler.step()
             
             running_loss += loss.item()
@@ -239,6 +264,7 @@ def train(epochs=None, batch=None, device=None, resume=False):
             except Exception as e:
                 print(f"Warning: could not create backup: {e}")
 
+        tmp_ckpt_path = last_ckpt_path.with_suffix('.pt.tmp')
         try:
             torch.save({
                 'epoch': epoch,
@@ -246,9 +272,13 @@ def train(epochs=None, batch=None, device=None, resume=False):
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
                 'loss': val_loss,
-            }, last_ckpt_path)
+            }, tmp_ckpt_path)
+            import os
+            os.replace(tmp_ckpt_path, last_ckpt_path)
         except Exception as e:
-            print(f"CRITICAL: Failed to save checkpoint at epoch {epoch}: {e}")
+            print(f"CRITICAL: Failed to save checkpoint atomically at epoch {epoch}: {e}")
+            if tmp_ckpt_path.exists():
+                tmp_ckpt_path.unlink()
 
 
         # Checkpoint Best

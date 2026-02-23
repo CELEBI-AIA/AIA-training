@@ -80,3 +80,7 @@
 ## 0.0.16 - 2026-02-23
 - Added Drive path resolution in `scripts/colab_bootstrap.py` to recover from dangling `MyDrive` shortcuts by resolving symlink targets automatically.
 - Added periodic in-training sync (`rsync` every 3 minutes) from `/content/runs` to Drive to reduce checkpoint loss risk on Colab disconnects/restarts.
+- **perf(training)**: Updated epoch limit to 65 (phase1=50, phase2=15).
+- **fix(gps_training)**: Added `collate_drop_none` to DataLoader to discard dummy samples dynamically.
+- **fix(gps_training)**: Added `torch.isfinite(loss)` check in training loop to fail fast on divergence.
+- **log(uav_training)**: Explicitly log `amp_dtype: bf16` in `auto_detect_hardware()`.
