@@ -48,6 +48,18 @@ def kill_gpu_hogs():
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
+def _is_checkpoint_valid(ckpt_path: Path) -> bool:
+    """Check if a PyTorch checkpoint is readable and not corrupt."""
+    import torch
+    if not ckpt_path.exists() or ckpt_path.stat().st_size < 1024 * 50:  # < 50KB is suspicious for ResNet
+        return False
+    try:
+        torch.load(ckpt_path, map_location='cpu')
+        return True
+    except Exception as e:
+        print(f"⚠️ Checkpoint {ckpt_path.name} is corrupt: {e}", flush=True)
+        return False
+
 def print_training_config(train_args: dict):
     """Print the full training configuration so it's visible in logs."""
     print(f"\n{'─'*60}", flush=True)
@@ -115,43 +127,27 @@ def train(epochs=None, batch=None, device=None, resume=False):
     checkpoint = None
     ckpt_path = ARTIFACTS_DIR / "last_model.pt"
     backup_path = ARTIFACTS_DIR / "last_model.bak"
-
-    # Resume Logic
+    
     if resume:
         print(f"Attempting to resume...")
-        
-        # Try primary checkpoint
-        loaded_path = None
-        if ckpt_path.exists():
-            try:
-                print(f"Checking integrity of {ckpt_path}...")
-                # Map to CPU to avoid GPU OOM if file is weird, and verify structure
-                checkpoint = torch.load(ckpt_path, map_location="cpu")
-                loaded_path = ckpt_path
-            except Exception as e:
-                print(f"Warning: {ckpt_path} seems corrupted: {e}")
-        
-        # Try backup if primary failed or didn't exist
-        if loaded_path is None and backup_path.exists():
-            try:
-                print(f"Trying backup checkpoint {backup_path}...")
-                checkpoint = torch.load(backup_path, map_location="cpu")
-                loaded_path = backup_path
-            except Exception as e:
-                print(f"Warning: Backup {backup_path} also corrupted: {e}")
-
-        # Load if successful
-        if checkpoint is not None:
-            print(f"Successfully loaded {loaded_path}")
-            model.load_state_dict(checkpoint['model_state_dict'])
-            if 'epoch' in checkpoint:
-                start_epoch = checkpoint['epoch'] + 1
-                print(f"Resuming at epoch {start_epoch}")
+        if ckpt_path.exists() and _is_checkpoint_valid(ckpt_path):
+            print(f"Resuming from {ckpt_path}...")
+            checkpoint = torch.load(ckpt_path, map_location=device)
         else:
-             print("No valid checkpoint found. Starting fresh.")
-
-
+            print("❌ last_model.pt is corrupt or missing! Checking backup...", flush=True)
+            if backup_path.exists() and _is_checkpoint_valid(backup_path):
+                 print(f"🔄 Resuming from backup {backup_path}...", flush=True)
+                 checkpoint = torch.load(backup_path, map_location=device)
+            else:
+                 print("⚠️ Backup is also missing or corrupt. Starting fresh training.", flush=True)
+                 resume = False
     
+    if resume and checkpoint is not None:
+        print("Successfully loaded checkpoint")
+        model.load_state_dict(checkpoint['model_state_dict'])
+        if 'epoch' in checkpoint:
+            start_epoch = checkpoint['epoch'] + 1
+            print(f"Resuming at epoch {start_epoch}")    
     # Optional: compile (PyTorch 2.0)
     try:
         model = torch.compile(model)

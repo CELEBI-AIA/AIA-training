@@ -69,3 +69,10 @@
 
 ## 0.0.14 - 2026-02-23
 - Bumped all module and script versions across the repository from `0.8.1` to `0.8.2` following global GPS & UAV architectural alignment.
+
+## 0.0.15 - 2026-02-23
+- **perf(ml-pipeline)**: Applied static analysis recommendations to improve training robustness and speed.
+- `uav_training/config.py`: Decreased scale augmentation from `0.2` to `0.05` to prevent small object deletion.
+- `uav_training/train.py`, `gps_training/train.py`: Implemented `_is_checkpoint_valid` guard to prevent `EOFError` when resuming from corrupted checkpoints.
+- `uav_training/train.py`: Added fallback mechanism for phase 2 transition to load `last.pt` if `best.pt` is missing.
+- `uav_training/build_dataset.py`: Replaced `shutil.copy2` with `os.link` to eliminate disk overhead and accelerate I/O in Colab VMs.

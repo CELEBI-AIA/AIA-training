@@ -294,11 +294,15 @@ def build_dataset():
                                 target_img_path = DATASET_DIR / target_split / "images" / unique_name
                                 target_lbl_path = DATASET_DIR / target_split / "labels" / (Path(unique_name).stem + ".txt")
                                 
-                                # Hard-copy image to local SSD (NOT symlink!)
+                                # Hard-link image to local SSD (0 disk space overhead)
                                 # Symlinks resolve back to Drive FUSE → 1-2 it/s.
                                 # Physical copies stay on NVMe SSD → 15-30+ it/s.
                                 if not target_img_path.exists():
-                                    shutil.copy2(img_path, target_img_path)
+                                    try:
+                                        os.link(img_path, target_img_path)
+                                    except OSError:
+                                        # Fallback to copy if cross-device link fails
+                                        shutil.copy2(img_path, target_img_path)
                                         
                                 with open(target_lbl_path, 'w') as f:
                                     f.writelines(new_labels)

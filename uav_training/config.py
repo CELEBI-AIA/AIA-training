@@ -180,7 +180,7 @@ def auto_detect_hardware() -> tuple:
         
         # ── Augmentation (UAV & Small Object Optimized) ──
         "mosaic": 1.0,            # Keep mosaic
-        "scale": 0.2,             # CRITICAL: Prevent over-shrinking small objects (was 0.5)
+        "scale": 0.05,            # CRITICAL: Prevent over-shrinking small objects (was 0.2)
         "copy_paste": 0.2,        # Inject minority classes (humans/vehicles) into background
         "copy_paste_mode": "flip",
         "flipud": 0.5,            # Top-down drone view: up/down flip is safe
@@ -261,7 +261,7 @@ TRAIN_CONFIG = {
     "close_mosaic": 15,
     "overlap_mask": True,
     "mosaic": 1.0,
-    "scale": 0.2,
+    "scale": 0.05,
     "copy_paste": 0.2,
     "copy_paste_mode": "flip",
     "flipud": 0.5,

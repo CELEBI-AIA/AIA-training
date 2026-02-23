@@ -17,7 +17,7 @@ import csv
 import shutil
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.8.2"
+__version__ = "0.8.3"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -29,6 +29,20 @@ def kill_gpu_hogs():
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+
+def _is_checkpoint_valid(ckpt_path: Path) -> bool:
+    """Check if a PyTorch checkpoint is readable and not corrupt."""
+    import torch
+    if not ckpt_path.exists() or ckpt_path.stat().st_size < 1024 * 1024:  # < 1MB is suspicious for YOLO
+        return False
+    try:
+        # Just map to CPU to test EOF/corruption without eating VRAM
+        torch.load(ckpt_path, map_location='cpu')
+        return True
+    except Exception as e:
+        print(f"⚠️ Checkpoint {ckpt_path.name} is corrupt: {e}", flush=True)
+        return False
 
 
 def get_best_metrics(results_dir: Path) -> dict:
@@ -297,6 +311,16 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
         # Sort by modification time (newest first)
         latest_ckpt = max(checkpoints, key=lambda p: p.stat().st_mtime)
         print(f"Found latest checkpoint: {latest_ckpt}", flush=True)
+        
+        if not _is_checkpoint_valid(latest_ckpt):
+            print("❌ Latest checkpoint is corrupt! Attempting to find backup...", flush=True)
+            checkpoints.remove(latest_ckpt)
+            if checkpoints:
+                 latest_ckpt = max(checkpoints, key=lambda p: p.stat().st_mtime)
+                 print(f"🔄 Using previous checkpoint: {latest_ckpt}", flush=True)
+            else:
+                 print("❌ No valid backup checkpoints found. Aborting resume.", flush=True)
+                 sys.exit(1)
 
         model_path = latest_ckpt
     else:
@@ -347,8 +371,15 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
         )
 
         phase2_model_path = phase1_result.get("best_pt")
-        if not phase2_model_path:
+        if not phase2_model_path or not os.path.exists(phase2_model_path):
             phase2_model_path = str(Path(phase1_result["results_dir"]) / "weights" / "best.pt")
+            
+            # Safeguard: if best.pt wasn't saved/renamed properly, fallback to last.pt
+            if not os.path.exists(phase2_model_path):
+                print("⚠️  phase1 best.pt not found! Falling back to last.pt", flush=True)
+                phase2_model_path = str(Path(phase1_result["results_dir"]) / "weights" / "last.pt")
+                if not os.path.exists(phase2_model_path):
+                     raise FileNotFoundError(f"Failed to find any phase1 weights in {phase1_result['results_dir']}")
 
         phase2_batch = batch
         if isinstance(batch, int):
