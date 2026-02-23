@@ -294,8 +294,7 @@ def train(epochs=None, batch=None, device=None, resume=False):
         plt.grid(True)
         plt.savefig(ARTIFACTS_DIR / "loss_plot.png")
         print(f"Loss plot saved to {ARTIFACTS_DIR}/loss_plot.png")
-    except ImportError:
-        print("matplotlib not installed, skipping plot.")
+    except Exception as e:
         print(f"Plotting failed: {e}")
         
     # Final Drive Sync
