@@ -62,6 +62,16 @@ def _is_checkpoint_valid(ckpt_path: Path) -> bool:
         print(f"⚠️ Checkpoint {ckpt_path.name} is corrupt: {e}", flush=True)
         return False
 
+def resolve_scheduler_max_lr(train_config: dict) -> float:
+    """Resolve max_lr from config and enforce a safe LR relationship."""
+    base_lr = float(train_config["learning_rate"])
+    max_lr = float(train_config.get("max_lr", base_lr))
+    if max_lr < base_lr:
+        raise ValueError(
+            f"Invalid LR config: max_lr ({max_lr}) cannot be lower than learning_rate ({base_lr})."
+        )
+    return max_lr
+
 def print_training_config(train_args: dict):
     """Print the full training configuration so it's visible in logs."""
     print(f"\n{'─'*60}", flush=True)
@@ -179,7 +189,13 @@ def train(epochs=None, batch=None, device=None, resume=False):
         pass
         
     optimizer = optim.AdamW(model.parameters(), lr=TRAIN_CONFIG["learning_rate"])
-    scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=1e-3, steps_per_epoch=len(train_loader), epochs=TRAIN_CONFIG["epochs"])
+    max_lr = resolve_scheduler_max_lr(TRAIN_CONFIG)
+    scheduler = optim.lr_scheduler.OneCycleLR(
+        optimizer,
+        max_lr=max_lr,
+        steps_per_epoch=len(train_loader),
+        epochs=TRAIN_CONFIG["epochs"],
+    )
     criterion = nn.MSELoss()
 
     # Load optimizer/scheduler state if resuming.

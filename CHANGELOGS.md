@@ -93,3 +93,11 @@
 - **perf(gps_training)**: Optimized DataLoader by moving RGB tensor float normalization to the GPU training loop, significantly reducing PCI-e transfer overhead.
 - **refactor(notebooks)**: Cleaned up `notebooks/train_colab.ipynb` by externalizing all bootstrap logic, nullifying notebook state corruption risks.
 - **test**: Initialized testing infrastructure with `pytest` unit coverage for validation scripts.
+
+## 0.0.18 - 2026-02-23
+- **feat(gps_training)**: Aligned scheduler LR policy with config by introducing `resolve_scheduler_max_lr()` and replacing hardcoded `OneCycleLR(max_lr=1e-3)` usage.
+- **feat(uav_training/build_dataset)**: Added strict split mapping via `resolve_target_split()` with explicit `test` handling (`test -> test` by default, `test -> val` only when `include_test_in_val=True`).
+- **feat(uav_training/build_dataset)**: Enabled native `test` split output directories and writes (`test/images`, `test/labels`) plus conditional `test: test/images` export in `dataset.yaml`.
+- **feat(uav_training/build_dataset)**: Reworked smart sampling to class-aware keep probabilities across all target classes and added warnings for out-of-range/unmapped class IDs.
+- **feat(uav_training/audit)**: Added split-level image/label counts and overlap risk reporting (`train-val-test`) for early leakage detection.
+- **test**: Added targeted unit tests for split mapping policy, scheduler max_lr validation, and audit overlap/count reporting.

@@ -39,6 +39,27 @@ def read_txt_classes(path):
         return []
 
 
+def _list_images(path: Path):
+    images = []
+    for ext in ("*.jpg", "*.jpeg", "*.png"):
+        images.extend(path.glob(ext))
+    return images
+
+
+def _compute_split_overlap(split_stems: dict):
+    train_val = split_stems["train"] & split_stems["val"]
+    train_test = split_stems["train"] & split_stems["test"]
+    val_test = split_stems["val"] & split_stems["test"]
+    sample_names = sorted(list(train_val | train_test | val_test))[:20]
+    return {
+        "train_val_overlap": len(train_val),
+        "train_test_overlap": len(train_test),
+        "val_test_overlap": len(val_test),
+        "has_overlap": bool(train_val or train_test or val_test),
+        "sample_names": sample_names,
+    }
+
+
 def scan_and_audit():
     if not ARTIFACTS_DIR.exists():
         ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -90,7 +111,19 @@ def audit_directory(dir_path):
         "uap_count": 0,
         "uai_count": 0,
         "image_count": 0,
-        "label_count": 0
+        "label_count": 0,
+        "split_counts": {
+            "train": {"images": 0, "labels": 0},
+            "val": {"images": 0, "labels": 0},
+            "test": {"images": 0, "labels": 0},
+        },
+        "split_overlap": {
+            "train_val_overlap": 0,
+            "train_test_overlap": 0,
+            "val_test_overlap": 0,
+            "has_overlap": False,
+            "sample_names": [],
+        },
     }
     # ... rest of logic ...
     # but wait, the original audit_directory used line 47: dir_path = BASE_PATH / dir_name
@@ -125,21 +158,27 @@ def audit_directory(dir_path):
         # Count images/labels
         img_count = 0
         lbl_count = 0
+        split_stems = {"train": set(), "val": set(), "test": set()}
         
         for sub in ['train', 'valid', 'val', 'test']:
+            canonical_split = "val" if sub in {"valid", "val"} else sub
             img_dir = dir_path / sub / 'images'
             lbl_dir = dir_path / sub / 'labels'
             
             if img_dir.exists():
-                imgs = list(img_dir.glob("*.jpg")) + list(img_dir.glob("*.png")) + list(img_dir.glob("*.jpeg"))
+                imgs = _list_images(img_dir)
                 img_count += len(imgs)
+                result["split_counts"][canonical_split]["images"] += len(imgs)
+                split_stems[canonical_split].update({p.stem for p in imgs})
             
             if lbl_dir.exists():
                 lbls = list(lbl_dir.glob("*.txt"))
                 lbl_count += len(lbls)
+                result["split_counts"][canonical_split]["labels"] += len(lbls)
                 
         result["image_count"] = img_count
         result["label_count"] = lbl_count
+        result["split_overlap"] = _compute_split_overlap(split_stems)
 
     # Check for flat YOLO (classes.txt + images/labels in same dir)
     elif (dir_path / "classes.txt").exists() or (dir_path / "images&labels" / "classes.txt").exists():
@@ -179,8 +218,13 @@ def audit_directory(dir_path):
     # Class filtering logic
     if isinstance(result["classes"], list):
         class_map = {i: n for i, n in enumerate(result["classes"])}
+        class_values = result["classes"]
+    elif isinstance(result["classes"], dict):
+        class_map = result["classes"]
+        class_values = list(result["classes"].values())
     else:
-        class_map = result["classes"] # handle dict case if yaml parses that way
+        class_map = {}
+        class_values = []
         
     for idx, name in class_map.items():
         n = str(name).lower()
@@ -195,7 +239,7 @@ def audit_directory(dir_path):
          result["reason"] = "Too few images"
     elif result["format"] == "YOLO" or result["format"] == "YOLO_FLAT":
          has_relevant = False
-         for name in result["classes"]:
+         for name in class_values:
              n = str(name).lower()
              # Updated relevant check using config
              for target_name in TARGET_CLASSES:
@@ -205,6 +249,8 @@ def audit_directory(dir_path):
          if has_relevant:
              result["status"] = "INCLUDE"
              result["reason"] = "Valid YOLO format with target classes"
+             if result["split_overlap"]["has_overlap"]:
+                 result["reason"] += " | Split overlap risk detected"
              
              if is_sample:
                  pass 
