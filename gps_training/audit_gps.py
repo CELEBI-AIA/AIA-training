@@ -7,8 +7,14 @@ import numpy as np
 
 # Adjust path to import config
 import sys
+import sys
 sys.path.append(str(Path(__file__).parent))
-from config import DATASETS_ROOT, ARTIFACTS_DIR
+from config import DATASETS_ROOT, ARTIFACTS_DIR, is_colab
+
+if is_colab() and Path("/content/datasets_local").exists():
+    EFFECTIVE_DATASETS_ROOT = Path("/content/datasets_local")
+else:
+    EFFECTIVE_DATASETS_ROOT = DATASETS_ROOT
 
 def recursive_scan(root_dir):
     candidates = []
@@ -102,7 +108,7 @@ def find_intrinsics(candidate):
     return None
 
 def audit():
-    candidates = recursive_scan(DATASETS_ROOT)
+    candidates = recursive_scan(EFFECTIVE_DATASETS_ROOT)
     report = []
     
     print(f"Found {len(candidates)} potential trajectory CSVs.")
@@ -145,10 +151,10 @@ def audit():
             status = "included"
             
         entry = {
-            "csv_path": str(cand['csv_path'].relative_to(DATASETS_ROOT)),
-            "media_path": str(media['path'].relative_to(DATASETS_ROOT)) if media else None,
+            "csv_path": str(cand['csv_path'].relative_to(EFFECTIVE_DATASETS_ROOT)),
+            "media_path": str(media['path'].relative_to(EFFECTIVE_DATASETS_ROOT)) if media else None,
             "media_type": media['type'] if media else None,
-            "intrinsics_path": str(intrinsics.relative_to(DATASETS_ROOT)) if intrinsics else None,
+            "intrinsics_path": str(intrinsics.relative_to(EFFECTIVE_DATASETS_ROOT)) if intrinsics else None,
             "status": status,
             "reasons": reason,
             "num_frames": len(df) if not reason else 0

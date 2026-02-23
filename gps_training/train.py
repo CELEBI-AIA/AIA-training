@@ -40,10 +40,48 @@ def _release_file_lock(fd: int, lock_path: Path) -> None:
     except OSError:
         pass
 
-def train(resume=False):
+def kill_gpu_hogs():
+    """Clear GPU memory before training."""
+    import gc
+    import torch
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+def print_training_config(train_args: dict):
+    """Print the full training configuration so it's visible in logs."""
+    print(f"\n{'─'*60}", flush=True)
+    print(f"  📋 TRAINING CONFIGURATION")
+    print(f"{'─'*60}")
+    for k, v in train_args.items():
+        print(f"  {k:<20}: {v}")
+    print(f"{'─'*60}\n", flush=True)
+
+def _sync_results_to_drive(artifacts_dir: Path):
+    """Best-effort sync from local SSD runs to Drive."""
+    drive_runs = os.environ.get("UAV_PROJECT_DIR")
+    if drive_runs and str(artifacts_dir).startswith("/content"):
+        drive_results = os.path.join(drive_runs, "gps_model")
+        os.makedirs(drive_results, exist_ok=True)
+        print(f"\n☁️  Syncing results to Drive: {drive_results}", flush=True)
+        _sync_cmd = f'rsync -a --info=progress2 "{artifacts_dir}/" "{drive_results}/"'
+        import subprocess
+        subprocess.run(_sync_cmd, shell=True, check=False)
+        print(f"  ✓ Results synced to Drive", flush=True)
+
+def train(epochs=None, batch=None, device=None, resume=False):
+    kill_gpu_hogs()
+    
     lock_path = ARTIFACTS_DIR / ".gps_train.lock"
     lock_fd = _acquire_file_lock(lock_path)
     atexit.register(_release_file_lock, lock_fd, lock_path)
+
+    # CLI Overrides
+    if epochs is not None: TRAIN_CONFIG["epochs"] = epochs
+    if batch is not None: TRAIN_CONFIG["batch_size"] = batch
+    if device is not None: TRAIN_CONFIG["device"] = device
+
+    print_training_config(TRAIN_CONFIG)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -258,11 +296,29 @@ def train(resume=False):
         print(f"Loss plot saved to {ARTIFACTS_DIR}/loss_plot.png")
     except ImportError:
         print("matplotlib not installed, skipping plot.")
-    except Exception as e:
         print(f"Plotting failed: {e}")
+        
+    # Final Drive Sync
+    _sync_results_to_drive(ARTIFACTS_DIR)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Train Siamese Tracker on GPS dataset")
+    parser.add_argument("--epochs", type=int, help="Number of epochs")
+    parser.add_argument("--batch", type=str, help="Batch size (int)")
+    parser.add_argument("--device", type=str, help="cuda device, i.e. 0 or cpu")
     parser.add_argument("--resume", action="store_true", help="Resume from last checkpoint")
     args = parser.parse_args()
-    train(resume=args.resume)
+    
+    batch_val = args.batch
+    if batch_val is not None:
+        try:
+            batch_val = int(batch_val)
+        except ValueError:
+            pass
+
+    train(
+        epochs=args.epochs,
+        batch=batch_val,
+        device=args.device,
+        resume=args.resume
+    )

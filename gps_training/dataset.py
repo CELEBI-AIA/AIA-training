@@ -8,7 +8,13 @@ import os
 import atexit
 from collections import OrderedDict
 from pathlib import Path
-from config import DATASETS_ROOT, TRAIN_CONFIG
+from config import DATASETS_ROOT, TRAIN_CONFIG, is_colab
+
+# On Colab, if local extraction exists, use it to avoid Drive FUSE bottlenecks
+if is_colab() and Path("/content/datasets_local").exists():
+    EFFECTIVE_DATASETS_ROOT = Path("/content/datasets_local")
+else:
+    EFFECTIVE_DATASETS_ROOT = DATASETS_ROOT
 
 class GPSDataset(Dataset):
     def __init__(self, audit_report_path, split="train", val_split=0.1):
@@ -31,8 +37,8 @@ class GPSDataset(Dataset):
         # Time-split is best for trajectory forecasting.
         
         for item in valid_seqs:
-            csv_path = DATASETS_ROOT / item["csv_path"]
-            media_path = DATASETS_ROOT / item["media_path"]
+            csv_path = EFFECTIVE_DATASETS_ROOT / item["csv_path"]
+            media_path = EFFECTIVE_DATASETS_ROOT / item["media_path"]
             media_type = item["media_type"]
             
             # Load CSV

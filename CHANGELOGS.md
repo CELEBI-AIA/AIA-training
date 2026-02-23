@@ -59,5 +59,13 @@
 ## 0.0.12 - 2026-02-23
 - Bumped UAV module and script versions from `0.8.0` to `0.8.1`.
 - `gps_training/model.py`: Replaced deprecated `pretrained=True` with `weights='DEFAULT'` for ResNet18 to avoid future deprecation errors.
-- `uav_training/audit.py`: Fixed JSON serialization issues where count fields mistakenly assigned string literals instead of integers.
 - `uav_training/build_dataset.py`: Fixed PEP-8 indentation block alignment in validation split configuration.
+
+## 0.0.13 - 2026-02-23
+- **Architectural Alignment (GPS)**: Refactored `gps_training` module to match standard optimizations from `uav_training`.
+- `gps_training/config.py`: Added `auto_detect_hardware()` and `is_colab()` for dynamic VRAM-based batch sizing.
+- `gps_training/train.py`: Added GPU memory cleanup hooks (`kill_gpu_hogs`), training config styling banners, and post-training Google Drive sync (`_sync_results_to_drive`).
+- `gps_training/dataset.py` & `audit_gps.py`: Refactored I/O logic to check and prefer local SSD extractions (`/content/datasets_local`) in Colab, eliminating Drive FUSE latency bottlenecks.
+
+## 0.0.14 - 2026-02-23
+- Bumped all module and script versions across the repository from `0.8.1` to `0.8.2` following global GPS & UAV architectural alignment.
