@@ -104,3 +104,8 @@
 
 ## 0.0.19 - 2026-02-23
 - **feat(uav_training/build_dataset)**: Tuned TEKNOFEST smart-sampling default for `vehicle` class from `0.10` to `0.30` to reduce missed-vehicle risk while keeping dataset balancing.
+
+## 0.0.20 - 2026-02-23
+- **fix(uav_training/train)**: Added OOM-safe retry flow in training phase execution: retry with `compile=False`, then progressively lower batch/imgsz only when CUDA OOM occurs.
+- **fix(uav_training/train)**: Disabled BF16 monkey patch by default to avoid conflicts with Ultralytics AMP safety checks; patch can still be enabled via `FORCE_BF16_PATCH=1`.
+- **chore(uav_training/train)**: Removed duplicate `threading` import.

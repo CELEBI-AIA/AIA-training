@@ -19,26 +19,33 @@ import time
 import csv
 import shutil
 import threading
-import threading
 
 # Enable V8 cuDNN API for better A100 performance
 os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
 
-# ── BF16 Autocast Patch for Ultralytics ──
-import ultralytics.utils.torch_utils as _tu
+if os.environ.get("FORCE_BF16_PATCH", "0") == "1":
+    # Optional compatibility patch: keep disabled by default because
+    # it can conflict with Ultralytics AMP safety checks on some runtimes.
+    import ultralytics.utils.torch_utils as _tu
 
-_orig_ac = _tu.torch.amp.autocast
-def _bf16_autocast(*a, **kw):
-    kw.setdefault("dtype", torch.bfloat16)
-    return _orig_ac(a[0] if a else "cuda", **kw)
-_tu.torch.amp.autocast = _bf16_autocast
+    _orig_ac = _tu.torch.amp.autocast
 
-# Disable GradScaler for BF16 safely
-_orig_gs = torch.cuda.amp.GradScaler.__init__
-def _noop_gs(self, *a, **kw):
-    kw["enabled"] = False
-    _orig_gs(self, *a, **kw)
-torch.cuda.amp.GradScaler.__init__ = _noop_gs
+    def _bf16_autocast(*a, **kw):
+        kw.setdefault("dtype", torch.bfloat16)
+        return _orig_ac(a[0] if a else "cuda", **kw)
+
+    _tu.torch.amp.autocast = _bf16_autocast
+
+    _orig_gs = torch.cuda.amp.GradScaler.__init__
+
+    def _noop_gs(self, *a, **kw):
+        kw["enabled"] = False
+        _orig_gs(self, *a, **kw)
+
+    torch.cuda.amp.GradScaler.__init__ = _noop_gs
+    print("⚙️ FORCE_BF16_PATCH=1 → BF16 monkey patch is enabled", flush=True)
+else:
+    print("ℹ️ BF16 monkey patch disabled (default, safer for AMP checks)", flush=True)
 
 
 # Version — keep in sync with uav_training/__init__.py
@@ -231,11 +238,13 @@ def _sync_results_to_drive(results_dir: Path, run_name: str):
     print(f"\n☁️  Final sync to Drive completed", flush=True)
 
 
+def _is_cuda_oom_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "out of memory" in msg and ("cuda" in msg or "cublas" in msg or "cudnn" in msg)
+
+
 def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=None, resume=False, phase_overrides=None):
     """Run one YOLO training phase and return summary metrics."""
-    # Load model for this phase
-    model = YOLO(model_path)
-
     yaml_path = DATASET_DIR / "dataset.yaml"
     if not yaml_path.exists():
         print(f"Error: Dataset config not found at {yaml_path}", flush=True)
@@ -272,10 +281,50 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
     if phase_overrides:
         train_args.update(phase_overrides)
 
-    print_training_config(train_args)
-    # Register the syncing callback before training starts
-    model.add_callback("on_fit_epoch_end", checkpoint_guard)
-    results = model.train(**train_args)
+    attempt_args = train_args.copy()
+    max_attempts = 4
+    results = None
+    last_exc = None
+
+    for attempt in range(1, max_attempts + 1):
+        print(f"\n🔁 Training attempt {attempt}/{max_attempts}", flush=True)
+        print_training_config(attempt_args)
+        model = YOLO(model_path)
+        model.add_callback("on_fit_epoch_end", checkpoint_guard)
+        try:
+            results = model.train(**attempt_args)
+            break
+        except RuntimeError as exc:
+            last_exc = exc
+            if not _is_cuda_oom_error(exc) or attempt == max_attempts:
+                raise
+
+            print(f"⚠️ CUDA OOM detected on attempt {attempt}: {exc}", flush=True)
+            next_args = attempt_args.copy()
+            recovery_action = None
+
+            if bool(next_args.get("compile", False)):
+                next_args["compile"] = False
+                recovery_action = "compile=False"
+            elif isinstance(next_args.get("batch"), int) and next_args["batch"] > 8:
+                next_args["batch"] = max(8, next_args["batch"] // 2)
+                recovery_action = f"batch={next_args['batch']}"
+            elif int(next_args.get("imgsz", 0)) > 896:
+                next_args["imgsz"] = 896
+                recovery_action = "imgsz=896"
+            elif isinstance(next_args.get("batch"), int) and next_args["batch"] > 4:
+                next_args["batch"] = max(4, next_args["batch"] // 2)
+                recovery_action = f"batch={next_args['batch']}"
+
+            if recovery_action is None:
+                raise
+
+            print(f"🛟 Applying OOM fallback: {recovery_action}", flush=True)
+            kill_gpu_hogs()
+            attempt_args = next_args
+
+    if results is None and last_exc is not None:
+        raise last_exc
 
     print("\n✅ Training completed.", flush=True)
     print(f"\n{'='*60}", flush=True)
