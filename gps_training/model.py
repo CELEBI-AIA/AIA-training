@@ -7,7 +7,7 @@ class SiameseTracker(nn.Module):
         super(SiameseTracker, self).__init__()
         
         # Backbone
-        resnet = models.resnet18(pretrained=True)
+        resnet = models.resnet18(weights='DEFAULT')
         # Remove FC
         self.backbone = nn.Sequential(*list(resnet.children())[:-1])
         

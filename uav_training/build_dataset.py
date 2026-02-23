@@ -133,10 +133,10 @@ def build_dataset():
                 if not src_split_path.exists():
                     # specific overrides if needed, or just skip
                     if dataset_name == "megaset" and split == "val" and INCLUDE_TEST_IN_VAL:
-                         # Megaset can use test as val only when explicitly enabled.
-                         src_split_path = dataset_path / "test"
-                         if not src_split_path.exists():
-                             continue
+                        # Megaset can use test as val only when explicitly enabled.
+                        src_split_path = dataset_path / "test"
+                        if not src_split_path.exists():
+                            continue
                     else:
                         continue
 

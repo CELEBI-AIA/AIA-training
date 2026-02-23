@@ -184,7 +184,7 @@ def audit_directory(dir_path):
         for target_name in TARGET_CLASSES:
              if target_name in n:
                  key = f"{target_name}_count"
-                 result[key] = "present"
+                 result[key] = 1
             
     # Include Decision
     if result["image_count"] < 10:

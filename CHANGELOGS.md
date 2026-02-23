@@ -55,3 +55,9 @@
 ## 0.0.11 - 2026-02-22
 - Made bootstrap version banner dynamic in `scripts/colab_bootstrap.py` by reading `uav_training/__init__.py::__version__` instead of using a hard-coded `VERSION` string.
 - Added a post-repo-sync version refresh message to confirm the active bootstrap/module version in runtime logs.
+
+## 0.0.12 - 2026-02-23
+- Bumped UAV module and script versions from `0.8.0` to `0.8.1`.
+- `gps_training/model.py`: Replaced deprecated `pretrained=True` with `weights='DEFAULT'` for ResNet18 to avoid future deprecation errors.
+- `uav_training/audit.py`: Fixed JSON serialization issues where count fields mistakenly assigned string literals instead of integers.
+- `uav_training/build_dataset.py`: Fixed PEP-8 indentation block alignment in validation split configuration.
