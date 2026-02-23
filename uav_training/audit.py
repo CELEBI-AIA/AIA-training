@@ -19,7 +19,8 @@ OUTPUT_REPORT = ARTIFACTS_DIR / "audit_report.json"
 def get_subdirs(path):
     try:
         return [d.name for d in path.iterdir() if d.is_dir()]
-    except:
+    except Exception as e:
+        print(f"Error accessing subdirs: {e}")
         return []
 
 def read_yaml(path):
@@ -33,7 +34,8 @@ def read_txt_classes(path):
     try:
         with open(path, 'r') as f:
             return [line.strip() for line in f.readlines() if line.strip()]
-    except:
+    except Exception as e:
+        print(f"Error reading classes file: {e}")
         return []
 
 
@@ -108,7 +110,8 @@ def audit_directory(dir_path):
             if any(x in content for x in ["test only", "inference only", "sample", "ornek", "örnek"]):
                 if "örnek" in r.name.lower() or "sample" in r.name.lower():
                      is_sample = True
-        except:
+        except Exception as e:
+            # Silently pass errors from reading unstructured README files
             pass
             
     # Check for YOLO format (data.yaml)

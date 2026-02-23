@@ -471,12 +471,12 @@ log_path = os.path.join(log_dir, log_name)
 
 if checkpoint:
     print(f"  🔄 Resuming from checkpoint: {checkpoint}", flush=True)
-    train_cmd = f'{sys.executable} -u "{train_script_path}" --resume'
+    train_cmd = [sys.executable, "-u", train_script_path, "--resume"]
 else:
     print("  🆕 No checkpoint found — starting fresh training", flush=True)
-    train_cmd = f'{sys.executable} -u "{train_script_path}"'
+    train_cmd = [sys.executable, "-u", train_script_path]
 
-print(f"  ▶ Command: {train_cmd}", flush=True)
+print(f"  ▶ Command: {' '.join(train_cmd)}", flush=True)
 print(f"  📝 Live log: {log_path}", flush=True)
 print(f"\n{'─'*60}", flush=True)
 
@@ -486,7 +486,7 @@ os.chdir(REPO_DIR)
 # Uses subprocess.Popen + os.read for TRUE real-time output in Colab.
 # Every byte from train.py appears instantly in the cell AND in the log file.
 proc = subprocess.Popen(
-    train_cmd, shell=True,
+    train_cmd, shell=False,
     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
     env={**os.environ, "PYTHONUNBUFFERED": "1"}
 )

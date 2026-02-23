@@ -19,13 +19,12 @@ import time
 import csv
 import shutil
 import threading
-from pathlib import Path
+import threading
 
 # Enable V8 cuDNN API for better A100 performance
 os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
 
 # ── BF16 Autocast Patch for Ultralytics ──
-import torch
 import ultralytics.utils.torch_utils as _tu
 
 _orig_ac = _tu.torch.amp.autocast
@@ -43,7 +42,7 @@ torch.cuda.amp.GradScaler.__init__ = _noop_gs
 
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.8.3"
+__version__ = "0.8.4"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -435,11 +434,11 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
             phase2_model_path = str(Path(phase1_result["results_dir"]) / "weights" / "best.pt")
             
             # Safeguard: if best.pt wasn't saved/renamed properly, fallback to last.pt
-            if not os.path.exists(phase2_model_path):
-                print("⚠️  phase1 best.pt not found! Falling back to last.pt", flush=True)
+            if not os.path.exists(phase2_model_path) or not _is_checkpoint_valid(Path(phase2_model_path)):
+                print("⚠️  phase1 best.pt not found or invalid! Falling back to last.pt", flush=True)
                 phase2_model_path = str(Path(phase1_result["results_dir"]) / "weights" / "last.pt")
-                if not os.path.exists(phase2_model_path):
-                     raise FileNotFoundError(f"Failed to find any phase1 weights in {phase1_result['results_dir']}")
+                if not os.path.exists(phase2_model_path) or not _is_checkpoint_valid(Path(phase2_model_path)):
+                     raise FileNotFoundError(f"Failed to find any valid phase1 weights in {phase1_result['results_dir']}")
 
         phase2_batch = batch
         if isinstance(batch, int):

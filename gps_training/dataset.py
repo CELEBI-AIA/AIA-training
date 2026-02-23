@@ -140,7 +140,8 @@ class GPSDataset(Dataset):
                 cap.release()
             except Exception:
                 pass
-            self._video_caps.pop(media_path, None)
+            finally:
+                self._video_caps.pop(media_path, None)
             cap = self._get_video_cap(media_path)
             cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_idx))
             ret, frame = cap.read()
@@ -172,7 +173,8 @@ class GPSDataset(Dataset):
                 cap.release()
             except Exception:
                 pass
-            self._video_caps.pop(media_path, None)
+            finally:
+                self._video_caps.pop(media_path, None)
 
         frame1 = cached_1 if cached_1 is not None else self._read_video_frame(media_path, frame_idx_1)
         frame2 = cached_2 if cached_2 is not None else self._read_video_frame(media_path, frame_idx_2)
@@ -225,13 +227,13 @@ class GPSDataset(Dataset):
             img1 = cv2.resize(img1, self.img_size)
             img2 = cv2.resize(img2, self.img_size)
             
-            # BGR to RGB and Normalize
-            img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB) / 255.0
-            img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB) / 255.0
+            # BGR to RGB (Keep as uint8 to save RAM/PCI-e bandwidth)
+            img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
+            img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
             
             # To Tensor (C, H, W)
-            img1 = torch.from_numpy(img1).permute(2, 0, 1).float()
-            img2 = torch.from_numpy(img2).permute(2, 0, 1).float()
+            img1 = torch.from_numpy(img1).permute(2, 0, 1)
+            img2 = torch.from_numpy(img2).permute(2, 0, 1)
             
             delta = torch.from_numpy(sample["delta"]).float()
             

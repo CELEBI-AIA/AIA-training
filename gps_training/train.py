@@ -212,7 +212,9 @@ def train(epochs=None, batch=None, device=None, resume=False):
         
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{TRAIN_CONFIG['epochs']}")
         for img1, img2, target in pbar:
-            img1, img2, target = img1.to(device), img2.to(device), target.to(device)
+            img1 = img1.to(device, non_blocking=True).float() / 255.0
+            img2 = img2.to(device, non_blocking=True).float() / 255.0
+            target = target.to(device, non_blocking=True)
             
             optimizer.zero_grad(set_to_none=True)
             
@@ -240,7 +242,9 @@ def train(epochs=None, batch=None, device=None, resume=False):
         val_loss = 0.0
         with torch.no_grad():
             for img1, img2, target in val_loader:
-                img1, img2, target = img1.to(device), img2.to(device), target.to(device)
+                img1 = img1.to(device, non_blocking=True).float() / 255.0
+                img2 = img2.to(device, non_blocking=True).float() / 255.0
+                target = target.to(device, non_blocking=True)
                 output = model(img1, img2)
                 loss = criterion(output, target)
                 val_loss += loss.item()

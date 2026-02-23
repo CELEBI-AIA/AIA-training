@@ -84,3 +84,12 @@
 - **fix(gps_training)**: Added `collate_drop_none` to DataLoader to discard dummy samples dynamically.
 - **fix(gps_training)**: Added `torch.isfinite(loss)` check in training loop to fail fast on divergence.
 - **log(uav_training)**: Explicitly log `amp_dtype: bf16` in `auto_detect_hardware()`.
+
+## 0.0.17 - 2026-02-23
+- **fix(uav_training, gps_training)**: Replaced bare except blocks with `Exception` to prevent swallowing critical errors and improve logging.
+- **fix(uav_training)**: Hardened model checkpoint loading in `uav_training/train.py` with `_is_checkpoint_valid` to prevent `EOFError` during two-phase fallback.
+- **fix(gps_training)**: Resolved a `VideoCapture` resource leak in `gps_training/dataset.py` by ensuring handles are properly released inside a `finally` block.
+- **security(scripts)**: Mitigated shell injection vulnerability in `scripts/colab_bootstrap.py` by replacing `shell=True` execution with `shell=False`.
+- **perf(gps_training)**: Optimized DataLoader by moving RGB tensor float normalization to the GPU training loop, significantly reducing PCI-e transfer overhead.
+- **refactor(notebooks)**: Cleaned up `notebooks/train_colab.ipynb` by externalizing all bootstrap logic, nullifying notebook state corruption risks.
+- **test**: Initialized testing infrastructure with `pytest` unit coverage for validation scripts.
