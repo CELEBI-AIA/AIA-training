@@ -101,3 +101,6 @@
 - **feat(uav_training/build_dataset)**: Reworked smart sampling to class-aware keep probabilities across all target classes and added warnings for out-of-range/unmapped class IDs.
 - **feat(uav_training/audit)**: Added split-level image/label counts and overlap risk reporting (`train-val-test`) for early leakage detection.
 - **test**: Added targeted unit tests for split mapping policy, scheduler max_lr validation, and audit overlap/count reporting.
+
+## 0.0.19 - 2026-02-23
+- **feat(uav_training/build_dataset)**: Tuned TEKNOFEST smart-sampling default for `vehicle` class from `0.10` to `0.30` to reduce missed-vehicle risk while keeping dataset balancing.

@@ -87,7 +87,7 @@ MAPPINGS = {
 DATASETS_DIR = PROJECT_ROOT / "datasets" / "TRAIN"
 MIN_BBOX_NORM = float(TRAIN_CONFIG.get("min_bbox_norm", 0.004))
 INCLUDE_TEST_IN_VAL = bool(TRAIN_CONFIG.get("include_test_in_val", False))
-DEFAULT_CLASS_KEEP_PROB = {0: 0.10, 1: 1.00, 2: 1.00, 3: 1.00}
+DEFAULT_CLASS_KEEP_PROB = {0: 0.30, 1: 1.00, 2: 1.00, 3: 1.00}
 
 
 def resolve_target_split(split_name: str, include_test_in_val: bool) -> str:
