@@ -97,8 +97,6 @@ MAPPINGS = {
     }
 }
 
-MIN_BBOX_NORM = float(TRAIN_CONFIG.get("min_bbox_norm", 0.004))
-INCLUDE_TEST_IN_VAL = bool(TRAIN_CONFIG.get("include_test_in_val", False))
 DEFAULT_CLASS_KEEP_PROB = {0: 0.30, 1: 1.00, 2: 1.00, 3: 1.00}
 
 
@@ -164,6 +162,9 @@ def build_dataset():
     (DATASET_DIR / "val" / "labels").mkdir(parents=True, exist_ok=True)
     (DATASET_DIR / "test" / "images").mkdir(parents=True, exist_ok=True)
     (DATASET_DIR / "test" / "labels").mkdir(parents=True, exist_ok=True)
+
+    min_bbox_norm = float(TRAIN_CONFIG.get("min_bbox_norm", 0.004))
+    include_test_in_val = bool(TRAIN_CONFIG.get("include_test_in_val", False))
 
     print("Starting optimized dataset unification (UAV Optimized)...")
 
@@ -296,8 +297,9 @@ def build_dataset():
                                 continue
                             x, y, w, h = coords
 
-                            # NaN guard
-                            if any(v != v for v in (x, y, w, h)):
+                            import math
+                            # NaN/Inf guard
+                            if any(v != v or math.isinf(v) for v in (x, y, w, h)):
                                 nan_bbox_count += 1
                                 continue
 
@@ -313,7 +315,7 @@ def build_dataset():
                             w = min(1.0, max(0.0, w))
                             h = min(1.0, max(0.0, h))
 
-                            if not (MIN_BBOX_NORM < w <= 1.0 and MIN_BBOX_NORM < h <= 1.0):
+                            if not (min_bbox_norm < w <= 1.0 and min_bbox_norm < h <= 1.0):
                                 too_small_bbox_count += 1
                                 continue
 
@@ -388,7 +390,7 @@ def build_dataset():
 
     def _execute_megaset_process(synthetic_splits, config, dataset_name, dataset_path, base_oversample_count, smart_sample):
         for target_split, image_files in synthetic_splits:
-            _process_image_files(target_split, image_files, target_split, config, dataset_name, dataset_path, base_oversample_count, smart_sample)
+            _process_image_files(target_split, image_files, None, config, dataset_name, dataset_path, base_oversample_count, smart_sample)
     
     # Actually run the processing here (so it's defined and visible to megaset)
     # Re-apply the earlier block loops since we extracted logic out
@@ -443,7 +445,7 @@ def build_dataset():
                 test_images_dir = test_split_path / "images"
                 test_images = _list_images(test_images_dir if test_images_dir.exists() else test_split_path)
                 if test_images:
-                    mapped_split = resolve_target_split("test", INCLUDE_TEST_IN_VAL)
+                    mapped_split = resolve_target_split("test", include_test_in_val)
                     _process_image_files(
                         mapped_split,
                         test_images,
@@ -460,7 +462,7 @@ def build_dataset():
             src_split_path = dataset_path / split
             if not src_split_path.exists():
                 continue
-            target_split = resolve_target_split(split, INCLUDE_TEST_IN_VAL)
+            target_split = resolve_target_split(split, include_test_in_val)
             images_dir = src_split_path / "images"
             if images_dir.exists():
                 image_files = _list_images(images_dir)
@@ -494,6 +496,13 @@ def build_dataset():
         yaml.dump(final_data_yaml, f)
         
     print(f"Dataset built successfully at {DATASET_DIR}")
+
+    _release_file_lock(lock_fd, lock_path)
+    try:
+        atexit.unregister(_release_file_lock)
+    except AttributeError:
+        pass
+
 
 if __name__ == "__main__":
     build_dataset()

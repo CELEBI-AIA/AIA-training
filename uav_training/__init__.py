@@ -1,3 +1,3 @@
 """UAV Training — YOLO-based object detection module."""
 
-__version__ = "0.8.20"
+__version__ = "0.8.21"

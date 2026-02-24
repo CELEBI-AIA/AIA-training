@@ -305,3 +305,10 @@
 - **refactor(uav_training/config)**: Import side effect kaldırıldı; `auto_detect_hardware()` lazy `ensure_colab_config()` ile sadece train başında çağrılıyor (sistem_denetim_raporu §2.1).
 - **feat(uav_training/visualize_dataset)**: `--split train|val|test` ve `--num` CLI argümanları eklendi; val/test split görselleştirmesi destekleniyor (sistem_denetim_raporu §6.5).
 - **release**: Bumped module/script version from `0.8.19` to `0.8.20`.
+
+## 0.0.41 - 2026-02-24
+- **fix(uav_training/build_dataset)**: Megaset label çözümleme hatası düzeltildi; `_execute_megaset_process` içinde `split` parametresi ile `src_split_path` doğru tayin ediliyor (KRTK-01).
+- **fix(uav_training/build_dataset)**: `MIN_BBOX_NORM` ve `INCLUDE_TEST_IN_VAL` artık modül seviyesi sabit yerine `build_dataset()` çağrıldığında dinamik okunuyor; Colab config senkronizasyon riski giderildi (KRTK-02).
+- **fix(uav_training/train)**: Leakage denetimi artık built dataset (`DATASET_DIR`) üzerinde de yapılıyor; audit raporu yanı sıra gerçek split overlap kontrolü (KRTK-03).
+- **docs(UAV_Pipeline_Audit_Report)**: Statik kod denetim raporu eklendi; sağlık skoru 9.0/10.
+- **release**: Bumped module/script version from `0.8.20` to `0.8.21`.

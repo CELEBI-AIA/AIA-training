@@ -196,13 +196,13 @@ def auto_detect_hardware() -> tuple:
     # fall back to disk or no cache on constrained machines.
     try:
         import psutil
-        available_ram_gb = psutil.virtual_memory().available / (1024 ** 3)
+        total_ram_gb = psutil.virtual_memory().total / (1024 ** 3)
     except ImportError:
-        available_ram_gb = ram
+        total_ram_gb = ram
 
-    if available_ram_gb > 100:
+    if total_ram_gb > 100:
         cache = "ram"
-    elif available_ram_gb > 20:
+    elif total_ram_gb > 20:
         cache = "disk"
     else:
         cache = False

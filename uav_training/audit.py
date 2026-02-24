@@ -10,7 +10,7 @@ except ImportError:
     # simple fallback if tqdm missing
     def tqdm(x, **kwargs): return x
 
-from config import PROJECT_ROOT, DATASETS_TRAIN_DIR, AUDIT_REPORT, ARTIFACTS_DIR, TARGET_CLASSES
+from config import PROJECT_ROOT, DATASETS_TRAIN_DIR, AUDIT_REPORT, ARTIFACTS_DIR, TARGET_CLASSES, DATASET_DIR
 
 
 def get_subdirs(path):
@@ -80,6 +80,13 @@ def scan_and_audit():
         # audit_directory currently takes name and uses BASE_PATH. 
         # We should update audit_directory to take full Path object.
         r = audit_directory(d) 
+        results.append(r)
+        print(f"  -> {r['status']} ({r['format']}): {r['reason']}")
+
+    if DATASET_DIR.exists():
+        print(f"Auditing built dataset at {DATASET_DIR}...")
+        r = audit_directory(DATASET_DIR)
+        r["name"] = f"BUILT_{DATASET_DIR.name}"
         results.append(r)
         print(f"  -> {r['status']} ({r['format']}): {r['reason']}")
     

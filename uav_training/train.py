@@ -36,7 +36,7 @@ if torch.cuda.is_available():
 try:
     from uav_training import __version__
 except ImportError:
-    __version__ = "0.8.20"  # fallback when uav_training not installed as package
+    __version__ = "0.8.21"  # fallback when uav_training not installed as package
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -45,6 +45,13 @@ def kill_gpu_hogs():
     """Clear GPU memory aggressively — sync, collect, then release cached blocks."""
     import gc
     import torch
+    import time
+    
+    # Wait for any active Drive sync from previous epochs (M-02)
+    global _SYNC_IN_FLIGHT
+    while _SYNC_IN_FLIGHT:
+        time.sleep(0.5)
+
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.synchronize()
@@ -662,8 +669,12 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
             "nbs": phase2_batch,
             "mosaic": TRAIN_CONFIG.get("phase2_mosaic", 0.2),
             "close_mosaic": TRAIN_CONFIG.get("phase2_close_mosaic", 10),
-            "lr0": TRAIN_CONFIG.get("phase2_lr0", TRAIN_CONFIG.get("lr0", 0.0015)),
+            "lr0": TRAIN_CONFIG.get("phase2_lr0", TRAIN_CONFIG.get("lr0", 0.001)),
+            "warmup_epochs": 0.0,
         }
+
+        # S-05: Reset seed before Phase 2 explicitly
+        setup_seed(42, deterministic=det)
 
         phase2_result = _train_single_phase(
             phase2_model_path,
