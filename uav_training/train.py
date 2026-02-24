@@ -34,7 +34,7 @@ if torch.cuda.is_available():
 
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.8.16"
+__version__ = "0.8.18"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 

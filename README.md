@@ -1,6 +1,6 @@
-# 🛩️ UAV Training Pipeline — v0.8.13
+# 🛩️ UAV Training Pipeline — v0.8.18
 
-YOLO11m tabanlı İHA (UAV) tespit ve GPS tabanlı konum takibi eğitim altyapısı.
+YOLO11m tabanlı İHA (UAV) tespit eğitim altyapısı.
 Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücre ile çalışır.
 
 ---
@@ -11,18 +11,11 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 .
 ├── uav_training/              # YOLO object detection module
 │   ├── config.py              # Auto hardware detection & hyperparameters
-│   ├── train.py               # Training entrypoint (v0.8.13)
+│   ├── train.py               # Training entrypoint (v0.8.18)
 │   ├── build_dataset.py       # Dataset unification, smart sampling & dedup
 │   ├── audit.py               # Dataset audit & validation
 │   ├── inference.py           # Smoke test inference
 │   └── visualize_dataset.py   # Bounding-box visualization
-│
-├── gps_training/              # Siamese GPS tracker module
-│   ├── config.py              # Hyperparameters & paths
-│   ├── train.py               # Training entrypoint
-│   ├── model.py               # SiameseTracker (ResNet-18 backbone)
-│   ├── dataset.py             # Frame-pair GPS dataset loader
-│   └── audit_gps.py           # Trajectory CSV scanner & validator
 │
 ├── scripts/
 │   ├── colab_bootstrap.py     # One-cell Colab training launcher
@@ -31,7 +24,7 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 ├── notebooks/
 │   └── train_colab.ipynb      # Open in Colab notebook
 │
-├── tests/                     # Unit tests (audit, build, config, scheduler)
+├── tests/                     # Unit tests (audit, build, config)
 ├── documentation/             # System check prompts & dataset docs
 │
 ├── requirements.txt
@@ -136,17 +129,6 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 | Uap-UaiAlanlariVeriSeti          | 3x         | —            |
 | drone-vision-project             | 3x         | —            |
 | megaset (24k images)             | 2x         | ✅ 100% human, 30% vehicle |
-
----
-
-## 🛰️ GPS Training Module
-
-Siamese network (ResNet-18) ile ardışık frame'lerden Δ(x, y, z) konum tahmini.
-
-1. `audit_gps.py` — Trajectory CSV + video/image tarama
-2. `dataset.py` — (frame_t, frame_t+1, Δxyz) çiftleri oluşturur
-3. `model.py` — SiameseTracker: dual ResNet-18 → concat → regressor
-4. `train.py` — OneCycleLR, AMP, checkpoint rotation, ONNX export
 
 ---
 

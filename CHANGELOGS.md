@@ -265,3 +265,14 @@
 ## 0.0.36 - 2026-02-24
 - **docs(statik_denetim_raporu)**: Güncellenmiş statik kod denetim raporu; önceki denetimde tespit edilen kritik risklerin giderildiği, kalan orta/yüksek risklerin ve genel sağlık skorunun (7.5/10) belgelenmesi.
 - **release**: Bumped module/script version from `0.8.15` to `0.8.16`.
+
+## 0.0.37 - 2026-02-24
+- **chore(archive)**: GPS training modülü `archive_gps/` klasörüne taşındı; UAV eğitim hattı tamamlanana kadar kullanılmayacak. Taşınan: `gps_training/`, `tests/test_gps_config.py`, `tests/test_gps_train_scheduler.py`.
+- **docs(README)**: GPS bölümü kaldırıldı, repository yapısı güncellendi.
+- **chore(cleanup.sh)**: GPS train.py pkill satırı kaldırıldı.
+- **release**: Bumped module/script version from `0.8.16` to `0.8.17`.
+
+## 0.0.38 - 2026-02-24
+- **chore(remove)**: GPS ile ilgili tüm dosyalar silindi (`archive_gps/` klasörü). Yerel yedek alındı, artık projede GPS modülü yok.
+- **docs(README)**: archive_gps referansı kaldırıldı.
+- **release**: Bumped module/script version from `0.8.17` to `0.8.18`.

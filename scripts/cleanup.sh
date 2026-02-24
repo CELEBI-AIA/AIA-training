@@ -4,7 +4,6 @@ echo "🚨 FORCE STOPPING TRAINING & CLEANING MEMORY 🚨"
 # Kill specific training processes
 echo "Killing train.py processes..."
 pkill -9 -f "uav_training/train.py"
-pkill -9 -f "gps_training/train.py"
 
 # Kill YOLO related processes
 echo "Killing YOLO processes..."
