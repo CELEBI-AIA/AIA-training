@@ -442,11 +442,14 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
     setup_seed(42, deterministic=det)
     kill_gpu_hogs()
 
-    # Auto-optimize dataset if not resuming AND not already built
+    # Ensure dataset.yaml exists for both fresh and resume runs.
+    # Resume without dataset metadata can happen after Colab runtime resets.
     yaml_path = DATASET_DIR / "dataset.yaml"
     needs_build = False
 
-    if not resume and not yaml_path.exists():
+    if not yaml_path.exists():
+        if resume:
+            print("⚠️  Resume requested but dataset.yaml is missing — rebuilding dataset...", flush=True)
         needs_build = True
     elif not resume and yaml_path.exists():
         # Check if existing dataset uses symlinks (old format → Drive FUSE → slow)

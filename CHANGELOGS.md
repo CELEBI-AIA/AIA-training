@@ -252,10 +252,12 @@
 - **fix(gps_training/train)**: Added `torch.isfinite(output)` check before loss computation to catch NaN model outputs early under AMP (ES-07).
 - **feat(gps_training/__init__)**: Added `__version__ = "0.8.14"` to GPS module for version tracking parity with UAV (MO-05).
 - **fix(gps_training/train)**: Replaced `subprocess.run(shell=True)` rsync call with explicit arg list to eliminate shell injection risk (MO-07).
+- **fix(uav_training/train)**: Resume path now auto-triggers `build_dataset()` when `dataset.yaml` is missing, preventing hard-fail (`Error: Dataset config not found at /content/dataset_built/dataset.yaml`) after Colab runtime resets.
 - **release**: Bumped module/script version from `0.8.13` to `0.8.14`.
 
 ## 0.0.35 - 2026-02-24
 - **feat(gps_training/train)**: Added CUDA OOM recovery with automatic batch halving (max 2 retries), DataLoader rebuild, and scheduler reset — prevents training crashes on memory spikes (PD-02).
 - **fix(gps_training/train)**: Added explicit `weights_only=False` to resume `torch.load` calls to suppress `FutureWarning` on PyTorch 2.2-2.5 and ensure consistent behavior across versions (MO-02).
 - **feat(gps_training/train)**: Training config is now persisted to `train_config.json` in artifacts directory at startup for post-hoc experiment comparison (MO-06).
+- **perf(scripts/colab_bootstrap)**: Added fast-path dataset readiness check (`/content/datasets_local/dataset.yaml` + file count) to skip extraction tooling, Drive→SSD copy, and tar extraction when local SSD dataset is already prepared in the current runtime.
 - **release**: Bumped module/script version from `0.8.14` to `0.8.15`.
