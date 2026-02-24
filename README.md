@@ -1,4 +1,4 @@
-# 🛩️ UAV Training Pipeline — v0.8.4
+# 🛩️ UAV Training Pipeline — v0.8.6
 
 YOLO11m tabanlı İHA (UAV) tespit ve GPS tabanlı konum takibi eğitim altyapısı.
 Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücre ile çalışır.
@@ -11,7 +11,7 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 .
 ├── uav_training/              # YOLO object detection module
 │   ├── config.py              # Auto hardware detection & hyperparameters
-│   ├── train.py               # Training entrypoint (v0.8.4)
+│   ├── train.py               # Training entrypoint (v0.8.6)
 │   ├── build_dataset.py       # Dataset unification, smart sampling & dedup
 │   ├── audit.py               # Dataset audit & validation
 │   ├── inference.py           # Smoke test inference
@@ -107,9 +107,9 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 | Epochs        | 65 (Phase1: 50 + Phase2: 15, Patience: 30) |
 | Optimizations | `optimizer=AdamW`, `lr0=0.001`, `close_mosaic=5` |
 | Augmentations | `scale=0.4`, `copy_paste=0.3`, `flipud=0.5` |
-| AMP (BF16 hedef) | ✅ Enabled (`amp=True`, Ampere+ için BF16 patch opsiyonel) |
+| AMP (BF16)    | ✅ Enabled (`amp=True`, Ampere+ GPU'da Ultralytics otomatik BF16 seçer) |
 | torch.compile | ✅ A100/H100 için `reduce-overhead`, düşük tier GPU'da kapalı |
-| Cache         | ❌ Off (NVMe SSD'den oku, RAM şişmez)       |
+| Cache         | Dinamik (RAM >60GB: `ram`, >20GB: `disk`, diğer: off) |
 | Deterministic | ❌ Off (Hızlı CUDA kernels)                 |
 | Save Period   | Her 5 epoch checkpoint (Colab güvenliği)   |
 | Label Filter  | `min_bbox_norm=0.004` ile filtrelenir       |
@@ -118,8 +118,8 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 
 | GPU Tier   | Batch | VRAM Usage |
 |------------|-------|------------|
-| H100 80GB  | Auto (genelde 80) | ~80% hedef |
-| A100 40GB  | Auto (genelde 32) | ~80% hedef |
+| H100 80GB  | 64    | ~85-90%    |
+| A100 40GB  | 32    | ~85-90%    |
 | L4 24GB    | 32    | ~70-80%    |
 | T4 16GB    | 16    | ~75%       |
 | 8GB GPU    | 8     | ~80%       |

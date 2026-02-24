@@ -57,7 +57,7 @@ TRAIN_CONFIG = {
     "model": "yolo11m.pt",
     "workers": 8,
     "amp": True,          # Mixed precision (BF16 target on Ampere+)
-    "cache": True,         # Local default, Colab auto profile uses False
+    "cache": True,         # Local default, Colab uses dynamic RAM-based selection
     "patience": 30,        # Early stopping
     "cos_lr": True,        # Cosine LR scheduler
     "optimizer": "AdamW",

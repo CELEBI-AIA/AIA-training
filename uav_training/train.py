@@ -159,7 +159,7 @@ def rename_and_export_best(results_dir: Path, drive_dest: str | None = None) -> 
 
     if drive_dest:
         # ── Create unique model folder under Drive/models/ ──
-        # Format: 2026-02-21_yolov8l_mAP50-0.853_mAP50-95-0.620
+        # Format: 2026-02-21_yolo11m_mAP50-0.853_mAP50-95-0.620
         model_name = TRAIN_CONFIG.get("model", "yolo").replace(".pt", "")
         date_str = datetime.now().strftime("%Y-%m-%d_%H-%M")
         folder_name = f"{date_str}_{model_name}_mAP50-{map50:.3f}_mAP50-95-{map50_95:.3f}"
@@ -606,13 +606,13 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
         sys.exit(1)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train YOLOv8 on UAV dataset")
+    parser = argparse.ArgumentParser(description="Train YOLO11 on UAV dataset")
     parser.add_argument("--epochs", type=int, help="Number of epochs")
     parser.add_argument("--batch", type=str, help="Batch size (int or -1 for autobatch)")
     parser.add_argument("--device", type=str, help="cuda device, i.e. 0 or 0,1,2,3 or cpu")
     parser.add_argument("--model", type=str, help="Model path or size (e.g. yolo11m.pt)")
     parser.add_argument("--resume", action="store_true", help="Resume training from last checkpoint")
-    parser.add_argument("--two-phase", action="store_true", help="Run 85+15 two-phase training profile")
+    parser.add_argument("--two-phase", action="store_true", help="Run 50+15 two-phase training profile")
 
     args = parser.parse_args()
 
