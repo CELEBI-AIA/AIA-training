@@ -1,0 +1,19 @@
+---
+alwaysApply: true
+---
+# CHANGELOGS.md Versioning Policy
+
+For any repository, always ensure a `CHANGELOGS.md` file exists in the project root.
+
+- If it does not exist, create it and start versioning from `0.0.01` even for mature projects.
+- For every change, append a new entry and increment the patch version step-by-step (`0.0.02`, `0.0.03`, ...).
+- When `CHANGELOGS.md` gets large, do **not** read the whole file; read only the end of the file (last ~20 lines), find the latest version, and continue from there.
+
+## Entry Format
+
+```markdown
+## X.X.XX - YYYY-MM-DD
+- **type(scope)**: Description of the change.
+```
+
+Where `type` is one of: `fix`, `feat`, `perf`, `refactor`, `chore`, `docs`, `test`, `log`, `release`.

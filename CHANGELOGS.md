@@ -153,3 +153,9 @@
 - **fix(uav_training/audit)**: Fixed class count logic in `uav_training/audit.py` — `result[key] = 1` replaced with proper `+= 1` accumulator for accurate class match reporting.
 - **log(uav_training/precision)**: Added BF16 hardware support verification and TF32 status to `auto_detect_hardware()` output in `uav_training/config.py`; cleaned up `amp_dtype` reference in `_log_precision_policy()` in `uav_training/train.py`.
 - **release**: Bumped module/script version from `0.8.5` to `0.8.6`.
+
+## 0.0.26 - 2026-02-24
+- **fix(uav_training/config)**: Renamed deprecated `smoothing` key to `label_smoothing` in both auto-detect and fallback config dicts in `uav_training/config.py` to fix Ultralytics 8.3+ `SyntaxError: 'smoothing' is not a valid YOLO argument`.
+- **fix(uav_training/train)**: Removed stale `smoothing` from `optional_params` forwarding list and reversed the backward-compat shim to migrate legacy `smoothing` -> `label_smoothing` instead of dropping the valid key.
+- **chore(deps)**: Relaxed `requirements.txt` upper-bound constraints (`<8.4.0`, `<2.3.0`, `<0.18.0`, `<2.0.0`) to minimum-only (`>=`) to prevent Colab pre-installed package conflicts.
+- **fix(scripts/colab_bootstrap)**: Added `/content/repo` fallback in version reader so the initial banner shows the actual version instead of `vdev` when the repo was already cloned from a previous Colab run.

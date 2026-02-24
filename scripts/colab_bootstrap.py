@@ -75,6 +75,8 @@ def _banner(msg: str):
 
 _bootstrap_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 VERSION = _read_repo_version(_bootstrap_root)
+if VERSION == "dev":
+    VERSION = _read_repo_version("/content/repo")
 
 print(f"\n🛰️  UAV Training Bootstrap v{VERSION}", flush=True)
 print(f"    Repo: {REPO_URL} ({REPO_BRANCH})\n", flush=True)
