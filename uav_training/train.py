@@ -22,30 +22,15 @@ import threading
 
 # Enable V8 cuDNN API for better A100 performance
 os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
+# Reduce VRAM fragmentation — must be set before any CUDA allocation
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
-if os.environ.get("FORCE_BF16_PATCH", "0") == "1":
-    # Optional compatibility patch: keep disabled by default because
-    # it can conflict with Ultralytics AMP safety checks on some runtimes.
-    import ultralytics.utils.torch_utils as _tu
-
-    _orig_ac = _tu.torch.amp.autocast
-
-    def _bf16_autocast(*a, **kw):
-        kw.setdefault("dtype", torch.bfloat16)
-        return _orig_ac(a[0] if a else "cuda", **kw)
-
-    _tu.torch.amp.autocast = _bf16_autocast
-
-    _orig_gs = torch.cuda.amp.GradScaler.__init__
-
-    def _noop_gs(self, *a, **kw):
-        kw["enabled"] = False
-        _orig_gs(self, *a, **kw)
-
-    torch.cuda.amp.GradScaler.__init__ = _noop_gs
-    print("⚙️ FORCE_BF16_PATCH=1 → BF16 monkey patch is enabled", flush=True)
-else:
-    print("ℹ️ BF16 monkey patch disabled (default, safer for AMP checks)", flush=True)
+if torch.cuda.is_available():
+    cc = torch.cuda.get_device_capability(0)
+    if cc[0] >= 8:
+        print(f"ℹ️ Ampere+ GPU (sm_{cc[0]}{cc[1]}) — native AMP will auto-select BF16", flush=True)
+    else:
+        print(f"ℹ️ GPU sm_{cc[0]}{cc[1]} — AMP will use FP16", flush=True)
 
 
 # Version — keep in sync with uav_training/__init__.py
@@ -55,11 +40,12 @@ print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
 
 def kill_gpu_hogs():
-    """Clear GPU memory before training."""
+    """Clear GPU memory aggressively — sync, collect, then release cached blocks."""
     import gc
     import torch
     gc.collect()
     if torch.cuda.is_available():
+        torch.cuda.synchronize()
         torch.cuda.empty_cache()
 
 
@@ -260,7 +246,6 @@ def _is_cuda_oom_error(exc: Exception) -> bool:
 
 def _log_precision_policy() -> None:
     """Emit a single precision policy line for run-to-run verification."""
-    bf16_patch = os.environ.get("FORCE_BF16_PATCH", "0") == "1"
     compile_mode = TRAIN_CONFIG.get("compile", False)
     gpu_capability = "cpu"
     bf16_hw = False
@@ -273,7 +258,7 @@ def _log_precision_policy() -> None:
         f"gpu_capability={gpu_capability} "
         f"tf32_matmul={torch.backends.cuda.matmul.allow_tf32} "
         f"tf32_cudnn={torch.backends.cudnn.allow_tf32} "
-        f"bf16_hw={bf16_hw} bf16_patch={bf16_patch} "
+        f"bf16_hw={bf16_hw} amp=native "
         f"compile={compile_mode}",
         flush=True,
     )
@@ -353,18 +338,21 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
                 recovery_action = "compile=False"
             elif isinstance(next_args.get("batch"), int) and next_args["batch"] > 8:
                 next_args["batch"] = max(8, next_args["batch"] // 2)
-                recovery_action = f"batch={next_args['batch']}"
+                next_args["nbs"] = next_args["batch"]
+                recovery_action = f"batch={next_args['batch']},nbs={next_args['batch']}"
             elif int(next_args.get("imgsz", 0)) > 896:
                 next_args["imgsz"] = 896
                 recovery_action = "imgsz=896"
             elif isinstance(next_args.get("batch"), int) and next_args["batch"] > 4:
                 next_args["batch"] = max(4, next_args["batch"] // 2)
-                recovery_action = f"batch={next_args['batch']}"
+                next_args["nbs"] = next_args["batch"]
+                recovery_action = f"batch={next_args['batch']},nbs={next_args['batch']}"
 
             if recovery_action is None:
                 raise
 
             print(f"🛟 Applying OOM fallback: {recovery_action}", flush=True)
+            del model
             kill_gpu_hogs()
             attempt_args = next_args
 
@@ -524,9 +512,9 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
             cc = torch.cuda.get_device_capability(0)
             vram_total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
             vram_free = (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / (1024**3)
-            bf16_status = "ON" if os.environ.get("FORCE_BF16_PATCH") == "1" else "OFF"
+            bf16_native = "Yes" if cc[0] >= 8 else "No"
             print(
-                f"  GPU: {gpu} (sm_{cc[0]}{cc[1]})  |  VRAM: {vram_free:.1f}/{vram_total:.1f} GB free  |  BF16 patch: {bf16_status}",
+                f"  GPU: {gpu} (sm_{cc[0]}{cc[1]})  |  VRAM: {vram_free:.1f}/{vram_total:.1f} GB free  |  BF16 native: {bf16_native}",
                 flush=True,
             )
     except Exception:

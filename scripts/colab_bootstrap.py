@@ -231,8 +231,8 @@ try:
         _cc = _t.cuda.get_device_capability(0)
         print(f"  Compute capability: {_cc[0]}.{_cc[1]}", flush=True)
         if _cc[0] >= 8:
-            os.environ["FORCE_BF16_PATCH"] = "1"
-            print(f"  BF16 patch enabled (Ampere+ sm_{_cc[0]}{_cc[1]})", flush=True)
+            os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+            print(f"  Ampere+ (sm_{_cc[0]}{_cc[1]}): native AMP BF16, expandable VRAM segments enabled", flush=True)
         del _p, _cc
     del _t
 except Exception as _e:

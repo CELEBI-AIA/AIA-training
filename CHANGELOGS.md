@@ -154,6 +154,14 @@
 - **log(uav_training/precision)**: Added BF16 hardware support verification and TF32 status to `auto_detect_hardware()` output in `uav_training/config.py`; cleaned up `amp_dtype` reference in `_log_precision_policy()` in `uav_training/train.py`.
 - **release**: Bumped module/script version from `0.8.5` to `0.8.6`.
 
+## 0.0.27 - 2026-02-24
+- **fix(uav_training/train)**: Removed BF16 monkey patch (`FORCE_BF16_PATCH`) that broke Ultralytics AMP validation check, causing AMP to be silently disabled and forcing FP32 (~2x VRAM), which cascaded into CUDA OOM on A100-40GB at batch=32/1024px. Native AMP now handles BF16 on Ampere+ GPUs automatically.
+- **fix(scripts/colab_bootstrap)**: Replaced `FORCE_BF16_PATCH=1` env var with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to reduce VRAM fragmentation on Ampere+ GPUs.
+- **fix(uav_training/config)**: Gated `torch.compile` (`reduce-overhead`) behind `sys.version_info < (3, 12)` check since Dynamo is unsupported on Python 3.12+ with torch 2.x; prevents wasting an OOM recovery attempt on a known failure.
+- **fix(uav_training/train)**: OOM fallback now also sets `nbs=batch` when halving batch size, preventing Ultralytics from silently halving the learning rate via `lr = lr0 * batch/nbs`.
+- **perf(uav_training/train)**: Set `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` as fallback in `train.py` for non-bootstrap launches.
+- **perf(uav_training/train)**: Improved `kill_gpu_hogs()` with `torch.cuda.synchronize()` before `empty_cache()` and added `del model` in OOM retry loop for more reliable VRAM cleanup between attempts.
+
 ## 0.0.26 - 2026-02-24
 - **fix(uav_training/config)**: Renamed deprecated `smoothing` key to `label_smoothing` in both auto-detect and fallback config dicts in `uav_training/config.py` to fix Ultralytics 8.3+ `SyntaxError: 'smoothing' is not a valid YOLO argument`.
 - **fix(uav_training/train)**: Removed stale `smoothing` from `optional_params` forwarding list and reversed the backward-compat shim to migrate legacy `smoothing` -> `label_smoothing` instead of dropping the valid key.

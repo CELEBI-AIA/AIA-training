@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import sys
 
 # Base paths
 # Getting the project root relative to this config file
@@ -187,7 +188,8 @@ def auto_detect_hardware() -> tuple:
     adamw_lr0 = 0.001
     warmup_epochs = 5.0
 
-    compile_mode = "reduce-overhead" if vram >= 35 else False
+    # Dynamo (torch.compile) requires Python < 3.12 on torch 2.x
+    compile_mode = "reduce-overhead" if (vram >= 35 and sys.version_info < (3, 12)) else False
 
     config_overrides = {
         "epochs": 65,            # 50 + 15 two-phase profile
