@@ -36,7 +36,7 @@ if torch.cuda.is_available():
 try:
     from uav_training import __version__
 except ImportError:
-    __version__ = "0.8.21"  # fallback when uav_training not installed as package
+    __version__ = "0.8.22"  # fallback when uav_training not installed as package
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -48,7 +48,10 @@ def kill_gpu_hogs():
     import time
     
     # Wait for any active Drive sync from previous epochs (M-02)
-    while _SYNC_IN_FLIGHT:
+    while True:
+        with _SYNC_LOCK:
+            if not _SYNC_IN_FLIGHT:
+                break
         time.sleep(0.5)
 
     gc.collect()
@@ -60,18 +63,14 @@ def kill_gpu_hogs():
 def _is_checkpoint_valid(ckpt_path: Path) -> bool:
     """Check if a PyTorch checkpoint is readable and not corrupt.
 
-    Tries weights_only=True first (avoids unpickling custom classes),
-    but YOLO checkpoints contain DetectionModel so that will be rejected.
-    Falls back to full load with explicit gc.collect() to free RAM.
+    Uses zipfile check to avoid weights_only=False unpickling security risk (M-03).
     """
-    import torch
-    import gc
+    import zipfile
     if not ckpt_path.exists() or ckpt_path.stat().st_size < 1024 * 1024:  # < 1MB is suspicious for YOLO
         return False
     try:
-        data = torch.load(ckpt_path, map_location='cpu', weights_only=False)
-        del data
-        gc.collect()
+        if not zipfile.is_zipfile(ckpt_path):
+            return False
         return True
     except Exception as e:
         print(f"⚠️ Checkpoint {ckpt_path.name} is corrupt: {e}", flush=True)
@@ -386,6 +385,16 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
 
     if results is None and last_exc is not None:
         raise last_exc
+        
+    # M-05 Fix: Explicitly log complete combined attempt_args for unified tracking
+    try:
+        import yaml
+        out_args_file = Path(str(TRAIN_CONFIG["project"])) / run_name / "full_attempt_args.yaml"
+        out_args_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_args_file, "w") as f:
+            yaml.dump(attempt_args, f)
+    except Exception as ex:
+        print(f"⚠️ [M-05] Failed to save full_attempt_args.yaml: {ex}", flush=True)
 
     print("\n✅ Training completed.", flush=True)
     print(f"\n{'='*60}", flush=True)
@@ -405,6 +414,7 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         "mAP50-95": results.box.map,
         "results_dir": str(results_dir),
         "best_pt": str(renamed) if renamed else None,
+        "batch": attempt_args.get("batch", batch),  # Fix for E-02 / B-04
     }
 
 
@@ -440,7 +450,16 @@ def _check_leakage_from_audit(*, allow_leakage: bool = False) -> None:
     if allow_leakage:
         return
     if not AUDIT_REPORT.exists():
-        return
+        print(f"⚠️ Audit report missing. Running audit.py to generate it... (M-06/E-05 Fix)", flush=True)
+        import subprocess
+        try:
+            audit_script = Path(__file__).parent / "audit.py"
+            subprocess.run([sys.executable, str(audit_script)], check=True)
+        except subprocess.CalledProcessError:
+            raise RuntimeError("Audit failed! Fix data leakage or use --allow-leakage to override.")
+        if not AUDIT_REPORT.exists():
+            print("⚠️ Audit report still not generated after running audit.py.", flush=True)
+            return
     try:
         import json
         with open(AUDIT_REPORT, encoding="utf-8") as f:
@@ -660,9 +679,9 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                 if not os.path.exists(phase2_model_path) or not _is_checkpoint_valid(Path(phase2_model_path)):
                      raise FileNotFoundError(f"Failed to find any valid phase1 weights in {phase1_result['results_dir']}")
 
-        phase2_batch = batch
-        if isinstance(batch, int):
-            phase2_batch = max(1, batch // 2)
+        phase2_batch = phase1_result.get("batch", batch)  # E-02 / B-04 Fix: use actual phase 1 batch
+        if isinstance(phase2_batch, int):
+            phase2_batch = max(1, phase2_batch // 2)
 
         phase2_overrides = {
             "nbs": phase2_batch,

@@ -7,7 +7,11 @@ import yaml
 import json
 import random
 import atexit
+import math
 import platform
+
+_EPS = 1e-6
+
 if platform.system() == "Windows":
     import msvcrt
 else:
@@ -141,7 +145,10 @@ def _release_file_lock(fd: int, lock_path: Path) -> None:
         else:
             fcntl.flock(fd, fcntl.LOCK_UN)
     finally:
-        os.close(fd)
+        try:
+            os.close(fd)
+        except OSError:
+            pass
     try:
         os.remove(lock_path)
     except OSError:
@@ -203,19 +210,19 @@ def build_dataset():
         if split_smart_sample:
             print(f"  Applying Smart Sampling for {dataset_name}...")
 
-        kept_by_class = {cls_id: 0 for cls_id in sorted(class_keep_prob.keys())}
-        skipped_smart = 0
-        out_of_range_cls = 0
-        unmapped_cls = 0
-        missing_label_count = 0
-        out_of_range_bbox_count = 0
-        nan_bbox_count = 0
-        too_small_bbox_count = 0
-        short_line_count = 0  # len(parts) < 5 (segmentation/keypoint format)
-        invalid_coords_count = 0
-        total_bbox_kept = 0
-
         for i in range(oversample_count):
+            kept_by_class = {cls_id: 0 for cls_id in sorted(class_keep_prob.keys())}
+            skipped_smart = 0
+            out_of_range_cls = 0
+            unmapped_cls = 0
+            missing_label_count = 0
+            out_of_range_bbox_count = 0
+            nan_bbox_count = 0
+            too_small_bbox_count = 0
+            short_line_count = 0  # len(parts) < 5 (segmentation/keypoint format)
+            invalid_coords_count = 0
+            total_bbox_kept = 0
+
             desc_suffix = f" (Copy {i+1}/{oversample_count})" if oversample_count > 1 else ""
             file_iter = tqdm(image_files, desc=f"{dataset_name} - {target_split}{desc_suffix}")
 
@@ -287,9 +294,6 @@ def build_dataset():
                         if target_id is None:
                             continue
 
-                        target_id = int(target_id)
-                        present_target_ids.add(target_id)
-
                         try:
                             coords = list(map(float, parts[1:5]))
                             if len(coords) != 4:
@@ -297,14 +301,12 @@ def build_dataset():
                                 continue
                             x, y, w, h = coords
 
-                            import math
                             # NaN/Inf guard
                             if any(v != v or math.isinf(v) for v in (x, y, w, h)):
                                 nan_bbox_count += 1
                                 continue
 
                             # Strict range check (eps tolerance for float rounding only)
-                            _EPS = 1e-6
                             if not all(-_EPS <= v <= 1.0 + _EPS for v in (x, y, w, h)):
                                 out_of_range_bbox_count += 1
                                 continue
@@ -318,6 +320,10 @@ def build_dataset():
                             if not (min_bbox_norm < w <= 1.0 and min_bbox_norm < h <= 1.0):
                                 too_small_bbox_count += 1
                                 continue
+
+                            # KR-2 Fix: Add to present_target_ids ONLY after all bbox validity checks pass!
+                            target_id = int(target_id)
+                            present_target_ids.add(target_id)
 
                             new_line = f"{target_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n"
                             if new_line not in _seen_lines:
@@ -365,28 +371,28 @@ def build_dataset():
                     print(f"Error processing {img_path}: {e}")
                     continue
 
-        if split_smart_sample:
-            print(f"  Smart Sampling Stats ({split}): KeptByClass={kept_by_class}, Skipped={skipped_smart}")
-        if out_of_range_cls > 0:
-            print(f"  ⚠️ {dataset_name}/{split}: out-of-range class_id count = {out_of_range_cls}")
-        if unmapped_cls > 0:
-            print(f"  ⚠️ {dataset_name}/{split}: unmapped class count = {unmapped_cls}")
-        if missing_label_count > 0:
-            print(f"  ⚠️ {dataset_name}/{split}: missing label files = {missing_label_count}")
-        rejected = out_of_range_bbox_count + nan_bbox_count + too_small_bbox_count
-        excluded = short_line_count + invalid_coords_count
-        print(
-            f"  [BBOX AUDIT] {dataset_name}/{target_split}: "
-            f"kept={total_bbox_kept} out_of_range={out_of_range_bbox_count} "
-            f"nan={nan_bbox_count} too_small={too_small_bbox_count} "
-            f"rejected_total={rejected}"
-        )
-        if excluded > 0:
+            if split_smart_sample:
+                print(f"  Smart Sampling Stats ({split}): KeptByClass={kept_by_class}, Skipped={skipped_smart}")
+            if out_of_range_cls > 0:
+                print(f"  ⚠️ {dataset_name}/{split}: out-of-range class_id count = {out_of_range_cls}")
+            if unmapped_cls > 0:
+                print(f"  ⚠️ {dataset_name}/{split}: unmapped class count = {unmapped_cls}")
+            if missing_label_count > 0:
+                print(f"  ⚠️ {dataset_name}/{split}: missing label files = {missing_label_count}")
+            rejected = out_of_range_bbox_count + nan_bbox_count + too_small_bbox_count
+            excluded = short_line_count + invalid_coords_count
             print(
-                f"  [EXCLUDED LABELS] {dataset_name}/{target_split}: "
-                f"short_format={short_line_count} invalid_coords={invalid_coords_count} "
-                f"(unsupported segmentation/keypoint or malformed lines)"
+                f"  [BBOX AUDIT] {dataset_name}/{target_split}{desc_suffix}: "
+                f"kept={total_bbox_kept} out_of_range={out_of_range_bbox_count} "
+                f"nan={nan_bbox_count} too_small={too_small_bbox_count} "
+                f"rejected_total={rejected}"
             )
+            if excluded > 0:
+                print(
+                    f"  [EXCLUDED LABELS] {dataset_name}/{target_split}{desc_suffix}: "
+                    f"short_format={short_line_count} invalid_coords={invalid_coords_count} "
+                    f"(unsupported segmentation/keypoint or malformed lines)"
+                )
 
     def _execute_megaset_process(synthetic_splits, config, dataset_name, dataset_path, base_oversample_count, smart_sample):
         for target_split, image_files in synthetic_splits:
@@ -476,7 +482,7 @@ def build_dataset():
 
     # Generate data.yaml
     final_data_yaml = {
-        'path': str(DATASET_DIR.absolute()),
+        'path': '.',
         'train': 'train/images',
         'val': 'val/images',
         'nc': 4,
@@ -491,6 +497,8 @@ def build_dataset():
     test_images_dir = DATASET_DIR / "test" / "images"
     if test_images_dir.exists() and any(test_images_dir.iterdir()):
         final_data_yaml["test"] = "test/images"
+    else:
+        final_data_yaml["test"] = "val/images"  # Safe fallback to prevent KeyError in val(split="test")
     
     with open(DATASET_DIR / "dataset.yaml", 'w') as f:
         yaml.dump(final_data_yaml, f)

@@ -312,3 +312,15 @@
 - **fix(uav_training/train)**: Leakage denetimi artık built dataset (`DATASET_DIR`) üzerinde de yapılıyor; audit raporu yanı sıra gerçek split overlap kontrolü (KRTK-03).
 - **docs(UAV_Pipeline_Audit_Report)**: Statik kod denetim raporu eklendi; sağlık skoru 9.0/10.
 - **release**: Bumped module/script version from `0.8.20` to `0.8.21`.
+
+## 0.0.42 - 2026-02-24
+- **chore(requirements)**: ultralytics/torch/torchvision sabit versiyonlara çekildi (8.3.0, 2.5.1, 0.20.1); Colab reprodüksiyon.
+- **feat(colab_bootstrap)**: `TWO_PHASE_TRAINING` ve `FORCE_FRESH_START` bayrakları eklendi (M-01, B-05).
+- **fix(uav_training/build_dataset)**: KR-2 — `target_id` sadece tüm bbox geçerlilik kontrolleri sonrası `present_target_ids`'e ekleniyor.
+- **fix(uav_training/build_dataset)**: Lock release'de `os.close(fd)` OSError koruması.
+- **fix(uav_training/build_dataset)**: `data.yaml` path `'.'` olarak ayarlandı; test yoksa `val/images` fallback.
+- **fix(uav_training/config)**: H100 batch 32'ye düşürüldü (P-04); workers `cpus*2` formülü; phase2_lr0 düşürüldü.
+- **fix(uav_training/train)**: M-02 sync lock ile race condition önlendi; M-03 checkpoint zipfile ile doğrulama.
+- **feat(uav_training/train)**: M-05 full_attempt_args.yaml kaydı; E-02/B-04 phase2 batch phase1'den alınıyor.
+- **feat(uav_training/train)**: M-06/E-05 audit raporu yoksa audit.py otomatik çalıştırılıyor.
+- **release**: Bumped module/script version from `0.8.21` to `0.8.22`.

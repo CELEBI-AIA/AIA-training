@@ -145,7 +145,7 @@ def auto_detect_hardware() -> tuple:
         tier = "H100-80GB"
         model = "yolo11m.pt"
         imgsz = 1024        # High-res for small objects
-        batch = 64          # Reduced from 96 due to 1024px
+        batch = 32          # Reduced from 64 due to 1024px peaks (fix for P-04)
     elif vram >= 35:
         # ── A100 40GB / A6000 48GB ──
         tier = "A100-40GB"
@@ -187,7 +187,8 @@ def auto_detect_hardware() -> tuple:
     os.environ["OPENBLAS_NUM_THREADS"] = str(max(2, min(6, cpus // 2)))
     os.environ["MKL_NUM_THREADS"] = str(max(1, min(2, cpus // 4)))
 
-    workers = min(cpus, 10) if vram >= 35 else min(cpus, 8)
+    # Multi-scale OFF — variable sizes cause OOM with large batches
+    workers = min(max(cpus * 2, 4), 10) if vram >= 35 else min(max(cpus * 2, 4), 8)
 
     # Multi-scale OFF — variable sizes cause OOM with large batches
     multi_scale = False
@@ -221,6 +222,7 @@ def auto_detect_hardware() -> tuple:
         "phase2_epochs": 15,
         "phase2_imgsz": 896,
         "phase2_mosaic": 0.2,
+        "phase2_lr0": adamw_lr0 * 0.1,
         "batch": batch,
         "imgsz": imgsz,
         "device": 0,

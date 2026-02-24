@@ -13,6 +13,8 @@ LOCAL_CACHE    = "/content/datasets_local"
 DRIVE_RUNS     = "/content/drive/MyDrive/AIA/runs"
 DRIVE_UPLOAD   = "/content/drive/MyDrive/AIA"     # best.pt upload destination
 TRAIN_SCRIPT   = "uav_training/train.py"
+TWO_PHASE_TRAINING = True  # Run 50+15 optimized profile by default (M-01)
+FORCE_FRESH_START  = False # Ignore existing checkpoints and start fresh (B-05)
 # ────────────────────────────────────────────────────────────────────────────
 
 import subprocess, sys, os, glob, time, threading
@@ -491,6 +493,10 @@ os.makedirs(log_dir, exist_ok=True)
 log_name = datetime.now().strftime("log_%Y-%m-%d_%H-%M.txt")
 log_path = os.path.join(log_dir, log_name)
 
+if FORCE_FRESH_START:
+    print("  ⚠️ FORCE_FRESH_START enabled - ignoring existing checkpoints.", flush=True)
+    checkpoint = None
+
 if checkpoint:
     print(f"  🔄 Resuming from checkpoint: {checkpoint}", flush=True)
     train_cmd = [
@@ -499,8 +505,10 @@ if checkpoint:
         "--resume",
     ]
 else:
-    print("  🆕 No checkpoint found — starting fresh training", flush=True)
+    print("  🆕 No checkpoint found or fresh start forced — starting fresh training", flush=True)
     train_cmd = [sys.executable, "-u", train_script_path]
+    if TWO_PHASE_TRAINING:
+        train_cmd.append("--two-phase")
 
 print(f"  ▶ Command: {' '.join(train_cmd)}", flush=True)
 print(f"  📝 Live log: {log_path}", flush=True)
