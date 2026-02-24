@@ -226,12 +226,15 @@ def audit_directory(dir_path):
         class_map = {}
         class_values = []
         
+    for target_name in TARGET_CLASSES:
+        result.setdefault(f"{target_name}_count", 0)
+
     for idx, name in class_map.items():
         n = str(name).lower()
         for target_name in TARGET_CLASSES:
              if target_name in n:
                  key = f"{target_name}_count"
-                 result[key] = 1
+                 result[key] += 1
             
     # Include Decision
     if result["image_count"] < 10:
@@ -253,7 +256,9 @@ def audit_directory(dir_path):
                  result["reason"] += " | Split overlap risk detected"
              
              if is_sample:
-                 pass 
+                 result["status"] = "SKIP"
+                 result["reason"] += " | Sample/inference-only dataset detected"
+                 return result
          else:
              result["status"] = "SKIP" 
              result["reason"] = "No target classes found in names"

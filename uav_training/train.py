@@ -49,7 +49,7 @@ else:
 
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.8.5"
+__version__ = "0.8.6"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -261,7 +261,6 @@ def _is_cuda_oom_error(exc: Exception) -> bool:
 def _log_precision_policy() -> None:
     """Emit a single precision policy line for run-to-run verification."""
     bf16_patch = os.environ.get("FORCE_BF16_PATCH", "0") == "1"
-    amp_dtype = TRAIN_CONFIG.get("amp_dtype", "auto")
     compile_mode = TRAIN_CONFIG.get("compile", False)
     gpu_capability = "cpu"
     bf16_hw = False
@@ -274,7 +273,7 @@ def _log_precision_policy() -> None:
         f"gpu_capability={gpu_capability} "
         f"tf32_matmul={torch.backends.cuda.matmul.allow_tf32} "
         f"tf32_cudnn={torch.backends.cudnn.allow_tf32} "
-        f"bf16_hw={bf16_hw} bf16_patch={bf16_patch} amp_dtype={amp_dtype} "
+        f"bf16_hw={bf16_hw} bf16_patch={bf16_patch} "
         f"compile={compile_mode}",
         flush=True,
     )
@@ -316,14 +315,9 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         if p in TRAIN_CONFIG:
             train_args[p] = TRAIN_CONFIG[p]
 
-    amp_dtype = TRAIN_CONFIG.get("amp_dtype")
-    if (
-        amp_dtype == "bf16"
-        and bool(train_args.get("amp", False))
-        and torch.cuda.is_available()
-        and getattr(torch.cuda, "is_bf16_supported", lambda: False)()
-    ):
-        train_args["amp_dtype"] = "bf16"
+    if torch.cuda.is_available() and hasattr(torch.cuda, "is_bf16_supported"):
+        bf16_ok = torch.cuda.is_bf16_supported()
+        print(f"[AMP] BF16 hardware support: {bf16_ok}", flush=True)
 
     # Forward-compat shim for Ultralytics smoothing parameter migration.
     if "smoothing" in train_args and "label_smoothing" in train_args:

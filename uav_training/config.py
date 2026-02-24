@@ -56,6 +56,10 @@ def auto_detect_hardware() -> tuple:
     """
     import torch
 
+    # A100+: TF32 matmul ~8x, conv ~3x faster. Works alongside BF16 AMP.
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
     info = {
         "gpu_name": "N/A",
         "vram_gb": 0.0,
@@ -160,19 +164,23 @@ def auto_detect_hardware() -> tuple:
 
     workers = min(cpus, 10) if vram >= 35 else min(cpus, 8)
 
-    # ── Safe VRAM Batch Sizing (Target ~80% Capacity) ──
-    usable_vram = vram * 0.80
-    model_overhead_gb = 3.5
-    available = max(0.0, usable_vram - model_overhead_gb)
-    gb_per_sample = 0.72 if imgsz == 1024 else ((imgsz / 640) ** 2 * 0.28)
-    safe_batch = int(available / gb_per_sample)
-    batch = max(8, (safe_batch // 8) * 8)
-
     # Multi-scale OFF — variable sizes cause OOM with large batches
     multi_scale = False
 
-    # Cache OFF — read directly from NVMe SSD
-    cache = False
+    # Dynamic cache: use RAM when available (A100 Colab has ~83GB),
+    # fall back to disk or no cache on constrained machines.
+    try:
+        import psutil
+        available_ram_gb = psutil.virtual_memory().available / (1024 ** 3)
+    except ImportError:
+        available_ram_gb = ram
+
+    if available_ram_gb > 60:
+        cache = "ram"
+    elif available_ram_gb > 20:
+        cache = "disk"
+    else:
+        cache = False
 
     # ── AdamW LR ──
     # AdamW uses ~1/10 of SGD lr; nbs=batch disables Ultralytics internal scaling
@@ -195,7 +203,6 @@ def auto_detect_hardware() -> tuple:
         "model": model,
         "workers": workers,
         "amp": True,
-        "amp_dtype": "bf16",
         "cache": cache,
         "exist_ok": True,
         "patience": 30,
@@ -253,8 +260,11 @@ def auto_detect_hardware() -> tuple:
     print(f"  Threads    : torch={torch_threads}, interop={interop_threads}")
     print(f"  Cache      : {cache}")
     print(f"  Multi-Scale: {multi_scale}")
+    bf16_ok = torch.cuda.is_bf16_supported() if torch.cuda.is_available() else False
+    print(f"  BF16      : {'Supported' if bf16_ok else 'Not supported'}")
+    print(f"  TF32      : Enabled (matmul + cuDNN)")
     print(f"  Epochs     : 65 (phase1=50, phase2=15)")
-    print(f"  AMP (BF16 tgt) : True")
+    print(f"  AMP        : True (BF16 auto-selected on Ampere+)")
     print(f"{'='*60}\n", flush=True)
 
     return config_overrides, info
@@ -287,7 +297,6 @@ TRAIN_CONFIG = {
     "name": "uav_v3_optimized",
     "workers": 8,
     "amp": True,
-    "amp_dtype": "bf16",
     "cache": True,
     "exist_ok": True,
     "patience": 30,

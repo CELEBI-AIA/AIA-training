@@ -1,15 +1,5 @@
 # CHANGELOGS
 
-## 0.0.24 - 2026-02-24
-- **fix(gps_training/precision)**: `gps_training/train.py` updated with CUDA-guarded autocast (`nullcontext` CPU fallback) in both train and validation loops to prevent CPU fallback crashes and enable consistent BF16 validation path.
-- **fix(gps_training/reproducibility)**: Added global seed/determinism chain in `gps_training/train.py` (`PYTHONHASHSEED`, `random`, `numpy`, `torch`, `cuda`) and wired it into training startup.
-- **fix(gps_training/dataset)**: Replaced silent `return None` failure path in `gps_training/dataset.py` with structured logging and fail-fast `RuntimeError`.
-- **fix(uav_training/bf16)**: `uav_training/train.py` now forwards `amp_dtype="bf16"` into `train_args` when CUDA BF16 support is available; `uav_training/config.py` default now explicitly includes `amp_dtype`.
-- **fix(uav_training/sync)**: Added single-flight checkpoint sync guard in `uav_training/train.py` to reduce overlapping Drive sync races and I/O spikes.
-- **perf(scripts/colab_bootstrap)**: Reworked DataLoader thread limiter in `scripts/colab_bootstrap.py` with CPU-aware dynamic thread/env settings instead of fixed low-thread caps.
-- **chore(deps)**: Tightened core dependency ranges in `requirements.txt` (`ultralytics`, `torch`, `torchvision`, `numpy`) to reduce long-term reproducibility drift.
-- **docs(reporting)**: Rebuilt `coderapor.md` scorecard and bug status mapping from current code state (`FIXED/PARTIAL/OPEN`) with updated risk narrative.
-- **release**: Bumped module/script version from `0.8.4` to `0.8.5`.
 
 ## 0.0.04 - 2026-02-21
 - **Colab Auto Hardware Detection**: `uav_training/config.py` now auto-detects GPU/RAM/CPU on Colab and maximizes batch/workers/imgsz/model size.
@@ -142,3 +132,24 @@
 - **docs(training-config)**: Updated `README.md` and `uav_training/README.md` to match current training defaults (`epochs=65`, `phase1=50`, `phase2=15`, AdamW/BF16-target settings, and A100 compile profile notes).
 - **fix(uav_training/build_dataset)**: Made dataset build file-locking cross-platform by adding a Windows lock fallback (`msvcrt`) while preserving Linux/Colab lock behavior (`fcntl`).
 - **docs(audit)**: Added `documentation/rapor_uyum_dogrulama.md` with report-to-code mapping (`UYGULANDI/KISMİ/EKSİK`) and runtime proof checklist for Colab A100 validation.
+
+## 0.0.24 - 2026-02-24
+- **fix(gps_training/precision)**: `gps_training/train.py` updated with CUDA-guarded autocast (`nullcontext` CPU fallback) in both train and validation loops to prevent CPU fallback crashes and enable consistent BF16 validation path.
+- **fix(gps_training/reproducibility)**: Added global seed/determinism chain in `gps_training/train.py` (`PYTHONHASHSEED`, `random`, `numpy`, `torch`, `cuda`) and wired it into training startup.
+- **fix(gps_training/dataset)**: Replaced silent `return None` failure path in `gps_training/dataset.py` with structured logging and fail-fast `RuntimeError`.
+- **fix(uav_training/bf16)**: `uav_training/train.py` now forwards `amp_dtype="bf16"` into `train_args` when CUDA BF16 support is available; `uav_training/config.py` default now explicitly includes `amp_dtype`.
+- **fix(uav_training/sync)**: Added single-flight checkpoint sync guard in `uav_training/train.py` to reduce overlapping Drive sync races and I/O spikes.
+- **perf(scripts/colab_bootstrap)**: Reworked DataLoader thread limiter in `scripts/colab_bootstrap.py` with CPU-aware dynamic thread/env settings instead of fixed low-thread caps.
+- **chore(deps)**: Tightened core dependency ranges in `requirements.txt` (`ultralytics`, `torch`, `torchvision`, `numpy`) to reduce long-term reproducibility drift.
+- **docs(reporting)**: Rebuilt `coderapor.md` scorecard and bug status mapping from current code state (`FIXED/PARTIAL/OPEN`) with updated risk narrative.
+- **release**: Bumped module/script version from `0.8.4` to `0.8.5`.
+
+## 0.0.25 - 2026-02-24
+- **perf(uav_training/tf32)**: Enabled TF32 matmul and cuDNN flags (`allow_tf32=True`) inside `auto_detect_hardware()` in `uav_training/config.py` for ~15-25% speedup on Ampere+ GPUs.
+- **perf(uav_training/cache)**: Replaced hardcoded `cache=False` with dynamic RAM-based cache selection (`ram`/`disk`/`False`) using `psutil` in `uav_training/config.py`, targeting GPU utilization from ~65% to 90%+ on A100 Colab.
+- **fix(uav_training/batch)**: Removed dead-code VRAM batch formula that silently overrode all tier-based batch values in `uav_training/config.py`; empirically tested tier batch sizes (A100=32, L4=32, T4=16) are now used directly.
+- **fix(uav_training/amp_dtype)**: Removed invalid `amp_dtype: "bf16"` key from both `config_overrides` and `TRAIN_CONFIG` in `uav_training/config.py` and its forwarding logic in `uav_training/train.py`; Ultralytics silently ignored this parameter.
+- **fix(uav_training/audit)**: Fixed `is_sample` dead code in `uav_training/audit.py` — sample/inference-only datasets now correctly receive `SKIP` status instead of being included in training.
+- **fix(uav_training/audit)**: Fixed class count logic in `uav_training/audit.py` — `result[key] = 1` replaced with proper `+= 1` accumulator for accurate class match reporting.
+- **log(uav_training/precision)**: Added BF16 hardware support verification and TF32 status to `auto_detect_hardware()` output in `uav_training/config.py`; cleaned up `amp_dtype` reference in `_log_precision_policy()` in `uav_training/train.py`.
+- **release**: Bumped module/script version from `0.8.5` to `0.8.6`.
