@@ -34,7 +34,7 @@ if torch.cuda.is_available():
 
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.8.11"
+__version__ = "0.8.12"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -52,24 +52,16 @@ def kill_gpu_hogs():
 def _is_checkpoint_valid(ckpt_path: Path) -> bool:
     """Check if a PyTorch checkpoint is readable and not corrupt.
 
-    Uses weights_only=True to avoid loading full tensors into RAM.
-    Falls back to a header-only read if weights_only fails.
+    Tries weights_only=True first (avoids unpickling custom classes),
+    but YOLO checkpoints contain DetectionModel so that will be rejected.
+    Falls back to full load with explicit gc.collect() to free RAM.
     """
     import torch
     import gc
     if not ckpt_path.exists() or ckpt_path.stat().st_size < 1024 * 1024:  # < 1MB is suspicious for YOLO
         return False
     try:
-        torch.load(ckpt_path, map_location='cpu', weights_only=True)
-        return True
-    except TypeError:
-        # Older PyTorch without weights_only support
-        pass
-    except Exception as e:
-        print(f"⚠️ Checkpoint {ckpt_path.name} is corrupt: {e}", flush=True)
-        return False
-    try:
-        data = torch.load(ckpt_path, map_location='cpu')
+        data = torch.load(ckpt_path, map_location='cpu', weights_only=False)
         del data
         gc.collect()
         return True

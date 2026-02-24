@@ -178,6 +178,20 @@
 - **feat(.github/workflows/lint.yml)**: CI now installs full dependencies and runs `pytest tests/` alongside existing flake8 and compileall checks.
 - **release**: Bumped module/script version from `0.8.9` to `0.8.10`.
 
+## 0.0.30 - 2026-02-24
+- **fix(uav_training/train)**: Fixed `_is_checkpoint_valid` regression — `weights_only=True` rejects YOLO checkpoints containing `DetectionModel` custom class, falsely marking valid checkpoints as corrupt. Now uses explicit `weights_only=False` with `gc.collect()` cleanup.
+- **fix(gps_training/train)**: Same `_is_checkpoint_valid` fix for GPS module.
+- **fix(gps_training/train)**: Platform-aware `fcntl`/`msvcrt` import and file locking for Windows compatibility.
+- **fix(gps_training/train)**: `OneCycleLR` now uses `epochs=remaining_epochs` for correct resume LR profile.
+- **fix(gps_training/train)**: Added `GradScaler` for pre-Ampere GPUs (FP16 + scaler on T4/V100, BF16 on Ampere+).
+- **fix(gps_training/train)**: Atomic write pattern for `best_model.pt` (tmp + `os.replace`).
+- **fix(gps_training/train)**: `torch.compile` gated behind Python <3.12 with proper `except Exception`.
+- **fix(uav_training/config)**: Aligned `TARGET_CLASSES` with `dataset.yaml` (0=vehicle, 1=human, 2=uap, 3=uai).
+- **feat(gps_training/dataset)**: Siamese-aware augmentation (horizontal flip, color jitter, Gaussian blur).
+- **fix(uav_training/train)**: `checkpoint_guard` dedup via `_LAST_SYNC_EPOCH`; atomic Drive sync writes.
+- **feat(.github/workflows/lint.yml)**: CI now runs `pytest tests/`.
+- **release**: Bumped module/script version from `0.8.11` to `0.8.12`.
+
 ## 0.0.29 - 2026-02-24
 - **docs(uav_training/build_dataset)**: Added inline comments to MAPPINGS explaining UAI-/UAP- semantics (unsuitable landing areas) and why they are merged with their suitable counterparts.
 - **docs(documentation/datasets.md)**: Created dataset reference documenting all 4 source datasets, their original class names, UAI-/UAP- meanings, and the unified 4-class target mapping.

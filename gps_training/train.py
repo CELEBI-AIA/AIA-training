@@ -88,15 +88,7 @@ def _is_checkpoint_valid(ckpt_path: Path) -> bool:
     if not ckpt_path.exists() or ckpt_path.stat().st_size < 1024 * 50:  # < 50KB is suspicious for ResNet
         return False
     try:
-        torch.load(ckpt_path, map_location='cpu', weights_only=True)
-        return True
-    except TypeError:
-        pass
-    except Exception as e:
-        print(f"⚠️ Checkpoint {ckpt_path.name} is corrupt: {e}", flush=True)
-        return False
-    try:
-        data = torch.load(ckpt_path, map_location='cpu')
+        data = torch.load(ckpt_path, map_location='cpu', weights_only=False)
         del data
         gc.collect()
         return True
