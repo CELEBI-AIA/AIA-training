@@ -32,9 +32,9 @@ python audit.py
 python build_dataset.py
 
 # 3. Train (single phase)
-python train.py --epochs 100 --batch 4 --device 0
+python train.py --epochs 65 --batch 4 --device 0
 
-# 3b. Train (recommended two-phase profile: 85 + 15)
+# 3b. Train (recommended two-phase profile: 50 + 15)
 python train.py --two-phase --batch 4 --device 0
 
 # 4. Resume
@@ -48,24 +48,25 @@ python inference.py --model path/to/best.pt --source path/to/images
 
 ```python
 TRAIN_CONFIG = {
-    "epochs": 100,
-    "phase1_epochs": 85,
+    "epochs": 65,
+    "phase1_epochs": 50,
     "phase2_epochs": 15,
     "batch": 4,           # Optimized for 6GB VRAM
     "imgsz": 640,
     "device": 0,
     "model": "yolo11m.pt",
     "workers": 8,
-    "amp": True,          # Mixed precision
-    "cache": True,         # RAM cache
+    "amp": True,          # Mixed precision (BF16 target on Ampere+)
+    "cache": True,         # Local default, Colab auto profile uses False
     "patience": 30,        # Early stopping
     "cos_lr": True,        # Cosine LR scheduler
-    "lr0": 0.005,
+    "optimizer": "AdamW",
+    "lr0": 0.001,
     "lrf": 0.01,
-    "warmup_epochs": 3.0,
+    "warmup_epochs": 5.0,
     "weight_decay": 0.0005,
     "mosaic": 1.0,         # Phase-1 augmentation
-    "close_mosaic": 15,
+    "close_mosaic": 5,
     "box": 7.5, "cls": 0.7, "dfl": 1.5,
     "min_bbox_norm": 0.004,
 }

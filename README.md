@@ -72,9 +72,9 @@ pip install -r requirements.txt
 
 # Train (UAV Detection)
 cd uav_training
-python train.py --epochs 100 --batch 4 --device 0
+python train.py --epochs 65 --batch 4 --device 0
 
-# Recommended two-phase profile (85 + 15)
+# Recommended two-phase profile (50 + 15)
 python train.py --two-phase --batch 4 --device 0
 
 # Resume from checkpoint
@@ -104,11 +104,11 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 |---------------|--------------------------------------------|
 | Model         | `yolo11m.pt` (20.1M params, 68 GFLOPs)    |
 | Image Size    | 1024 (A100/H100) / 640 (T4/L4)             |
-| Epochs        | 100 (Phase1: 85 + Phase2: 15, Patience: 30) |
-| Optimizations | `lr0=0.005`, `bgr=0.05`, `close_mosaic=15`  |
-| Augmentations | `scale=0.2`, `copy_paste=0.2`, `flipud`    |
-| AMP (FP16)    | ✅ Enabled                                  |
-| torch.compile | ✅ Enabled (YOLO built-in)                  |
+| Epochs        | 65 (Phase1: 50 + Phase2: 15, Patience: 30) |
+| Optimizations | `optimizer=AdamW`, `lr0=0.001`, `close_mosaic=5` |
+| Augmentations | `scale=0.4`, `copy_paste=0.3`, `flipud=0.5` |
+| AMP (BF16 hedef) | ✅ Enabled (`amp=True`, Ampere+ için BF16 patch opsiyonel) |
+| torch.compile | ✅ A100/H100 için `reduce-overhead`, düşük tier GPU'da kapalı |
 | Cache         | ❌ Off (NVMe SSD'den oku, RAM şişmez)       |
 | Deterministic | ❌ Off (Hızlı CUDA kernels)                 |
 | Save Period   | Her 5 epoch checkpoint (Colab güvenliği)   |
@@ -118,9 +118,9 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 
 | GPU Tier   | Batch | VRAM Usage |
 |------------|-------|------------|
-| H100 80GB  | 96    | ~60%       |
-| A100 40GB  | 48    | ~75%       |
-| L4 24GB    | 32    | ~70%       |
+| H100 80GB  | Auto (genelde 80) | ~80% hedef |
+| A100 40GB  | Auto (genelde 32) | ~80% hedef |
+| L4 24GB    | 32    | ~70-80%    |
 | T4 16GB    | 16    | ~75%       |
 | 8GB GPU    | 8     | ~80%       |
 

@@ -126,3 +126,8 @@
 - **perf(scripts/colab_bootstrap)**: Added optional quiet-window control via `UAV_SYNC_QUIET_WINDOW_SEC` in periodic checkpoint sync flow so recent `last.pt` writes can settle before rsync.
 - **log(scripts/colab_bootstrap)**: Periodic sync log now includes checkpoint `mtime` and still syncs only when newest `last.pt` changes, improving I/O jitter diagnostics.
 - **fix(uav_training/inference)**: Updated default model in `uav_training/inference.py` from `yolov8n.pt` to `yolo11m.pt` to avoid operational model-selection confusion.
+
+## 0.0.23 - 2026-02-24
+- **docs(training-config)**: Updated `README.md` and `uav_training/README.md` to match current training defaults (`epochs=65`, `phase1=50`, `phase2=15`, AdamW/BF16-target settings, and A100 compile profile notes).
+- **fix(uav_training/build_dataset)**: Made dataset build file-locking cross-platform by adding a Windows lock fallback (`msvcrt`) while preserving Linux/Colab lock behavior (`fcntl`).
+- **docs(audit)**: Added `documentation/rapor_uyum_dogrulama.md` with report-to-code mapping (`UYGULANDI/KISMİ/EKSİK`) and runtime proof checklist for Colab A100 validation.

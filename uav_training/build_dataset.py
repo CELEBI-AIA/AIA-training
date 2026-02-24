@@ -7,7 +7,11 @@ import yaml
 import json
 import random
 import atexit
-import fcntl
+import platform
+if platform.system() == "Windows":
+    import msvcrt
+else:
+    import fcntl
 
 def set_seed(seed=42):
     import random, numpy, torch
@@ -112,13 +116,24 @@ def _list_images(base_path: Path) -> list[Path]:
 def _acquire_file_lock(lock_path: Path) -> int:
     os.makedirs(lock_path.parent, exist_ok=True)
     fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
-    fcntl.flock(fd, fcntl.LOCK_EX)
+    if platform.system() == "Windows":
+        # Lock a single byte to serialize concurrent builders on Windows.
+        msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+    else:
+        fcntl.flock(fd, fcntl.LOCK_EX)
     return fd
 
 
 def _release_file_lock(fd: int, lock_path: Path) -> None:
     try:
-        fcntl.flock(fd, fcntl.LOCK_UN)
+        if platform.system() == "Windows":
+            try:
+                os.lseek(fd, 0, os.SEEK_SET)
+            except OSError:
+                pass
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        else:
+            fcntl.flock(fd, fcntl.LOCK_UN)
     finally:
         os.close(fd)
     try:
