@@ -18,6 +18,7 @@ FORCE_FRESH_START  = False # Ignore existing checkpoints and start fresh (B-05)
 # ────────────────────────────────────────────────────────────────────────────
 
 import subprocess, sys, os, glob, time, threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 
@@ -358,35 +359,63 @@ else:
                 os.remove(LOCAL_TAR)
 
         if _need_download:
-            print(f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD …", flush=True)
+            N_WORKERS = max(1, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "8")))
+            print(f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD ({N_WORKERS} parallel workers) …", flush=True)
             print(f"     {DRIVE_DATASET} → {LOCAL_TAR}", flush=True)
-            CHUNK = 64 * 1024 * 1024  # 64 MB chunks
-            copied = 0
+            CHUNK = 32 * 1024 * 1024  # 32 MB per read
+            chunk_size = (tar_size_bytes + N_WORKERS - 1) // N_WORKERS
             _dl_start = time.time()
-            _last_print = _dl_start
-            with open(DRIVE_DATASET, 'rb') as src, open(LOCAL_TAR, 'wb') as dst:
-                while True:
-                    buf = src.read(CHUNK)
-                    if not buf:
-                        break
-                    dst.write(buf)
-                    copied += len(buf)
-                    now = time.time()
-                    # Print progress every 2 seconds
-                    if now - _last_print >= 2.0 or copied == tar_size_bytes:
-                        elapsed = now - _dl_start
-                        pct = copied / tar_size_bytes * 100
-                        speed_mb = (copied / (1024**2)) / max(elapsed, 0.1)
-                        remaining = (tar_size_bytes - copied) / max(copied / max(elapsed, 0.1), 1)
-                        mins, secs = divmod(int(remaining), 60)
-                        sys.stdout.write(
-                            f"\r  📥  {pct:5.1f}%  |  "
-                            f"{copied/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
-                            f"{speed_mb:.0f} MB/s  |  "
-                            f"ETA {mins}m {secs}s   "
-                        )
-                        sys.stdout.flush()
-                        _last_print = now
+            _last_print = [time.time()]
+            _copied_lock = threading.Lock()
+            _copied = [0]  # mutable for closure
+
+            def _copy_range(start: int, end: int) -> int:
+                n = 0
+                with open(DRIVE_DATASET, "rb") as src, open(LOCAL_TAR, "r+b") as dst:
+                    src.seek(start)
+                    dst.seek(start)
+                    remaining = end - start
+                    while remaining > 0:
+                        to_read = min(CHUNK, remaining)
+                        buf = src.read(to_read)
+                        if not buf:
+                            break
+                        dst.write(buf)
+                        n += len(buf)
+                        remaining -= len(buf)
+                        with _copied_lock:
+                            _copied[0] += len(buf)
+                            now = time.time()
+                            if now - _last_print[0] >= 2.0 or _copied[0] >= tar_size_bytes:
+                                elapsed = now - _dl_start
+                                pct = _copied[0] / tar_size_bytes * 100
+                                speed_mb = (_copied[0] / (1024**2)) / max(elapsed, 0.1)
+                                remaining_sec = (tar_size_bytes - _copied[0]) / max(_copied[0] / max(elapsed, 0.1), 1)
+                                mins, secs = divmod(int(remaining_sec), 60)
+                                sys.stdout.write(
+                                    f"\r  📥  {pct:5.1f}%  |  "
+                                    f"{_copied[0]/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
+                                    f"{speed_mb:.0f} MB/s  |  "
+                                    f"ETA {mins}m {secs}s   "
+                                )
+                                sys.stdout.flush()
+                                _last_print[0] = now
+                return n
+
+            # Pre-allocate output file
+            with open(LOCAL_TAR, "wb") as f:
+                f.truncate(tar_size_bytes)
+
+            with ThreadPoolExecutor(max_workers=N_WORKERS) as ex:
+                futures = []
+                for i in range(N_WORKERS):
+                    s = i * chunk_size
+                    e = min((i + 1) * chunk_size, tar_size_bytes)
+                    if s < tar_size_bytes:
+                        futures.append(ex.submit(_copy_range, s, e))
+                for _ in as_completed(futures):
+                    pass
+
             print(flush=True)  # newline after \r progress
 
         dl_elapsed = time.time() - t0

@@ -335,3 +335,7 @@
 ## 0.0.44 - 2026-02-25
 - **fix(uav_training/train)**: Resume across Ultralytics version upgrade (8.3→8.4) — on optimizer state mismatch (`parameter group` ValueError), retry with `resume=False` to load model weights only and restart optimizer.
 - **release**: Bumped module/script version from `0.8.23` to `0.8.24`.
+
+## 0.0.45 - 2026-02-25
+- **perf(colab_bootstrap)**: Parallel Drive→SSD download — 8 workers copy disjoint byte ranges concurrently; tunable via `UAV_DOWNLOAD_WORKERS` env var.
+- **release**: Bumped module/script version from `0.8.24` to `0.8.25`.
