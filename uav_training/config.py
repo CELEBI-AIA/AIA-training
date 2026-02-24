@@ -242,7 +242,7 @@ def auto_detect_hardware() -> tuple:
         "multi_scale": multi_scale,
         "deterministic": False,
         "compile": compile_mode,
-        "save_period": 5,
+        "save_period": 1,
     }
 
     # Print detected hardware — flush=True so it appears instantly in Colab
@@ -331,7 +331,7 @@ TRAIN_CONFIG = {
     "multi_scale": False,
     "deterministic": False,
     "compile": False,
-    "save_period": 5,
+    "save_period": 1,
 }
 
 # Auto-override when running on Colab

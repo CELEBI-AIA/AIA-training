@@ -554,9 +554,13 @@ def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):
 
 
 _sync_stop = threading.Event()
-sync_interval = int(os.environ.get("UAV_SYNC_INTERVAL_SEC", "300"))
-_sync_thread = threading.Thread(target=_periodic_runs_sync, args=(_sync_stop, sync_interval), daemon=True)
-_sync_thread.start()
+_sync_thread = None
+sync_interval = int(os.environ.get("UAV_SYNC_INTERVAL_SEC", "0"))
+if sync_interval > 0:
+    _sync_thread = threading.Thread(target=_periodic_runs_sync, args=(_sync_stop, sync_interval), daemon=True)
+    _sync_thread.start()
+else:
+    print("  ℹ️  Periodic runs sync disabled (UAV_SYNC_INTERVAL_SEC<=0). Using epoch-end Drive sync.", flush=True)
 
 with open(log_path, 'wb') as lf:
     fd = proc.stdout.fileno()
@@ -573,7 +577,8 @@ with open(log_path, 'wb') as lf:
 
 exit_code = proc.wait()
 _sync_stop.set()
-_sync_thread.join(timeout=5)
+if _sync_thread is not None:
+    _sync_thread.join(timeout=5)
 print(f"\n{'─'*60}", flush=True)
 
 if exit_code != 0:

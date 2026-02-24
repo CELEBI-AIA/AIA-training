@@ -215,3 +215,8 @@
 - **fix(uav_training/train)**: Removed stale `smoothing` from `optional_params` forwarding list and reversed the backward-compat shim to migrate legacy `smoothing` -> `label_smoothing` instead of dropping the valid key.
 - **chore(deps)**: Relaxed `requirements.txt` upper-bound constraints (`<8.4.0`, `<2.3.0`, `<0.18.0`, `<2.0.0`) to minimum-only (`>=`) to prevent Colab pre-installed package conflicts.
 - **fix(scripts/colab_bootstrap)**: Added `/content/repo` fallback in version reader so the initial banner shows the actual version instead of `vdev` when the repo was already cloned from a previous Colab run.
+
+## 0.0.31 - 2026-02-24
+- **fix(scripts/colab_bootstrap)**: Disabled periodic runs sync by default (`UAV_SYNC_INTERVAL_SEC=0`) so minute-level "Periodic checkpoint sync completed" log spam stops unless explicitly re-enabled.
+- **fix(uav_training/config)**: Changed `save_period` default from `5` to `1` for epoch-by-epoch checkpoint sync.
+- **fix(uav_training/train)**: Updated `checkpoint_guard` to 1-based epoch indexing and removed extra debug-file writes to reduce I/O overhead during training.

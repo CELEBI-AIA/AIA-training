@@ -229,32 +229,15 @@ _LAST_SYNC_EPOCH = -1
 def checkpoint_guard(trainer):
     """Drive sync every save_period epochs — GPU pipeline'ı bloklamaz."""
     global _SYNC_IN_FLIGHT, _LAST_SYNC_EPOCH
-    save_period = int(TRAIN_CONFIG.get("save_period", 5))
-    epoch = trainer.epoch
-
-    # #region agent log
-    import json as _json, pathlib as _pl
-    _logf = _pl.Path("debug-4e729f.log")
-    with open(_logf, "a") as _lf:
-        _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-E","location":"train.py:checkpoint_guard","message":"callback fired","data":{"epoch":epoch,"save_period":save_period,"in_flight":_SYNC_IN_FLIGHT,"last_sync_epoch":_LAST_SYNC_EPOCH},"timestamp":int(time.time()*1000)}) + "\n")
-    # #endregion
-
-    if epoch <= 0 or epoch % save_period != 0:
+    save_period = int(TRAIN_CONFIG.get("save_period", 1))
+    epoch = int(trainer.epoch) + 1  # Ultralytics epoch is 0-based.
+    if epoch % save_period != 0:
         return
     with _SYNC_LOCK:
         if _SYNC_IN_FLIGHT or epoch == _LAST_SYNC_EPOCH:
-            # #region agent log
-            with open(_logf, "a") as _lf:
-                _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-F","location":"train.py:checkpoint_guard:skip","message":"sync skipped","data":{"epoch":epoch,"in_flight":_SYNC_IN_FLIGHT,"last_sync_epoch":_LAST_SYNC_EPOCH},"timestamp":int(time.time()*1000)}) + "\n")
-            # #endregion
             return
         _SYNC_IN_FLIGHT = True
         _LAST_SYNC_EPOCH = epoch
-
-    # #region agent log
-    with open(_logf, "a") as _lf:
-        _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-E","location":"train.py:checkpoint_guard:dispatch","message":"sync dispatched","data":{"epoch":epoch},"timestamp":int(time.time()*1000)}) + "\n")
-    # #endregion
 
     def _sync_job():
         global _SYNC_IN_FLIGHT
