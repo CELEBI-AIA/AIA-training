@@ -25,6 +25,8 @@ Every commit **must** also bump the system version (`__version__`). The version 
 - `uav_training/__init__.py`
 - `uav_training/train.py`
 
+**Bootstrap banner**: `scripts/colab_bootstrap.py` displays `UAV Training Bootstrap v{VERSION}` after repo sync — it reads from `uav_training/__init__.py`. Never forget to bump `__version__` when making changes; the banner will then show the correct version.
+
 Increment the **patch** segment (e.g. `0.8.6` → `0.8.7`). Add a `release` line to the changelog entry:
 
 ```markdown

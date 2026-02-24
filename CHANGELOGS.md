@@ -339,3 +339,9 @@
 ## 0.0.45 - 2026-02-25
 - **perf(colab_bootstrap)**: Parallel Drive→SSD download — 8 workers copy disjoint byte ranges concurrently; tunable via `UAV_DOWNLOAD_WORKERS` env var.
 - **release**: Bumped module/script version from `0.8.24` to `0.8.25`.
+
+## 0.0.46 - 2026-02-25
+- **perf(colab_bootstrap)**: Download optimization — progress in separate thread (no lock contention); 8MB chunks; default 4 workers to avoid Drive FUSE throttling; workers only hold lock for counter update.
+- **fix(colab_bootstrap)**: Banner moved to after repo sync — `UAV Training Bootstrap v{VERSION}` now always shows version from pulled repo.
+- **docs(.cursor/rules)**: Added bootstrap version reminder to changelogs rule.
+- **release**: Bumped module/script version from `0.8.25` to `0.8.26`.

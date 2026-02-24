@@ -76,14 +76,6 @@ def _resolve_drive_path(path: str) -> str:
 def _banner(msg: str):
     print(f"\n{'='*60}\n  {msg}\n{'='*60}", flush=True)
 
-_bootstrap_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-VERSION = _read_repo_version(_bootstrap_root)
-if VERSION == "dev":
-    VERSION = _read_repo_version("/content/repo")
-
-print(f"\n🛰️  UAV Training Bootstrap v{VERSION}", flush=True)
-print(f"    Repo: {REPO_URL} ({REPO_BRANCH})\n", flush=True)
-
 # ═══════════════════════════════════════════════════════════════════════════
 # 0. Pre-Flight Cleanup
 # ═══════════════════════════════════════════════════════════════════════════
@@ -165,6 +157,8 @@ else:
 # Show repo info
 _run(f"git -C {REPO_DIR} log --oneline -1")
 VERSION = _read_repo_version(REPO_DIR)
+print(f"\n🛰️  UAV Training Bootstrap v{VERSION}", flush=True)
+print(f"    Repo: {REPO_URL} ({REPO_BRANCH})", flush=True)
 print(f"  ✓ Bootstrap version synced from repo: v{VERSION}", flush=True)
 print("  ✓ Repo ready", flush=True)
 
@@ -359,15 +353,15 @@ else:
                 os.remove(LOCAL_TAR)
 
         if _need_download:
-            N_WORKERS = max(1, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "8")))
-            print(f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD ({N_WORKERS} parallel workers) …", flush=True)
+            N_WORKERS = max(1, min(8, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "4"))))
+            print(f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD ({N_WORKERS} workers) …", flush=True)
             print(f"     {DRIVE_DATASET} → {LOCAL_TAR}", flush=True)
-            CHUNK = 32 * 1024 * 1024  # 32 MB per read
+            CHUNK = 8 * 1024 * 1024  # 8 MB — smaller to reduce lock contention & memory
             chunk_size = (tar_size_bytes + N_WORKERS - 1) // N_WORKERS
             _dl_start = time.time()
-            _last_print = [time.time()]
             _copied_lock = threading.Lock()
-            _copied = [0]  # mutable for closure
+            _copied = [0]
+            _done = threading.Event()
 
             def _copy_range(start: int, end: int) -> int:
                 n = 0
@@ -385,38 +379,60 @@ else:
                         remaining -= len(buf)
                         with _copied_lock:
                             _copied[0] += len(buf)
-                            now = time.time()
-                            if now - _last_print[0] >= 2.0 or _copied[0] >= tar_size_bytes:
-                                elapsed = now - _dl_start
-                                pct = _copied[0] / tar_size_bytes * 100
-                                speed_mb = (_copied[0] / (1024**2)) / max(elapsed, 0.1)
-                                remaining_sec = (tar_size_bytes - _copied[0]) / max(_copied[0] / max(elapsed, 0.1), 1)
-                                mins, secs = divmod(int(remaining_sec), 60)
-                                sys.stdout.write(
-                                    f"\r  📥  {pct:5.1f}%  |  "
-                                    f"{_copied[0]/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
-                                    f"{speed_mb:.0f} MB/s  |  "
-                                    f"ETA {mins}m {secs}s   "
-                                )
-                                sys.stdout.flush()
-                                _last_print[0] = now
                 return n
+
+            def _progress_loop():
+                while not _done.is_set():
+                    time.sleep(2.0)
+                    with _copied_lock:
+                        c = _copied[0]
+                    if c >= tar_size_bytes:
+                        break
+                    elapsed = time.time() - _dl_start
+                    pct = c / tar_size_bytes * 100
+                    speed_mb = (c / (1024**2)) / max(elapsed, 0.1)
+                    remaining_sec = (tar_size_bytes - c) / max(c / max(elapsed, 0.1), 1)
+                    mins, secs = divmod(int(remaining_sec), 60)
+                    sys.stdout.write(
+                        f"\r  📥  {pct:5.1f}%  |  "
+                        f"{c/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
+                        f"{speed_mb:.0f} MB/s  |  "
+                        f"ETA {mins}m {secs}s   "
+                    )
+                    sys.stdout.flush()
 
             # Pre-allocate output file
             with open(LOCAL_TAR, "wb") as f:
                 f.truncate(tar_size_bytes)
 
-            with ThreadPoolExecutor(max_workers=N_WORKERS) as ex:
-                futures = []
-                for i in range(N_WORKERS):
-                    s = i * chunk_size
-                    e = min((i + 1) * chunk_size, tar_size_bytes)
-                    if s < tar_size_bytes:
-                        futures.append(ex.submit(_copy_range, s, e))
-                for _ in as_completed(futures):
-                    pass
+            _prog_thread = threading.Thread(target=_progress_loop, daemon=True)
+            _prog_thread.start()
 
-            print(flush=True)  # newline after \r progress
+            try:
+                with ThreadPoolExecutor(max_workers=N_WORKERS) as ex:
+                    futures = [
+                        ex.submit(_copy_range, i * chunk_size, min((i + 1) * chunk_size, tar_size_bytes))
+                        for i in range(N_WORKERS)
+                        if i * chunk_size < tar_size_bytes
+                    ]
+                    for _ in as_completed(futures):
+                        pass
+            finally:
+                _done.set()
+                _prog_thread.join(timeout=3)
+
+            # Final progress line
+            with _copied_lock:
+                c = _copied[0]
+            elapsed = time.time() - _dl_start
+            pct = c / tar_size_bytes * 100
+            speed_mb = (c / (1024**2)) / max(elapsed, 0.1)
+            sys.stdout.write(
+                f"\r  📥  {pct:5.1f}%  |  "
+                f"{c/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
+                f"{speed_mb:.0f} MB/s  |  done      \n"
+            )
+            sys.stdout.flush()
 
         dl_elapsed = time.time() - t0
         print(f"  ✓ Download done in {dl_elapsed:.0f}s ({tar_size_gb/max(dl_elapsed,1)*1024:.0f} MB/s)", flush=True)
