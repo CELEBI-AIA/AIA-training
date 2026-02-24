@@ -154,6 +154,11 @@
 - **log(uav_training/precision)**: Added BF16 hardware support verification and TF32 status to `auto_detect_hardware()` output in `uav_training/config.py`; cleaned up `amp_dtype` reference in `_log_precision_policy()` in `uav_training/train.py`.
 - **release**: Bumped module/script version from `0.8.5` to `0.8.6`.
 
+## 0.0.28 - 2026-02-24
+- **perf(uav_training/config)**: Reduced A100-40GB batch from 32 to 28 at 1024px to provide ~6GB VRAM headroom for TaskAlignedAssigner dynamic allocations, eliminating repeated OOM CPU fallbacks.
+- **perf(uav_training/train)**: Added `max_split_size_mb:512` to `PYTORCH_CUDA_ALLOC_CONF` to reduce VRAM fragmentation.
+- **release**: Bumped module/script version from `0.8.6` to `0.8.7`.
+
 ## 0.0.27 - 2026-02-24
 - **fix(uav_training/train)**: Removed BF16 monkey patch (`FORCE_BF16_PATCH`) that broke Ultralytics AMP validation check, causing AMP to be silently disabled and forcing FP32 (~2x VRAM), which cascaded into CUDA OOM on A100-40GB at batch=32/1024px. Native AMP now handles BF16 on Ampere+ GPUs automatically.
 - **fix(scripts/colab_bootstrap)**: Replaced `FORCE_BF16_PATCH=1` env var with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to reduce VRAM fragmentation on Ampere+ GPUs.

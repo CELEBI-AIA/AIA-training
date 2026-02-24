@@ -127,7 +127,7 @@ def auto_detect_hardware() -> tuple:
         tier = "A100-40GB"
         model = "yolo11m.pt"
         imgsz = 1024        # High-res for small objects
-        batch = 32          # Reduced from 48 due to 1024px
+        batch = 28          # ~85% VRAM; headroom for TaskAlignedAssigner peaks
     elif vram >= 20:
         # ── L4 24GB ──
         tier = "L4-24GB"

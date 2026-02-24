@@ -23,7 +23,7 @@ import threading
 # Enable V8 cuDNN API for better A100 performance
 os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
 # Reduce VRAM fragmentation — must be set before any CUDA allocation
-os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True,max_split_size_mb:512")
 
 if torch.cuda.is_available():
     cc = torch.cuda.get_device_capability(0)
@@ -34,7 +34,7 @@ if torch.cuda.is_available():
 
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.8.6"
+__version__ = "0.8.7"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 

@@ -17,3 +17,16 @@ For any repository, always ensure a `CHANGELOGS.md` file exists in the project r
 ```
 
 Where `type` is one of: `fix`, `feat`, `perf`, `refactor`, `chore`, `docs`, `test`, `log`, `release`.
+
+## System Version Bump
+
+Every commit **must** also bump the system version (`__version__`). The version lives in two files that must stay in sync:
+
+- `uav_training/__init__.py`
+- `uav_training/train.py`
+
+Increment the **patch** segment (e.g. `0.8.6` → `0.8.7`). Add a `release` line to the changelog entry:
+
+```markdown
+- **release**: Bumped module/script version from `X.X.X` to `X.X.Y`.
+```
