@@ -6,9 +6,12 @@ import cv2
 import json
 import os
 import atexit
+import logging
 from collections import OrderedDict
 from pathlib import Path
 from config import DATASETS_ROOT, TRAIN_CONFIG, is_colab
+
+logger = logging.getLogger(__name__)
 
 # On Colab, if local extraction exists, use it to avoid Drive FUSE bottlenecks
 if is_colab() and Path("/content/datasets_local").exists():
@@ -240,9 +243,13 @@ class GPSDataset(Dataset):
             return img1, img2, delta
             
         except Exception as e:
-            # Return dummy or fail (better to skip in collation, but simplified here)
-            print(f"Error loading sample {idx}: {e}")
-            return None
+            logger.error(
+                "Dataset sample failed idx=%s media=%s err=%s",
+                idx,
+                sample.get("media_path"),
+                e,
+            )
+            raise RuntimeError(f"Dataset sample failed at idx={idx}") from e
 
     def _close_video_caps(self):
         for _, cap in list(self._video_caps.items()):

@@ -287,6 +287,7 @@ TRAIN_CONFIG = {
     "name": "uav_v3_optimized",
     "workers": 8,
     "amp": True,
+    "amp_dtype": "bf16",
     "cache": True,
     "exist_ok": True,
     "patience": 30,

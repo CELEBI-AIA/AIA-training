@@ -261,15 +261,23 @@ os.environ["UAV_PROJECT_DIR"] = DRIVE_RUNS
 os.environ["DRIVE_UPLOAD_DIR"] = DRIVE_UPLOAD
 
 # --- DataLoader thread limiter ---
-os.environ["OMP_NUM_THREADS"] = "2"
-os.environ["OPENBLAS_NUM_THREADS"] = "2"
-os.environ["MKL_NUM_THREADS"] = "1"
-os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
-os.environ["NUMEXPR_NUM_THREADS"] = "1"
-os.environ["OPENCV_FOR_THREADS_NUM"] = "1"
+cpu_count = os.cpu_count() or 8
+data_threads = max(8, min(12, cpu_count))
+intra_threads = max(4, data_threads // 2)
+interop_threads = 2
+
+os.environ["OMP_NUM_THREADS"] = str(intra_threads)
+os.environ["OPENBLAS_NUM_THREADS"] = str(intra_threads)
+os.environ["MKL_NUM_THREADS"] = str(max(2, data_threads // 4))
+os.environ["VECLIB_MAXIMUM_THREADS"] = str(max(2, data_threads // 4))
+os.environ["NUMEXPR_NUM_THREADS"] = str(max(2, data_threads // 4))
+os.environ["OPENCV_FOR_THREADS_NUM"] = str(max(2, data_threads // 4))
 
 # Force inter/intra op threads for PyTorch 
-_run(f'{sys.executable} -c "import torch; torch.set_num_threads(1); torch.set_num_interop_threads(1)"', check=False)
+_run(
+    f'{sys.executable} -c "import torch; torch.set_num_threads({intra_threads}); torch.set_num_interop_threads({interop_threads})"',
+    check=False,
+)
 
 # Point YOLO settings to local SSD
 _run('yolo settings runs_dir="/content/runs"', check=False)

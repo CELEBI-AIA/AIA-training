@@ -6,6 +6,7 @@ from tqdm import tqdm
 import time
 from pathlib import Path
 import json
+from contextlib import nullcontext
 
 from dataset import GPSDataset
 from model import SiameseTracker
@@ -21,6 +22,8 @@ import sys
 import os
 import atexit
 import fcntl
+import random
+import numpy as np
 
 # ... imports ...
 
@@ -49,6 +52,26 @@ def kill_gpu_hogs():
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+
+def setup_seed(seed: int = 42, *, deterministic: bool = False) -> None:
+    """Seed all RNGs and configure deterministic policy."""
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
+    if deterministic:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    else:
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
+        os.environ.pop("CUBLAS_WORKSPACE_CONFIG", None)
 
 def _is_checkpoint_valid(ckpt_path: Path) -> bool:
     """Check if a PyTorch checkpoint is readable and not corrupt."""
@@ -94,6 +117,8 @@ def _sync_results_to_drive(artifacts_dir: Path):
         print(f"  ✓ Results synced to Drive", flush=True)
 
 def train(epochs=None, batch=None, device=None, resume=False):
+    deterministic = bool(TRAIN_CONFIG.get("deterministic", False))
+    setup_seed(42, deterministic=deterministic)
     kill_gpu_hogs()
     
     lock_path = ARTIFACTS_DIR / ".gps_train.lock"
@@ -221,6 +246,7 @@ def train(epochs=None, batch=None, device=None, resume=False):
     best_val_loss = float("inf")
     train_losses = []
     val_losses = []
+    amp_enabled = bool(TRAIN_CONFIG.get("mixed_precision", True)) and device.type == "cuda"
     
     for epoch in range(start_epoch, TRAIN_CONFIG["epochs"]):
         model.train()
@@ -234,8 +260,12 @@ def train(epochs=None, batch=None, device=None, resume=False):
             
             optimizer.zero_grad(set_to_none=True)
             
-            # A100 Native BFloat16 without GradScaler
-            with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=TRAIN_CONFIG["mixed_precision"]):
+            amp_ctx = (
+                torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp_enabled)
+                if amp_enabled
+                else nullcontext()
+            )
+            with amp_ctx:
                 output = model(img1, img2)
                 loss = criterion(output, target)
             
@@ -256,14 +286,20 @@ def train(epochs=None, batch=None, device=None, resume=False):
         # Validation
         model.eval()
         val_loss = 0.0
+        val_amp_ctx = (
+            torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp_enabled)
+            if amp_enabled
+            else nullcontext()
+        )
         with torch.no_grad():
-            for img1, img2, target in val_loader:
-                img1 = img1.to(device, non_blocking=True).float() / 255.0
-                img2 = img2.to(device, non_blocking=True).float() / 255.0
-                target = target.to(device, non_blocking=True)
-                output = model(img1, img2)
-                loss = criterion(output, target)
-                val_loss += loss.item()
+            with val_amp_ctx:
+                for img1, img2, target in val_loader:
+                    img1 = img1.to(device, non_blocking=True).float() / 255.0
+                    img2 = img2.to(device, non_blocking=True).float() / 255.0
+                    target = target.to(device, non_blocking=True)
+                    output = model(img1, img2)
+                    loss = criterion(output, target)
+                    val_loss += loss.item()
                 
         val_loss /= len(val_loader)
         

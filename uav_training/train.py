@@ -49,7 +49,7 @@ else:
 
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.8.4"
+__version__ = "0.8.5"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -209,6 +209,8 @@ def print_training_config(train_args: dict):
 
 
 DRIVE_CP = Path(os.environ.get("UAV_PROJECT_DIR", "/content/drive/MyDrive/AIA/checkpoints"))
+_SYNC_LOCK = threading.Lock()
+_SYNC_IN_FLIGHT = False
 
 def _sync_to_drive(save_dir, run_name):
     """Non-blocking Drive sync — checkpoint kaybını önler."""
@@ -225,10 +227,23 @@ def _sync_to_drive(save_dir, run_name):
 
 def checkpoint_guard(trainer):
     """Her 5 epoch'ta Drive'a async sync — GPU pipeline'ı bloklamaz."""
+    global _SYNC_IN_FLIGHT
     if trainer.epoch > 0 and trainer.epoch % 5 == 0:
+        with _SYNC_LOCK:
+            if _SYNC_IN_FLIGHT:
+                return
+            _SYNC_IN_FLIGHT = True
+
+        def _sync_job():
+            global _SYNC_IN_FLIGHT
+            try:
+                _sync_to_drive(trainer.save_dir, trainer.save_dir.name)
+            finally:
+                with _SYNC_LOCK:
+                    _SYNC_IN_FLIGHT = False
+
         threading.Thread(
-            target=_sync_to_drive,
-            args=(trainer.save_dir, trainer.save_dir.name),
+            target=_sync_job,
             daemon=True
         ).start()
 
@@ -300,6 +315,15 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
     for p in optional_params:
         if p in TRAIN_CONFIG:
             train_args[p] = TRAIN_CONFIG[p]
+
+    amp_dtype = TRAIN_CONFIG.get("amp_dtype")
+    if (
+        amp_dtype == "bf16"
+        and bool(train_args.get("amp", False))
+        and torch.cuda.is_available()
+        and getattr(torch.cuda, "is_bf16_supported", lambda: False)()
+    ):
+        train_args["amp_dtype"] = "bf16"
 
     # Forward-compat shim for Ultralytics smoothing parameter migration.
     if "smoothing" in train_args and "label_smoothing" in train_args:
