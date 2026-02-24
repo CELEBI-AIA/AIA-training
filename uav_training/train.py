@@ -36,7 +36,7 @@ if torch.cuda.is_available():
 try:
     from uav_training import __version__
 except ImportError:
-    __version__ = "0.8.23"  # fallback when uav_training not installed as package
+    __version__ = "0.8.24"  # fallback when uav_training not installed as package
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -350,8 +350,21 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         try:
             results = model.train(**attempt_args)
             break
-        except RuntimeError as exc:
+        except (RuntimeError, ValueError) as exc:
             last_exc = exc
+
+            # Optimizer state mismatch when resuming across Ultralytics versions (e.g. 8.3→8.4)
+            if isinstance(exc, ValueError) and "parameter group" in str(exc).lower():
+                if attempt_args.get("resume") and attempt == 1:
+                    print(f"⚠️ Optimizer state incompatible (likely Ultralytics version upgrade): {exc}", flush=True)
+                    print("🛟 Retrying with resume=False — loading model weights only, restarting optimizer.", flush=True)
+                    next_args = attempt_args.copy()
+                    next_args["resume"] = False
+                    del model
+                    kill_gpu_hogs()
+                    attempt_args = next_args
+                    continue
+                raise
 
             if not _is_cuda_oom_error(exc) or attempt == max_attempts:
                 raise

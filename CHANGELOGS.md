@@ -331,3 +331,7 @@
 - **feat(uav_training/config)**: Run name now versioned — `uav_v3_optimized_v{version}` from `__init__.py`; runs no longer overwrite across versions.
 - **feat(colab_bootstrap)**: Log filename now versioned — `log_v{VERSION}_%Y-%m-%d_%H-%M.txt` for easier log identification.
 - **release**: Bumped module/script version from `0.8.22` to `0.8.23`.
+
+## 0.0.44 - 2026-02-25
+- **fix(uav_training/train)**: Resume across Ultralytics version upgrade (8.3→8.4) — on optimizer state mismatch (`parameter group` ValueError), retry with `resume=False` to load model weights only and restart optimizer.
+- **release**: Bumped module/script version from `0.8.23` to `0.8.24`.
