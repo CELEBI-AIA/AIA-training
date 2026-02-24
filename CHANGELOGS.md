@@ -109,3 +109,14 @@
 - **fix(uav_training/train)**: Added OOM-safe retry flow in training phase execution: retry with `compile=False`, then progressively lower batch/imgsz only when CUDA OOM occurs.
 - **fix(uav_training/train)**: Disabled BF16 monkey patch by default to avoid conflicts with Ultralytics AMP safety checks; patch can still be enabled via `FORCE_BF16_PATCH=1`.
 - **chore(uav_training/train)**: Removed duplicate `threading` import.
+
+## 0.0.21 - 2026-02-24
+- **fix(uav_training/resume)**: Hardened resume path resolution in `uav_training/train.py` with a 3-step fallback chain (CLI `--model` -> local runs -> Drive runs) to prevent accidental fresh starts after Colab reset.
+- **fix(scripts/colab_bootstrap)**: Resume launch now passes explicit checkpoint path (`--model <last.pt> --resume`) so training state is restored deterministically.
+- **perf(uav_training/seed-tf32)**: Refactored `setup_seed()` in `uav_training/train.py` to honor config-driven determinism, re-enable `cudnn.benchmark` in speed mode, and apply `torch.set_float32_matmul_precision("high")`.
+- **perf(uav_training/optimizer)**: Switched training defaults to explicit `AdamW` in `uav_training/config.py` and forwarded `optimizer/momentum/nbs` in `uav_training/train.py` to avoid Ultralytics `optimizer=auto` overriding LR policy.
+- **perf(uav_training/bf16)**: Added Ampere+ compute capability detection in `scripts/colab_bootstrap.py` to auto-set `FORCE_BF16_PATCH=1`; startup logs now show GPU SM capability and BF16 patch state in `uav_training/train.py`.
+- **fix(uav_training/build_dataset)**: Replaced silent bbox clamping with strict validation (NaN/out-of-range/too-small counters) and added `[BBOX AUDIT]` summary logs to surface label quality issues before training.
+- **perf(scripts/colab_bootstrap)**: Increased periodic Drive sync interval from 180s to 300s to reduce I/O contention during training.
+- **perf(uav_training/config)**: Raised A100-tier DataLoader worker cap from 8 to 10 for better GPU feed stability.
+- **chore(deps)**: Added upper bounds in `requirements.txt` (`ultralytics<9.0.0`, `torch<3.0.0`, `torchvision<1.0.0`) for better reproducibility against upstream breaking changes.

@@ -156,7 +156,7 @@ def auto_detect_hardware() -> tuple:
     os.environ["OPENBLAS_NUM_THREADS"] = "2"
     os.environ["MKL_NUM_THREADS"] = "1"
 
-    workers = min(cpus, 8)
+    workers = min(cpus, 10) if vram >= 35 else min(cpus, 8)
 
     # ── Safe VRAM Batch Sizing (Target ~80% Capacity) ──
     usable_vram = vram * 0.80
@@ -172,12 +172,10 @@ def auto_detect_hardware() -> tuple:
     # Cache OFF — read directly from NVMe SSD
     cache = False
 
-    # ── Linear LR Scaling ──
-    # Scaled properly to match new dynamic batch sizing
-    base_batch = 16
-    base_lr = 0.01
-    scaled_lr0 = base_lr * (batch / base_batch)
-    warmup_epochs = 5.0 # Increased for larger batch sizes
+    # ── AdamW LR ──
+    # AdamW uses ~1/10 of SGD lr; nbs=batch disables Ultralytics internal scaling
+    adamw_lr0 = 0.001
+    warmup_epochs = 5.0
 
     config_overrides = {
         "epochs": 65,            # 50 + 15 two-phase profile
@@ -186,7 +184,7 @@ def auto_detect_hardware() -> tuple:
         "phase2_imgsz": 896,
         "phase2_mosaic": 0.2,
         "phase2_close_mosaic": 5,
-        "phase2_lr0": scaled_lr0 * 0.1,  # Reduced LR in phase 2
+        "phase2_lr0": adamw_lr0 * 0.1,
         "batch": batch,
         "imgsz": imgsz,
         "device": 0,
@@ -196,39 +194,42 @@ def auto_detect_hardware() -> tuple:
         "amp_dtype": "bf16",
         "cache": cache,
         "exist_ok": True,
-        "patience": 30,           # Extended early stopping tolerance
+        "patience": 30,
         "cos_lr": True,
-        "close_mosaic": 5,       # Keep clean samples for the final epochs
+        "close_mosaic": 5,
         "overlap_mask": True,
-        
+
         # ── Augmentation (UAV & Small Object Optimized) ──
-        "mosaic": 1.0,            
-        "scale": 0.4,             # Increased for better scale variation for small objects
-        "copy_paste": 0.3,        # Increased context simulation
+        "mosaic": 1.0,
+        "scale": 0.4,
+        "copy_paste": 0.3,
         "copy_paste_mode": "flip",
-        "flipud": 0.5,            
-        "fliplr": 0.5,            # Added symmetric flips
-        "hsv_h": 0.015,           # Adding slight color variation
-        "hsv_s": 0.7,             # Sunset/fog simulation
-        "hsv_v": 0.4,             # Day/night transitions
-        "bgr": 0.05,              
-        
+        "flipud": 0.5,
+        "fliplr": 0.5,
+        "hsv_h": 0.015,
+        "hsv_s": 0.7,
+        "hsv_v": 0.4,
+        "bgr": 0.05,
+
         # ── Optimizer & Hyperparameters ──
-        "lr0": scaled_lr0,        # Linearly scaled 
-        "lrf": 0.01,              # Final LR fraction
-        "warmup_epochs": warmup_epochs, 
+        "optimizer": "AdamW",
+        "lr0": adamw_lr0,
+        "lrf": 0.01,
+        "momentum": 0.9,         # beta1 for AdamW
+        "nbs": batch,            # disable Ultralytics internal LR scaling
+        "warmup_epochs": warmup_epochs,
         "weight_decay": 0.0005,
-        "label_smoothing": 0.05,  
+        "label_smoothing": 0.05,
         "box": 7.5,
         "cls": 0.7,
         "dfl": 1.5,
-        
+
         # ── Mechanics ──
         "rect": False,
         "multi_scale": multi_scale,
-        "deterministic": False,   # ~30% faster — non-deterministic CUDA kernels
-        "compile": True,          # torch.compile via YOLO's own pipeline (20-40% faster)
-        "save_period": 5,         # Reduced from 10 to 5 to prevent data loss on Colab interrupts
+        "deterministic": False,
+        "compile": True,
+        "save_period": 5,
     }
 
     # Print detected hardware — flush=True so it appears instantly in Colab
@@ -297,8 +298,11 @@ TRAIN_CONFIG = {
     "hsv_s": 0.7,
     "hsv_v": 0.4,
     "bgr": 0.05,
-    "lr0": 0.02,
+    "optimizer": "AdamW",
+    "lr0": 0.001,
     "lrf": 0.01,
+    "momentum": 0.9,
+    "nbs": 4,                 # match batch to disable internal LR scaling
     "warmup_epochs": 5.0,
     "weight_decay": 0.0005,
     "label_smoothing": 0.05,

@@ -268,6 +268,7 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
     }
 
     optional_params = [
+        "optimizer", "momentum", "nbs",
         "patience", "cos_lr", "overlap_mask", "mosaic", "rect", "multi_scale",
         "close_mosaic", "deterministic", "save_period", "compile",
         "lr0", "lrf", "warmup_epochs", "weight_decay", "label_smoothing",
@@ -347,22 +348,48 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
     }
 
 
-def setup_seed(seed=42):
+def setup_seed(seed: int = 42, *, deterministic: bool = False) -> None:
+    """Seed all RNGs and configure CUDA determinism / benchmark mode.
+
+    deterministic=False (default) → A100 kernel autotuning ON, max throughput.
+    deterministic=True            → full reproducibility, significant speed cost.
+    """
     import random
     import numpy as np
-    import torch
-    os.environ['PYTHONHASHSEED'] = str(seed)
+
+    os.environ["PYTHONHASHSEED"] = str(seed)
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
+    if deterministic:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    else:
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
+        os.environ.pop("CUBLAS_WORKSPACE_CONFIG", None)
+
+    try:
+        torch.set_float32_matmul_precision("high")
+    except Exception:
+        pass
+
+    print(
+        f"[SEED] seed={seed} deterministic={deterministic} "
+        f"benchmark={torch.backends.cudnn.benchmark} "
+        f"TF32={torch.backends.cuda.matmul.allow_tf32} "
+        f"matmul_precision=high",
+        flush=True,
+    )
+
 
 def train(epochs=None, batch=None, device=None, model_path=None, resume=False, two_phase=False):
-    setup_seed(42)
+    det = bool(TRAIN_CONFIG.get("deterministic", False))
+    setup_seed(42, deterministic=det)
     kill_gpu_hogs()
 
     # Auto-optimize dataset if not resuming AND not already built
@@ -404,31 +431,40 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
 
     # Resume logic
     if resume:
-        # Auto-detect latest checkpoint
-        project_results = TRAIN_CONFIG["project"]
-        if not project_results.exists():
-             print(f"Error: Project directory {project_results} not found.", flush=True)
-             sys.exit(1)
+        latest_ckpt = None
 
-        # Find all last.pt files in the project directory
-        checkpoints = list(project_results.rglob("last.pt"))
-        if not checkpoints:
-            print(f"Error: No 'last.pt' found in {project_results}", flush=True)
+        # 1) CLI --model takes priority (bootstrap passes Drive checkpoint here)
+        if model_path and Path(str(model_path)).exists() and _is_checkpoint_valid(Path(str(model_path))):
+            latest_ckpt = Path(str(model_path))
+            print(f"Resuming from CLI-provided checkpoint: {latest_ckpt}", flush=True)
+
+        # 2) Search local project directory
+        if latest_ckpt is None:
+            project_results = TRAIN_CONFIG["project"]
+            if project_results.exists():
+                checkpoints = list(project_results.rglob("last.pt"))
+                if checkpoints:
+                    candidate = max(checkpoints, key=lambda p: p.stat().st_mtime)
+                    if _is_checkpoint_valid(candidate):
+                        latest_ckpt = candidate
+                        print(f"Resuming from local checkpoint: {latest_ckpt}", flush=True)
+
+        # 3) Fallback: search Drive runs directory
+        if latest_ckpt is None:
+            drive_runs = os.environ.get("UAV_PROJECT_DIR")
+            if drive_runs:
+                drive_path = Path(drive_runs)
+                if drive_path.exists():
+                    checkpoints = list(drive_path.rglob("last.pt"))
+                    if checkpoints:
+                        candidate = max(checkpoints, key=lambda p: p.stat().st_mtime)
+                        if _is_checkpoint_valid(candidate):
+                            latest_ckpt = candidate
+                            print(f"Resuming from Drive checkpoint: {latest_ckpt}", flush=True)
+
+        if latest_ckpt is None:
+            print("❌ No valid 'last.pt' found in CLI path, local runs, or Drive. Aborting resume.", flush=True)
             sys.exit(1)
-
-        # Sort by modification time (newest first)
-        latest_ckpt = max(checkpoints, key=lambda p: p.stat().st_mtime)
-        print(f"Found latest checkpoint: {latest_ckpt}", flush=True)
-        
-        if not _is_checkpoint_valid(latest_ckpt):
-            print("❌ Latest checkpoint is corrupt! Attempting to find backup...", flush=True)
-            checkpoints.remove(latest_ckpt)
-            if checkpoints:
-                 latest_ckpt = max(checkpoints, key=lambda p: p.stat().st_mtime)
-                 print(f"🔄 Using previous checkpoint: {latest_ckpt}", flush=True)
-            else:
-                 print("❌ No valid backup checkpoints found. Aborting resume.", flush=True)
-                 sys.exit(1)
 
         model_path = latest_ckpt
     else:
@@ -438,12 +474,16 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
 
     # GPU info before training
     try:
-        import torch
         if torch.cuda.is_available():
             gpu = torch.cuda.get_device_name(0)
+            cc = torch.cuda.get_device_capability(0)
             vram_total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
             vram_free = (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / (1024**3)
-            print(f"  GPU: {gpu}  |  VRAM: {vram_free:.1f}/{vram_total:.1f} GB free", flush=True)
+            bf16_status = "ON" if os.environ.get("FORCE_BF16_PATCH") == "1" else "OFF"
+            print(
+                f"  GPU: {gpu} (sm_{cc[0]}{cc[1]})  |  VRAM: {vram_free:.1f}/{vram_total:.1f} GB free  |  BF16 patch: {bf16_status}",
+                flush=True,
+            )
     except Exception:
         pass
 

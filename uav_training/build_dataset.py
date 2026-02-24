@@ -179,6 +179,10 @@ def build_dataset():
         out_of_range_cls = 0
         unmapped_cls = 0
         missing_label_count = 0
+        out_of_range_bbox_count = 0
+        nan_bbox_count = 0
+        too_small_bbox_count = 0
+        total_bbox_kept = 0
 
         for i in range(oversample_count):
             desc_suffix = f" (Copy {i+1}/{oversample_count})" if oversample_count > 1 else ""
@@ -255,15 +259,37 @@ def build_dataset():
 
                         try:
                             coords = list(map(float, parts[1:5]))
-                            if len(coords) == 4:
-                                x, y, w, h = coords
-                                x, y, w, h = (max(0.0, min(1.0, v)) for v in (x, y, w, h))
-                                if MIN_BBOX_NORM < w <= 1.0 and MIN_BBOX_NORM < h <= 1.0:
-                                    new_line = f"{target_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n"
-                                    if new_line not in _seen_lines:
-                                        _seen_lines.add(new_line)
-                                        temp_lines.append(new_line)
-                                        has_valid_cls = True
+                            if len(coords) != 4:
+                                continue
+                            x, y, w, h = coords
+
+                            # NaN guard
+                            if any(v != v for v in (x, y, w, h)):
+                                nan_bbox_count += 1
+                                continue
+
+                            # Strict range check (eps tolerance for float rounding only)
+                            _EPS = 1e-6
+                            if not all(-_EPS <= v <= 1.0 + _EPS for v in (x, y, w, h)):
+                                out_of_range_bbox_count += 1
+                                continue
+
+                            # Micro-clamp for float precision artifacts within eps
+                            x = min(1.0, max(0.0, x))
+                            y = min(1.0, max(0.0, y))
+                            w = min(1.0, max(0.0, w))
+                            h = min(1.0, max(0.0, h))
+
+                            if not (MIN_BBOX_NORM < w <= 1.0 and MIN_BBOX_NORM < h <= 1.0):
+                                too_small_bbox_count += 1
+                                continue
+
+                            new_line = f"{target_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n"
+                            if new_line not in _seen_lines:
+                                _seen_lines.add(new_line)
+                                temp_lines.append(new_line)
+                                has_valid_cls = True
+                                total_bbox_kept += 1
                         except ValueError:
                             continue
 
@@ -308,6 +334,13 @@ def build_dataset():
             print(f"  ⚠️ {dataset_name}/{split}: unmapped class count = {unmapped_cls}")
         if missing_label_count > 0:
             print(f"  ⚠️ {dataset_name}/{split}: missing label files = {missing_label_count}")
+        rejected = out_of_range_bbox_count + nan_bbox_count + too_small_bbox_count
+        print(
+            f"  [BBOX AUDIT] {dataset_name}/{target_split}: "
+            f"kept={total_bbox_kept} out_of_range={out_of_range_bbox_count} "
+            f"nan={nan_bbox_count} too_small={too_small_bbox_count} "
+            f"rejected_total={rejected}"
+        )
 
     def _execute_megaset_process(synthetic_splits, config, dataset_name, dataset_path, base_oversample_count, smart_sample):
         for target_split, image_files in synthetic_splits:

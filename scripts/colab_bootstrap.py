@@ -226,7 +226,12 @@ try:
     if _has_cuda:
         _p = _t.cuda.get_device_properties(0)
         print(f"  GPU: {_p.name}  |  VRAM: {_p.total_memory / 1024**3:.1f} GB", flush=True)
-        del _p
+        _cc = _t.cuda.get_device_capability(0)
+        print(f"  Compute capability: {_cc[0]}.{_cc[1]}", flush=True)
+        if _cc[0] >= 8:
+            os.environ["FORCE_BF16_PATCH"] = "1"
+            print(f"  BF16 patch enabled (Ampere+ sm_{_cc[0]}{_cc[1]})", flush=True)
+        del _p, _cc
     del _t
 except Exception as _e:
     _has_cuda = False
@@ -471,7 +476,11 @@ log_path = os.path.join(log_dir, log_name)
 
 if checkpoint:
     print(f"  🔄 Resuming from checkpoint: {checkpoint}", flush=True)
-    train_cmd = [sys.executable, "-u", train_script_path, "--resume"]
+    train_cmd = [
+        sys.executable, "-u", train_script_path,
+        "--model", checkpoint,
+        "--resume",
+    ]
 else:
     print("  🆕 No checkpoint found — starting fresh training", flush=True)
     train_cmd = [sys.executable, "-u", train_script_path]
@@ -492,7 +501,7 @@ proc = subprocess.Popen(
 )
 
 
-def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 180):
+def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):
     """
     Periodically sync /content/runs to Drive during training to avoid
     checkpoint loss when Colab runtime disconnects/restarts.
