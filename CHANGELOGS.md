@@ -235,3 +235,6 @@
 - **docs(README)**: Added Python `<3.12` gate to `torch.compile` description.
 - **docs(README)**: Added missing `tests/`, `documentation/`, `CHANGELOGS.md` to repository structure.
 - **docs(README)**: Added ImgSz column to Auto Hardware Detection table.
+
+## 0.0.34 - 2026-02-24
+- **fix(uav_training/train)**: Resume path now auto-triggers `build_dataset()` when `dataset.yaml` is missing, preventing hard-fail (`Error: Dataset config not found at /content/dataset_built/dataset.yaml`) after Colab runtime resets.
