@@ -1,6 +1,0 @@
-refactor(uav_training): lazy config + visualize split CLI (v0.8.20)
-
-- config: Remove import side effect; ensure_colab_config() called from train
-- visualize_dataset: Add --split train|val|test and --num CLI args
-- docs: Update uav_training/README.md and root README to v0.8.20
-- release: 0.8.19 → 0.8.20 (CHANGELOGS 0.0.40)
