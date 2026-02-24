@@ -48,7 +48,6 @@ def kill_gpu_hogs():
     import time
     
     # Wait for any active Drive sync from previous epochs (M-02)
-    global _SYNC_IN_FLIGHT
     while _SYNC_IN_FLIGHT:
         time.sleep(0.5)
 
