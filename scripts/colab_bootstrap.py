@@ -17,7 +17,7 @@ TWO_PHASE_TRAINING = True  # Run 50+15 optimized profile by default (M-01)
 FORCE_FRESH_START  = False # Ignore existing checkpoints and start fresh (B-05)
 # ────────────────────────────────────────────────────────────────────────────
 
-import subprocess, sys, os, glob, time, threading
+import subprocess, sys, os, glob, shutil, time, threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
@@ -308,7 +308,7 @@ if os.path.isfile(dataset_yaml) and existing > 5000:
 else:
     # Install extraction tools only when download/extract may be needed.
     print("  📦 Installing extraction tools …", flush=True)
-    _run("apt-get update -qq && apt-get install -y pigz pv 2>&1 | tail -3", check=False)
+    _run("apt-get update -qq && apt-get install -y pigz pv eatmydata 2>&1 | tail -3", check=False)
 
     if os.path.isfile(CACHE_MARKER):
         print(f"  ⚡ Cache complete ({existing} files) — SKIP", flush=True)
@@ -438,27 +438,31 @@ else:
         print(f"  ✓ Download done in {dl_elapsed:.0f}s ({tar_size_gb/max(dl_elapsed,1)*1024:.0f} MB/s)", flush=True)
 
         # ── PHASE 2: Extract from local copy (full NVMe speed) ──
-        # Using Popen + os.read for real-time output in Colab
+        # stdbuf: 64MB pipe buffer for pigz→tar throughput
+        # eatmydata: skip fsync for faster writes (safe to re-extract on crash)
+        # pigz -p NCPU: parallel decompression
         t1 = time.time()
         TAR_FAST = "--no-same-owner --no-same-permissions -b 512"
+        PIPE_BUF = "64M"
+        CKPT = 50000  # less frequent progress = less overhead
+        _eatmydata = "eatmydata " if shutil.which("eatmydata") else ""
 
         if existing > 100:
             print(f"  ♻️  Incremental extraction ({existing} existing files) …", flush=True)
             _ext_cmd = (
-                f'pigz -d -c -p {NCPU} "{LOCAL_TAR}" '
-                f'| tar -xf - -C "{LOCAL_CACHE}" '
+                f'stdbuf -o {PIPE_BUF} pigz -d -c -p {NCPU} "{LOCAL_TAR}" '
+                f'| stdbuf -i {PIPE_BUF} {_eatmydata}tar -xf - -C "{LOCAL_CACHE}" '
                 f'{TAR_FAST} --skip-old-files '
-                f'--checkpoint=10000 '
-                f'--checkpoint-action=echo="  %u files checked…"'
+                f'--checkpoint={CKPT} --checkpoint-action=echo="  %u files checked…"'
             )
         else:
-            print(f"  🚀 Full extraction → {LOCAL_CACHE} (pigz {NCPU} cores, local SSD)", flush=True)
+            _ed = "eatmydata, " if _eatmydata else ""
+            print(f"  🚀 Full extraction → {LOCAL_CACHE} ({_ed}pigz {NCPU} cores, 64MB pipe)", flush=True)
             _ext_cmd = (
-                f'pigz -d -c -p {NCPU} "{LOCAL_TAR}" '
-                f'| tar -xf - -C "{LOCAL_CACHE}" '
+                f'stdbuf -o {PIPE_BUF} pigz -d -c -p {NCPU} "{LOCAL_TAR}" '
+                f'| stdbuf -i {PIPE_BUF} {_eatmydata}tar -xf - -C "{LOCAL_CACHE}" '
                 f'{TAR_FAST} '
-                f'--checkpoint=10000 '
-                f'--checkpoint-action=echo="  %u files extracted…"'
+                f'--checkpoint={CKPT} --checkpoint-action=echo="  %u files extracted…"'
             )
 
         # Stream extraction output in real-time (not buffered like _run)

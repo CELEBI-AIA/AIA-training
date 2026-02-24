@@ -345,3 +345,7 @@
 - **fix(colab_bootstrap)**: Banner moved to after repo sync — `UAV Training Bootstrap v{VERSION}` now always shows version from pulled repo.
 - **docs(.cursor/rules)**: Added bootstrap version reminder to changelogs rule.
 - **release**: Bumped module/script version from `0.8.25` to `0.8.26`.
+
+## 0.0.47 - 2026-02-25
+- **perf(colab_bootstrap)**: Extraction optimization — 64MB pipe buffer (stdbuf), eatmydata (skip fsync), checkpoint 50k; install eatmydata for faster tar writes.
+- **release**: Bumped module/script version from `0.8.26` to `0.8.27`.
