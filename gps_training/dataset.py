@@ -284,7 +284,7 @@ class GPSDataset(Dataset):
                 sample.get("media_path"),
                 e,
             )
-            raise RuntimeError(f"Dataset sample failed at idx={idx}") from e
+            return None
 
     def _close_video_caps(self):
         for _, cap in list(self._video_caps.items()):

@@ -458,7 +458,7 @@ def build_dataset():
         'path': str(DATASET_DIR.absolute()),
         'train': 'train/images',
         'val': 'val/images',
-        'values': ['vehicle', 'human', 'uap', 'uai'], # Display names
+        'nc': 4,
         'names': {
             0: 'vehicle',
             1: 'human',

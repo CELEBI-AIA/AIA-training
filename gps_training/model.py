@@ -12,6 +12,7 @@ class SiameseTracker(nn.Module):
         self.backbone = nn.Sequential(*list(resnet.children())[:-1])
         
         # Feature concat dimension: 512 + 512 = 1024
+        self.norm = nn.LayerNorm(1024)
         
         self.regressor = nn.Sequential(
             nn.Linear(1024, 512),
@@ -28,8 +29,9 @@ class SiameseTracker(nn.Module):
         f1 = self.backbone(img1).flatten(1)
         f2 = self.backbone(img2).flatten(1)
         
-        # Concatenate
+        # Concatenate + normalize
         combined = torch.cat((f1, f2), dim=1)
+        combined = self.norm(combined)
         
         # Regress
         out = self.regressor(combined)

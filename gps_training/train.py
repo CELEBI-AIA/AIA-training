@@ -62,6 +62,11 @@ def kill_gpu_hogs():
         torch.cuda.empty_cache()
 
 
+def _is_cuda_oom_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "out of memory" in msg and ("cuda" in msg or "cublas" in msg or "cudnn" in msg)
+
+
 def setup_seed(seed: int = 42, *, deterministic: bool = False) -> None:
     """Seed all RNGs and configure deterministic policy."""
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -122,9 +127,11 @@ def _sync_results_to_drive(artifacts_dir: Path):
         drive_results = os.path.join(drive_runs, "gps_model")
         os.makedirs(drive_results, exist_ok=True)
         print(f"\n☁️  Syncing results to Drive: {drive_results}", flush=True)
-        _sync_cmd = f'rsync -a --info=progress2 "{artifacts_dir}/" "{drive_results}/"'
         import subprocess
-        subprocess.run(_sync_cmd, shell=True, check=False)
+        subprocess.run(
+            ["rsync", "-a", "--info=progress2", f"{artifacts_dir}/", f"{drive_results}/"],
+            check=False,
+        )
         print(f"  ✓ Results synced to Drive", flush=True)
 
 def train(epochs=None, batch=None, device=None, resume=False):
@@ -142,6 +149,15 @@ def train(epochs=None, batch=None, device=None, resume=False):
     if device is not None: TRAIN_CONFIG["device"] = device
 
     print_training_config(TRAIN_CONFIG)
+
+    config_snapshot = ARTIFACTS_DIR / "train_config.json"
+    try:
+        serializable = {k: (list(v) if isinstance(v, tuple) else v) for k, v in TRAIN_CONFIG.items()}
+        with open(config_snapshot, "w") as _cf:
+            json.dump(serializable, _cf, indent=2)
+        print(f"📝 Config saved to {config_snapshot}", flush=True)
+    except Exception as e:
+        print(f"Warning: could not persist config: {e}", flush=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -184,8 +200,10 @@ def train(epochs=None, batch=None, device=None, resume=False):
         val_ds, 
         batch_size=TRAIN_CONFIG["batch_size"], 
         shuffle=False, 
-        num_workers=TRAIN_CONFIG["num_workers"],
+        num_workers=w_count,
         pin_memory=True,
+        persistent_workers=True if w_count > 0 else False,
+        prefetch_factor=4 if w_count > 0 else None,
         collate_fn=collate_drop_none
     )
     
@@ -201,12 +219,12 @@ def train(epochs=None, batch=None, device=None, resume=False):
         print(f"Attempting to resume...")
         if ckpt_path.exists() and _is_checkpoint_valid(ckpt_path):
             print(f"Resuming from {ckpt_path}...")
-            checkpoint = torch.load(ckpt_path, map_location=device)
+            checkpoint = torch.load(ckpt_path, map_location=device, weights_only=False)
         else:
             print("❌ last_model.pt is corrupt or missing! Checking backup...", flush=True)
             if backup_path.exists() and _is_checkpoint_valid(backup_path):
                  print(f"🔄 Resuming from backup {backup_path}...", flush=True)
-                 checkpoint = torch.load(backup_path, map_location=device)
+                 checkpoint = torch.load(backup_path, map_location=device, weights_only=False)
             else:
                  print("⚠️ Backup is also missing or corrupt. Starting fresh training.", flush=True)
                  resume = False
@@ -244,16 +262,15 @@ def train(epochs=None, batch=None, device=None, resume=False):
         else:
             print("Warning: checkpoint missing optimizer_state_dict; continuing without it.")
 
-        if "scheduler_state_dict" in checkpoint:
-            try:
-                scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
-            except Exception as e:
-                print(f"Warning: scheduler state incompatible (likely batch/epoch change), creating fresh OneCycleLR for remaining {remaining_epochs} epochs: {e}")
-        else:
-            print(f"Warning: checkpoint missing scheduler_state_dict; fresh OneCycleLR for remaining {remaining_epochs} epochs.")
+        # OneCycleLR state is NOT restored on resume by design:
+        # total_steps is baked in at creation and differs when remaining_epochs
+        # changes, loading stale state can silently shift or collapse the LR curve.
+        print(f"OneCycleLR created fresh for remaining {remaining_epochs} epochs (scheduler state not restored by design).")
 
     # Training Loop
     best_val_loss = float("inf")
+    patience = int(TRAIN_CONFIG.get("patience", 20))
+    epochs_without_improvement = 0
     train_losses = []
     val_losses = []
     amp_enabled = bool(TRAIN_CONFIG.get("mixed_precision", True)) and device.type == "cuda"
@@ -271,42 +288,85 @@ def train(epochs=None, batch=None, device=None, resume=False):
             print(f"[AMP] Ampere+ GPU (sm_{cc[0]}{cc[1]}): using BF16 (no scaler needed)", flush=True)
 
     scaler = torch.amp.GradScaler(enabled=use_grad_scaler)
+    oom_recoveries = 0
+    max_oom_recoveries = 2
+    current_batch = TRAIN_CONFIG["batch_size"]
 
     for epoch in range(start_epoch, TRAIN_CONFIG["epochs"]):
         model.train()
         running_loss = 0.0
-        
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{TRAIN_CONFIG['epochs']}")
-        for img1, img2, target in pbar:
-            img1 = img1.to(device, non_blocking=True).float() / 255.0
-            img2 = img2.to(device, non_blocking=True).float() / 255.0
-            target = target.to(device, non_blocking=True)
-            
-            optimizer.zero_grad(set_to_none=True)
-            
-            amp_ctx = (
-                torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=amp_enabled)
-                if amp_enabled
-                else nullcontext()
-            )
-            with amp_ctx:
-                output = model(img1, img2)
-                loss = criterion(output, target)
-            
-            if not torch.isfinite(loss):
-                raise RuntimeError(f"Non-finite loss detected: {loss.item()}")
 
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            
-            scaler.step(optimizer)
-            scaler.update()
-            scheduler.step()
-            
-            running_loss += loss.item()
-            pbar.set_postfix({"loss": f"{loss.item():.4f}"})
-            
+        try:
+            pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{TRAIN_CONFIG['epochs']}")
+            for img1, img2, target in pbar:
+                img1 = img1.to(device, non_blocking=True).float() / 255.0
+                img2 = img2.to(device, non_blocking=True).float() / 255.0
+                target = target.to(device, non_blocking=True)
+
+                optimizer.zero_grad(set_to_none=True)
+
+                amp_ctx = (
+                    torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=amp_enabled)
+                    if amp_enabled
+                    else nullcontext()
+                )
+                with amp_ctx:
+                    output = model(img1, img2)
+                    if not torch.isfinite(output).all():
+                        raise RuntimeError(f"Non-finite model output detected at epoch {epoch+1}")
+                    loss = criterion(output, target)
+
+                if not torch.isfinite(loss):
+                    raise RuntimeError(f"Non-finite loss detected: {loss.item()}")
+
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
+
+                running_loss += loss.item()
+                pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+        except RuntimeError as exc:
+            if not _is_cuda_oom_error(exc) or oom_recoveries >= max_oom_recoveries:
+                raise
+            oom_recoveries += 1
+            prev_batch = current_batch
+            current_batch = max(1, current_batch // 2)
+            print(
+                f"\n⚠️ CUDA OOM at epoch {epoch+1}! "
+                f"Reducing batch {prev_batch} → {current_batch} "
+                f"(recovery {oom_recoveries}/{max_oom_recoveries})",
+                flush=True,
+            )
+            import gc
+            gc.collect()
+            torch.cuda.empty_cache()
+            train_loader = DataLoader(
+                train_ds, batch_size=current_batch, shuffle=True,
+                num_workers=w_count, pin_memory=True,
+                persistent_workers=True if w_count > 0 else False,
+                prefetch_factor=4 if w_count > 0 else None,
+                drop_last=True, worker_init_fn=seed_worker,
+                collate_fn=collate_drop_none,
+            )
+            val_loader = DataLoader(
+                val_ds, batch_size=current_batch, shuffle=False,
+                num_workers=w_count, pin_memory=True,
+                persistent_workers=True if w_count > 0 else False,
+                prefetch_factor=4 if w_count > 0 else None,
+                collate_fn=collate_drop_none,
+            )
+            remaining = TRAIN_CONFIG["epochs"] - epoch
+            scheduler = optim.lr_scheduler.OneCycleLR(
+                optimizer, max_lr=max_lr,
+                steps_per_epoch=len(train_loader), epochs=remaining,
+            )
+            scaler = torch.amp.GradScaler(enabled=use_grad_scaler)
+            continue
+
         epoch_loss = running_loss / len(train_loader)
         
         # Validation
@@ -363,9 +423,10 @@ def train(epochs=None, batch=None, device=None, resume=False):
                 tmp_ckpt_path.unlink()
 
 
-        # Checkpoint Best (atomic write: tmp → replace)
+        # Checkpoint Best (atomic write: tmp → replace) + Early Stopping
         if val_loss < best_val_loss:
             best_val_loss = val_loss
+            epochs_without_improvement = 0
             best_tmp = (ARTIFACTS_DIR / "best_model.pt").with_suffix('.pt.tmp')
             try:
                 torch.save(model.state_dict(), best_tmp)
@@ -375,6 +436,11 @@ def train(epochs=None, batch=None, device=None, resume=False):
                 print(f"CRITICAL: Failed to save best_model.pt atomically: {e}")
                 if best_tmp.exists():
                     best_tmp.unlink()
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= patience:
+                print(f"Early stopping triggered: no improvement for {patience} epochs (best_val_loss={best_val_loss:.4f})")
+                break
             
     # Export ONNX
     print("Exporting ONNX...")
@@ -389,7 +455,7 @@ def train(epochs=None, batch=None, device=None, resume=False):
             onnx_path,
             input_names=["img1", "img2"], 
             output_names=["delta_translation"],
-            opset_version=11
+            opset_version=17
         )
         print(f"Exported to {onnx_path}")
     except Exception as e:

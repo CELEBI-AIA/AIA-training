@@ -235,3 +235,27 @@
 - **docs(README)**: Added Python `<3.12` gate to `torch.compile` description.
 - **docs(README)**: Added missing `tests/`, `documentation/`, `CHANGELOGS.md` to repository structure.
 - **docs(README)**: Added ImgSz column to Auto Hardware Detection table.
+
+## 0.0.34 - 2026-02-24
+- **fix(gps_training/dataset)**: `__getitem__` now returns `None` on error instead of raising `RuntimeError`, enabling `collate_drop_none` to gracefully skip corrupt samples instead of crashing training (KR-01).
+- **fix(gps_training/config)**: Added `max_lr: 1e-3` to `TRAIN_CONFIG` so `OneCycleLR` performs its warmup/anneal cycle instead of behaving as constant LR (KR-03).
+- **fix(gps_training/train)**: Removed stale `scheduler_state_dict` restoration on resume; `OneCycleLR` is now always created fresh for remaining epochs to avoid `total_steps` mismatch (KR-02).
+- **fix(uav_training/build_dataset)**: Added standard `nc: 4` key to generated `dataset.yaml` and removed non-standard `values` key for Ultralytics compatibility (KR-04).
+- **fix(deps)**: Added major-version upper bounds to `requirements.txt` (`ultralytics<9`, `torch<3`, `torchvision<1`, `numpy<3`) and minimum versions for previously unpinned packages (KR-05).
+- **perf(gps_training/train)**: Added `persistent_workers` and `prefetch_factor=4` to `val_loader`, eliminating per-epoch worker respawn overhead (PD-03).
+- **perf(gps_training/train)**: Updated ONNX export `opset_version` from 11 to 17 for modern operator fusion support (PD-05).
+- **perf(gps_training/config)**: Reduced default `frame_cache_size` from 256 to 128, halving per-worker memory footprint in multi-worker DataLoader (PD-01).
+- **chore(uav_training/train)**: Removed all 4 `#region agent log` debug blocks that wrote to `debug-4e729f.log`, eliminating production I/O overhead and code clutter (PD-08).
+- **feat(gps_training/train)**: Added early stopping with configurable `patience` (default 20 epochs) to prevent overfitting and GPU waste (ES-01).
+- **feat(gps_training/model)**: Added `LayerNorm(1024)` after backbone feature concatenation in `SiameseTracker` to stabilize regressor input distribution (ES-02).
+- **fix(uav_training/train)**: Wrapped `torch.cuda.manual_seed` calls in `setup_seed` with `torch.cuda.is_available()` guard, consistent with GPS module (ES-03).
+- **fix(gps_training/train)**: Added `torch.isfinite(output)` check before loss computation to catch NaN model outputs early under AMP (ES-07).
+- **feat(gps_training/__init__)**: Added `__version__ = "0.8.14"` to GPS module for version tracking parity with UAV (MO-05).
+- **fix(gps_training/train)**: Replaced `subprocess.run(shell=True)` rsync call with explicit arg list to eliminate shell injection risk (MO-07).
+- **release**: Bumped module/script version from `0.8.13` to `0.8.14`.
+
+## 0.0.35 - 2026-02-24
+- **feat(gps_training/train)**: Added CUDA OOM recovery with automatic batch halving (max 2 retries), DataLoader rebuild, and scheduler reset — prevents training crashes on memory spikes (PD-02).
+- **fix(gps_training/train)**: Added explicit `weights_only=False` to resume `torch.load` calls to suppress `FutureWarning` on PyTorch 2.2-2.5 and ensure consistent behavior across versions (MO-02).
+- **feat(gps_training/train)**: Training config is now persisted to `train_config.json` in artifacts directory at startup for post-hoc experiment comparison (MO-06).
+- **release**: Bumped module/script version from `0.8.14` to `0.8.15`.

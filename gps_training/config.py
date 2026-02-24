@@ -89,10 +89,11 @@ TRAIN_CONFIG = {
     "device": "0", 
     "num_workers": 8, 
     "learning_rate": 1e-4,
+    "max_lr": 1e-3,
     "lambda_traj": 0.1, 
     "mixed_precision": True, 
     "pin_memory": True,
-    "frame_cache_size": 256,
+    "frame_cache_size": 128,
 }
 
 if is_colab():

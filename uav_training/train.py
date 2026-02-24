@@ -34,7 +34,7 @@ if torch.cuda.is_available():
 
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.8.13"
+__version__ = "0.8.15"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -335,16 +335,6 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         print(f"\n🔁 Training attempt {attempt}/{max_attempts}", flush=True)
         print_training_config(attempt_args)
 
-        # #region agent log
-        import json as _json, pathlib as _pl
-        _logf = _pl.Path("debug-4e729f.log")
-        _vram_data = {}
-        if torch.cuda.is_available():
-            _vram_data = {"allocated_mb": round(torch.cuda.memory_allocated(0)/1e6,1), "reserved_mb": round(torch.cuda.memory_reserved(0)/1e6,1), "max_allocated_mb": round(torch.cuda.max_memory_allocated(0)/1e6,1)}
-        with open(_logf, "a") as _lf:
-            _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-D","location":"train.py:pre_train_attempt","message":"VRAM before YOLO.train","data":{"attempt":attempt,"batch":attempt_args.get("batch"),"imgsz":attempt_args.get("imgsz"),"compile":attempt_args.get("compile"),"vram":_vram_data},"timestamp":int(time.time()*1000)}) + "\n")
-        # #endregion
-
         model = YOLO(model_path)
         model.add_callback("on_fit_epoch_end", checkpoint_guard)
         try:
@@ -352,14 +342,6 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
             break
         except RuntimeError as exc:
             last_exc = exc
-
-            # #region agent log
-            _oom_vram = {}
-            if torch.cuda.is_available():
-                _oom_vram = {"allocated_mb": round(torch.cuda.memory_allocated(0)/1e6,1), "reserved_mb": round(torch.cuda.memory_reserved(0)/1e6,1), "max_allocated_mb": round(torch.cuda.max_memory_allocated(0)/1e6,1)}
-            with open(_logf, "a") as _lf:
-                _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-D" if _is_cuda_oom_error(exc) else "H-B","location":"train.py:train_exception","message":"training exception","data":{"attempt":attempt,"is_oom":_is_cuda_oom_error(exc),"error":str(exc)[:200],"vram":_oom_vram},"timestamp":int(time.time()*1000)}) + "\n")
-            # #endregion
 
             if not _is_cuda_oom_error(exc) or attempt == max_attempts:
                 raise
@@ -428,8 +410,9 @@ def setup_seed(seed: int = 42, *, deterministic: bool = False) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
 
     if deterministic:
         torch.backends.cudnn.deterministic = True
@@ -500,16 +483,6 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
     if resume:
         latest_ckpt = None
 
-        # #region agent log
-        import json as _json, pathlib as _pl
-        _logf = _pl.Path("debug-4e729f.log")
-        _mem_before = {}
-        if torch.cuda.is_available():
-            _mem_before = {"allocated_mb": round(torch.cuda.memory_allocated(0)/1e6,1), "reserved_mb": round(torch.cuda.memory_reserved(0)/1e6,1)}
-        with open(_logf, "a") as _lf:
-            _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-A","location":"train.py:resume_start","message":"memory before checkpoint validation","data":{"vram":_mem_before},"timestamp":int(time.time()*1000)}) + "\n")
-        # #endregion
-
         # 1) CLI --model takes priority (bootstrap passes Drive checkpoint here)
         if model_path and Path(str(model_path)).exists() and _is_checkpoint_valid(Path(str(model_path))):
             latest_ckpt = Path(str(model_path))
@@ -538,14 +511,6 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                         if _is_checkpoint_valid(candidate):
                             latest_ckpt = candidate
                             print(f"[RESUME] source=drive checkpoint={latest_ckpt}", flush=True)
-
-        # #region agent log
-        _mem_after = {}
-        if torch.cuda.is_available():
-            _mem_after = {"allocated_mb": round(torch.cuda.memory_allocated(0)/1e6,1), "reserved_mb": round(torch.cuda.memory_reserved(0)/1e6,1)}
-        with open(_logf, "a") as _lf:
-            _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-A","location":"train.py:resume_end","message":"memory after checkpoint validation","data":{"vram":_mem_after,"found": latest_ckpt is not None},"timestamp":int(time.time()*1000)}) + "\n")
-        # #endregion
 
         if latest_ckpt is None:
             print("❌ No valid 'last.pt' found in CLI path, local runs, or Drive. Aborting resume.", flush=True)
