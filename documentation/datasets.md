@@ -1,6 +1,9 @@
 # Dataset Reference
 
-Training datasets are located under `/content/datasets_local/TRAIN/` (Colab) or `datasets/TRAIN/` (local).
+Training datasets are located under `datasets/TRAIN/` (relative to project root). The code uses `DATASETS_TRAIN_DIR = PROJECT_ROOT / "datasets" / "TRAIN"`.
+
+- **Local:** `datasets/TRAIN/` (e.g. `AIA-training/datasets/TRAIN/`)
+- **Colab:** The bootstrap symlinks `repo/datasets` → `/content/datasets_local`, so `DATASETS_TRAIN_DIR` resolves to `/content/datasets_local/TRAIN/` after extraction.
 
 ## Source Datasets
 
@@ -11,7 +14,7 @@ Training datasets are located under `/content/datasets_local/TRAIN/` (Colab) or 
 | 0     | vehicle      |
 | 1     | pedestrian   |
 
-Large-scale dataset (~24k images). Smart sampling is applied during build: 100% of human annotations are kept while vehicles are down-sampled to reduce class imbalance.
+Large-scale dataset (~24k images). Smart sampling is applied during build: 100% of human annotations are kept while 30% of vehicle-only images are kept to reduce class imbalance.
 
 ### 2. drone-vision-project
 

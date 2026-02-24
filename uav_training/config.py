@@ -7,6 +7,8 @@ import sys
 # structure: project_root/uav_training/config.py -> project_root is parent
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATASETS_ROOT = PROJECT_ROOT / "datasets"
+# Source directory for build_dataset (audit must scan the same path)
+DATASETS_TRAIN_DIR = PROJECT_ROOT / "datasets" / "TRAIN"
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts" / "uav_model"
 
 # Ensure directories exist
@@ -39,6 +41,8 @@ TARGET_CLASSES = {
     "araba": 0,
     "human": 1,
     "person": 1,
+    "pedestrian": 1,
+    "people": 1,
     "insan": 1,
     "uap": 2,
     "uai": 3,
@@ -47,6 +51,14 @@ TARGET_CLASSES = {
 # ── Colab Auto Hardware Detection ────────────────────────────────────────────
 
 # is_colab() is defined at top of file (needed early for DATASET_DIR)
+
+
+def setup_torch_backend() -> None:
+    """Central TF32 configuration. Call before any CUDA ops."""
+    import torch
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
 
 def auto_detect_hardware() -> tuple:
     """
@@ -57,10 +69,7 @@ def auto_detect_hardware() -> tuple:
     because autobatch only fills ~60% of VRAM which wastes expensive cloud GPU.
     """
     import torch
-
-    # A100+: TF32 matmul ~8x, conv ~3x faster. Works alongside BF16 AMP.
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.allow_tf32 = True
+    setup_torch_backend()
 
     info = {
         "gpu_name": "N/A",
@@ -111,6 +120,20 @@ def auto_detect_hardware() -> tuple:
         print("     Runtime → Change runtime type → GPU (T4/L4/A100/H100)")
         print("!" * 60 + "\n", flush=True)
         # Fall back to CPU-like settings
+        tier = "TPU (unsupported)"
+        model = "yolo11m.pt"
+        imgsz = 640
+        batch = 8
+        info["gpu_name"] = f"TPU ({os.environ.get('TPU_NAME', 'unknown')})"
+
+    elif is_tpu:
+        # TPU detected with vram > 0 (e.g. Colab H100+TPU hybrid) — same fallback
+        print("\n" + "!" * 60, flush=True)
+        print("  ⚠️  TPU RUNTIME DETECTED — YOLO EĞİTİMİ İÇİN UYGUN DEĞİL!")
+        print("  YOLO/Ultralytics CUDA (GPU) gerektirir, TPU/XLA desteklemez.")
+        print("  Lütfen runtime'ı GPU'ya değiştirin:")
+        print("     Runtime → Change runtime type → GPU (T4/L4/A100/H100)")
+        print("!" * 60 + "\n", flush=True)
         tier = "TPU (unsupported)"
         model = "yolo11m.pt"
         imgsz = 640
@@ -198,8 +221,6 @@ def auto_detect_hardware() -> tuple:
         "phase2_epochs": 15,
         "phase2_imgsz": 896,
         "phase2_mosaic": 0.2,
-        "phase2_close_mosaic": 5,
-        "phase2_lr0": adamw_lr0 * 0.1,
         "batch": batch,
         "imgsz": imgsz,
         "device": 0,

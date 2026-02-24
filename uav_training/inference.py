@@ -5,9 +5,11 @@ import argparse
 from ultralytics import YOLO
 from pathlib import Path
 
-from config import DATASET_DIR, ARTIFACTS_DIR, DATASETS_ROOT
+from config import DATASET_DIR, ARTIFACTS_DIR
 
-def smoke_infer(model_path, source=str(DATASET_DIR / "val" / "images"), num_images=5):
+DEFAULT_INFER_SOURCE = str(DATASET_DIR / "val" / "images")
+
+def smoke_infer(model_path, source=DEFAULT_INFER_SOURCE, num_images=5):
     print(f"Loading model from {model_path}...")
     try:
         model = YOLO(model_path)
@@ -46,7 +48,7 @@ def smoke_infer(model_path, source=str(DATASET_DIR / "val" / "images"), num_imag
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default="yolo11m.pt", help="Path to model file")
-    parser.add_argument("--source", type=str, default=str(DATASETS_ROOT / "TEST_DATA"), help="Source directory")
+    parser.add_argument("--source", type=str, default=DEFAULT_INFER_SOURCE, help="Source directory (default: built dataset val/images)")
     parser.add_argument("--num", type=int, default=5, help="Number of images to test")
     
     args = parser.parse_args()

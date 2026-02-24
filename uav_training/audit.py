@@ -10,10 +10,7 @@ except ImportError:
     # simple fallback if tqdm missing
     def tqdm(x, **kwargs): return x
 
-from config import PROJECT_ROOT, DATASETS_ROOT, AUDIT_REPORT, ARTIFACTS_DIR, TARGET_CLASSES
-
-# Define output path using config
-OUTPUT_REPORT = ARTIFACTS_DIR / "audit_report.json"
+from config import PROJECT_ROOT, DATASETS_TRAIN_DIR, AUDIT_REPORT, ARTIFACTS_DIR, TARGET_CLASSES
 
 
 def get_subdirs(path):
@@ -65,19 +62,15 @@ def scan_and_audit():
         ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
         
     results = []
-    print(f"Scanning datasets in {DATASETS_ROOT}...")
+    print(f"Scanning datasets in {DATASETS_TRAIN_DIR}...")
     
-    # We want to find subdirectories in DATASETS_ROOT that look like datasets
-    # A simple heuristic: check immediate subdirectories. 
-    # Or recursive? The user said "datasetleri ... içine koydum" implies they are direct children or one level deep.
-    # Let's check direct children first to avoid scanning too deep and finding subfolders of datasets.
-    
-    if not DATASETS_ROOT.exists():
-        print(f"Error: {DATASETS_ROOT} does not exist.")
+    # Audit scans same path as build_dataset (datasets/TRAIN) for consistency
+    if not DATASETS_TRAIN_DIR.exists():
+        print(f"Error: {DATASETS_TRAIN_DIR} does not exist.")
         return
 
-    # iterate over directories in DATASETS_ROOT
-    dirs_to_audit = [d for d in DATASETS_ROOT.iterdir() if d.is_dir()]
+    # iterate over directories in DATASETS_TRAIN_DIR
+    dirs_to_audit = [d for d in DATASETS_TRAIN_DIR.iterdir() if d.is_dir()]
     
     print(f"Found {len(dirs_to_audit)} candidates.")
     
@@ -199,6 +192,14 @@ def audit_directory(dir_path):
         
         result["image_count"] = len(imgs)
         result["label_count"] = len(lbls)
+        result["split_overlap"] = {
+            "train_val_overlap": 0,
+            "train_test_overlap": 0,
+            "val_test_overlap": 0,
+            "has_overlap": False,
+            "sample_names": [],
+            "reason": "flat format, no train/val/test split",
+        }
         
     elif "video" in str(dir_path).lower() or list(dir_path.glob("*.mp4")) or list(dir_path.glob("*.MP4")):
          result["format"] = "VIDEO"
@@ -232,7 +233,7 @@ def audit_directory(dir_path):
     for idx, name in class_map.items():
         n = str(name).lower()
         for target_name in TARGET_CLASSES:
-             if target_name in n:
+             if n == target_name or n == f"{target_name}-":
                  key = f"{target_name}_count"
                  result[key] += 1
             
@@ -246,7 +247,7 @@ def audit_directory(dir_path):
              n = str(name).lower()
              # Updated relevant check using config
              for target_name in TARGET_CLASSES:
-                 if target_name in n:
+                 if n == target_name or n == f"{target_name}-":
                      has_relevant = True
          
          if has_relevant:

@@ -276,3 +276,27 @@
 - **chore(remove)**: GPS ile ilgili tüm dosyalar silindi (`archive_gps/` klasörü). Yerel yedek alındı, artık projede GPS modülü yok.
 - **docs(README)**: archive_gps referansı kaldırıldı.
 - **release**: Bumped module/script version from `0.8.17` to `0.8.18`.
+
+## 0.0.39 - 2026-02-24
+- **fix(uav_training/train)**: PYTORCH_CUDA_ALLOC_CONF artık CUDA erişiminden önce ayarlanıyor (KR-5).
+- **fix(uav_training/config)**: TPU + VRAM > 0 senaryosunda NameError önlendi; `elif is_tpu:` dalı eklendi (KR-1).
+- **fix(uav_training/train)**: `optional_params` listesine `fliplr`, `hsv_h`, `hsv_s`, `hsv_v` eklendi (KR-2).
+- **fix(uav_training/train)**: Phase2 `phase_overrides` içinde `nbs` güncelleniyor (KR-4).
+- **fix(uav_training/config)**: Config drift giderildi; `phase2_close_mosaic` ve `phase2_lr0` donanım profillerinden kaldırıldı (ES-1, ES-2).
+- **fix(uav_training)**: `DATASETS_TRAIN_DIR` eklendi; audit ve build_dataset aynı dizini kullanıyor (KR-3, MLO-1).
+- **feat(uav_training/train)**: Resume öncesi `_resume_preflight_check()` ile dataset path ve split doğrulaması.
+- **fix(uav_training/train)**: Son epoch'ta checkpoint sync senkron yapılıyor; daemon thread kesintisi riski azaltıldı (P-3).
+- **feat(uav_training/train)**: Leakage denetimi yaptırıma bağlandı; `--allow-leakage` ile override (P1).
+- **fix(uav_training/audit)**: YOLO_FLAT formatı için `split_overlap` alanı eklendi (ES-6).
+- **chore(uav_training/audit)**: `OUTPUT_REPORT` dead code kaldırıldı (MLO-2).
+- **refactor(uav_training)**: `__version__` tek kaynak olarak `__init__.py`'da (MLO-4).
+- **refactor(uav_training)**: TF32 ayarları `setup_torch_backend()` ile merkezileştirildi (MLO-5).
+- **perf(uav_training/build_dataset)**: Cross-device hardlink denemesi `st_dev` ile atlanıyor (P-1).
+- **fix(uav_training/build_dataset)**: Megaset sahne bölümlemesi deterministik; `set_seed(42)` shuffle öncesi (P-4).
+- **fix(uav_training/train)**: OOM kurtarma zincirinde `imgsz > 640` ise `imgsz=640` (P-5).
+- **docs(uav_training)**: `DEFAULT_CLASS_KEEP_PROB` ile dokümantasyon uyumu; %30 (ES-3).
+- **chore(requirements)**: `requirements-dev.txt` oluşturuldu; `pytest` oraya taşındı (MLO-3).
+- **docs(datasets.md)**: Colab yolu ve `DATASETS_TRAIN_DIR` açıklaması güncellendi (MLO-6).
+- **feat(uav_training/build_dataset)**: Dışlanan etiket satırları (short_format, invalid_coords) raporlanıyor.
+- **fix(uav_training/inference)**: CLI ve fonksiyon varsayılan path tutarlı; `DEFAULT_INFER_SOURCE`.
+- **release**: Bumped module/script version from `0.8.18` to `0.8.19`.

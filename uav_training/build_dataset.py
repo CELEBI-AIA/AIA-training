@@ -26,7 +26,7 @@ def set_seed(seed=42):
 set_seed(42)
 
 # Use configuration from config.py if needed, or define constants here for standalone utility
-from config import PROJECT_ROOT, DATASET_DIR, ARTIFACTS_DIR, TRAIN_CONFIG
+from config import PROJECT_ROOT, DATASET_DIR, DATASETS_TRAIN_DIR, ARTIFACTS_DIR, TRAIN_CONFIG
 
 # Using the optimized MAPPINGS from the successful unify_datasets.py
 # Updated MAPPINGS for "TRAIN" folder
@@ -66,7 +66,7 @@ MAPPINGS = {
 
     # 4. megaset (Existed before, confirmed in TRAIN)
     # HUGE dataset (24k images).
-    # SMART SAMPLING: Keep 100% of humans, 10% of vehicles.
+    # SMART SAMPLING: Keep 100% of humans, 30% of vehicles.
     "megaset": {
         "source_names": ['vehicle', 'pedestrian'], 
         "map": {
@@ -99,7 +99,6 @@ MAPPINGS = {
     }
 }
 
-DATASETS_DIR = PROJECT_ROOT / "datasets" / "TRAIN"
 MIN_BBOX_NORM = float(TRAIN_CONFIG.get("min_bbox_norm", 0.004))
 INCLUDE_TEST_IN_VAL = bool(TRAIN_CONFIG.get("include_test_in_val", False))
 DEFAULT_CLASS_KEEP_PROB = {0: 0.30, 1: 1.00, 2: 1.00, 3: 1.00}
@@ -174,6 +173,11 @@ def build_dataset():
         oversample_count = base_oversample_count if target_split == "train" else 1
         split_smart_sample = smart_sample and target_split == "train"
         sampling_rate = config.get("sampling_rate", 1.0)
+        dst_images_dir = DATASET_DIR / target_split / "images"
+        try:
+            dst_dev = dst_images_dir.stat().st_dev
+        except OSError:
+            dst_dev = None
 
         if not split_smart_sample and sampling_rate < 1.0:
             original_count = len(image_files)
@@ -208,6 +212,8 @@ def build_dataset():
         out_of_range_bbox_count = 0
         nan_bbox_count = 0
         too_small_bbox_count = 0
+        short_line_count = 0  # len(parts) < 5 (segmentation/keypoint format)
+        invalid_coords_count = 0
         total_bbox_kept = 0
 
         for i in range(oversample_count):
@@ -256,11 +262,13 @@ def build_dataset():
                     for line in lines:
                         parts = line.strip().split()
                         if len(parts) < 5:
+                            short_line_count += 1
                             continue
 
                         try:
                             cls_id = int(parts[0])
                         except ValueError:
+                            short_line_count += 1
                             continue
 
                         target_id = None
@@ -286,6 +294,7 @@ def build_dataset():
                         try:
                             coords = list(map(float, parts[1:5]))
                             if len(coords) != 4:
+                                invalid_coords_count += 1
                                 continue
                             x, y, w, h = coords
 
@@ -340,9 +349,13 @@ def build_dataset():
                         target_lbl_path = DATASET_DIR / target_split / "labels" / (Path(unique_name).stem + ".txt")
 
                         if not target_img_path.exists():
-                            try:
-                                os.link(img_path, target_img_path)
-                            except OSError:
+                            same_device = dst_dev is not None and img_path.stat().st_dev == dst_dev
+                            if same_device:
+                                try:
+                                    os.link(img_path, target_img_path)
+                                except OSError:
+                                    shutil.copy2(img_path, target_img_path)
+                            else:
                                 shutil.copy2(img_path, target_img_path)
 
                         with open(target_lbl_path, "w") as f:
@@ -361,12 +374,19 @@ def build_dataset():
         if missing_label_count > 0:
             print(f"  ⚠️ {dataset_name}/{split}: missing label files = {missing_label_count}")
         rejected = out_of_range_bbox_count + nan_bbox_count + too_small_bbox_count
+        excluded = short_line_count + invalid_coords_count
         print(
             f"  [BBOX AUDIT] {dataset_name}/{target_split}: "
             f"kept={total_bbox_kept} out_of_range={out_of_range_bbox_count} "
             f"nan={nan_bbox_count} too_small={too_small_bbox_count} "
             f"rejected_total={rejected}"
         )
+        if excluded > 0:
+            print(
+                f"  [EXCLUDED LABELS] {dataset_name}/{target_split}: "
+                f"short_format={short_line_count} invalid_coords={invalid_coords_count} "
+                f"(unsupported segmentation/keypoint or malformed lines)"
+            )
 
     def _execute_megaset_process(synthetic_splits, config, dataset_name, dataset_path, base_oversample_count, smart_sample):
         for target_split, image_files in synthetic_splits:
@@ -375,7 +395,7 @@ def build_dataset():
     # Actually run the processing here (so it's defined and visible to megaset)
     # Re-apply the earlier block loops since we extracted logic out
     for dataset_name, config in MAPPINGS.items():
-        dataset_path = DATASETS_DIR / dataset_name
+        dataset_path = DATASETS_TRAIN_DIR / dataset_name
         if not dataset_path.exists():
             continue
             
@@ -405,6 +425,7 @@ def build_dataset():
                     scene_groups.setdefault(scene_id, []).append(p)
 
                 scenes = list(scene_groups.keys())
+                set_seed(42)  # deterministic train/val split for megaset
                 random.shuffle(scenes)
                 val_scene_count = max(1, int(len(scenes) * 0.15))
                 val_scenes = set(scenes[:val_scene_count])

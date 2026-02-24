@@ -1,10 +1,14 @@
 import argparse
+import os
 import sys
 from pathlib import Path
 import torch
 
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
+# Reduce VRAM fragmentation — must be set before any CUDA allocation
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True,max_split_size_mb:512")
+
+from config import ARTIFACTS_DIR, AUDIT_REPORT, DATASET_DIR, TRAIN_CONFIG, setup_torch_backend
+setup_torch_backend()
 try:
     from ultralytics import YOLO
 except ImportError:
@@ -12,9 +16,7 @@ except ImportError:
     print("  pip install ultralytics")
     sys.exit(1)
 
-from config import ARTIFACTS_DIR, DATASET_DIR, TRAIN_CONFIG
 from build_dataset import build_dataset
-import os
 import time
 import csv
 import shutil
@@ -22,8 +24,6 @@ import threading
 
 # Enable V8 cuDNN API for better A100 performance
 os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
-# Reduce VRAM fragmentation — must be set before any CUDA allocation
-os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True,max_split_size_mb:512")
 
 if torch.cuda.is_available():
     cc = torch.cuda.get_device_capability(0)
@@ -33,8 +33,10 @@ if torch.cuda.is_available():
         print(f"ℹ️ GPU sm_{cc[0]}{cc[1]} — AMP will use FP16", flush=True)
 
 
-# Version — keep in sync with uav_training/__init__.py
-__version__ = "0.8.18"
+try:
+    from uav_training import __version__
+except ImportError:
+    __version__ = "0.8.19"  # fallback when uav_training not installed as package
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -227,7 +229,7 @@ def _sync_to_drive(save_dir, run_name):
 _LAST_SYNC_EPOCH = -1
 
 def checkpoint_guard(trainer):
-    """Drive sync every save_period epochs — GPU pipeline'ı bloklamaz."""
+    """Drive sync every save_period epochs. Last epoch uses synchronous sync to avoid daemon cutoff."""
     global _SYNC_IN_FLIGHT, _LAST_SYNC_EPOCH
     save_period = int(TRAIN_CONFIG.get("save_period", 1))
     epoch = int(trainer.epoch) + 1  # Ultralytics epoch is 0-based.
@@ -239,18 +241,24 @@ def checkpoint_guard(trainer):
         _SYNC_IN_FLIGHT = True
         _LAST_SYNC_EPOCH = epoch
 
-    def _sync_job():
-        global _SYNC_IN_FLIGHT
+    is_last_epoch = epoch >= int(getattr(trainer, "epochs", epoch))
+    if is_last_epoch:
+        # Synchronous sync on last epoch — daemon thread could be cut off on process exit
         try:
             _sync_to_drive(trainer.save_dir, trainer.save_dir.name)
         finally:
             with _SYNC_LOCK:
                 _SYNC_IN_FLIGHT = False
+    else:
+        def _sync_job():
+            global _SYNC_IN_FLIGHT
+            try:
+                _sync_to_drive(trainer.save_dir, trainer.save_dir.name)
+            finally:
+                with _SYNC_LOCK:
+                    _SYNC_IN_FLIGHT = False
 
-    threading.Thread(
-        target=_sync_job,
-        daemon=True
-    ).start()
+        threading.Thread(target=_sync_job, daemon=True).start()
 
 def _sync_results_to_drive(results_dir: Path, run_name: str):
     """Final sync from local SSD runs to Drive."""
@@ -312,7 +320,7 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         "patience", "cos_lr", "overlap_mask", "mosaic", "rect", "multi_scale",
         "close_mosaic", "deterministic", "save_period", "compile",
         "lr0", "lrf", "warmup_epochs", "weight_decay",
-        "scale", "copy_paste", "copy_paste_mode", "flipud", "bgr",
+        "scale", "copy_paste", "copy_paste_mode", "flipud", "fliplr", "hsv_h", "hsv_s", "hsv_v", "bgr",
         "box", "cls", "dfl",
     ]
     for p in optional_params:
@@ -357,9 +365,9 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
                 next_args["batch"] = max(8, next_args["batch"] // 2)
                 next_args["nbs"] = next_args["batch"]
                 recovery_action = f"batch={next_args['batch']},nbs={next_args['batch']}"
-            elif int(next_args.get("imgsz", 0)) > 896:
-                next_args["imgsz"] = 896
-                recovery_action = "imgsz=896"
+            elif int(next_args.get("imgsz", 0)) > 640:
+                next_args["imgsz"] = 640
+                recovery_action = "imgsz=640"
             elif isinstance(next_args.get("batch"), int) and next_args["batch"] > 4:
                 next_args["batch"] = max(4, next_args["batch"] // 2)
                 next_args["nbs"] = next_args["batch"]
@@ -395,6 +403,64 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         "results_dir": str(results_dir),
         "best_pt": str(renamed) if renamed else None,
     }
+
+
+def _resume_preflight_check() -> None:
+    """Validate dataset path chain before resume. Fail-fast on errors."""
+    yaml_path = DATASET_DIR / "dataset.yaml"
+    if not yaml_path.exists():
+        raise FileNotFoundError(
+            f"Resume preflight failed: dataset.yaml not found at {yaml_path}. "
+            "Run build_dataset first or ensure DATASET_DIR is correct."
+        )
+    try:
+        import yaml
+        with open(yaml_path, encoding="utf-8") as f:
+            yaml.safe_load(f)
+    except Exception as e:
+        raise RuntimeError(f"Resume preflight failed: dataset.yaml unreadable: {e}") from e
+    train_imgs = DATASET_DIR / "train" / "images"
+    val_imgs = DATASET_DIR / "val" / "images"
+    if not train_imgs.exists():
+        raise FileNotFoundError(
+            f"Resume preflight failed: train/images not found at {train_imgs}"
+        )
+    if not val_imgs.exists():
+        raise FileNotFoundError(
+            f"Resume preflight failed: val/images not found at {val_imgs}"
+        )
+    print("[RESUME] Preflight check passed: dataset.yaml and split dirs OK", flush=True)
+
+
+def _check_leakage_from_audit(*, allow_leakage: bool = False) -> None:
+    """Read audit report and fail if split overlap detected, unless allow_leakage."""
+    if allow_leakage:
+        return
+    if not AUDIT_REPORT.exists():
+        return
+    try:
+        import json
+        with open(AUDIT_REPORT, encoding="utf-8") as f:
+            results = json.load(f)
+    except Exception:
+        return
+    for r in results:
+        if r.get("status") != "INCLUDE":
+            continue
+        overlap = r.get("split_overlap", {})
+        if overlap.get("has_overlap"):
+            total = (
+                overlap.get("train_val_overlap", 0)
+                + overlap.get("train_test_overlap", 0)
+                + overlap.get("val_test_overlap", 0)
+            )
+            raise RuntimeError(
+                f"Data leakage detected in dataset '{r.get('name', '?')}': "
+                f"split overlap (train_val={overlap.get('train_val_overlap',0)}, "
+                f"train_test={overlap.get('train_test_overlap',0)}, "
+                f"val_test={overlap.get('val_test_overlap',0)}). "
+                "Run audit.py and fix overlaps, or use --allow-leakage to override."
+            )
 
 
 def setup_seed(seed: int = 42, *, deterministic: bool = False) -> None:
@@ -437,10 +503,11 @@ def setup_seed(seed: int = 42, *, deterministic: bool = False) -> None:
     )
 
 
-def train(epochs=None, batch=None, device=None, model_path=None, resume=False, two_phase=False):
+def train(epochs=None, batch=None, device=None, model_path=None, resume=False, two_phase=False, allow_leakage=False):
     det = bool(TRAIN_CONFIG.get("deterministic", False))
     setup_seed(42, deterministic=det)
     kill_gpu_hogs()
+    _check_leakage_from_audit(allow_leakage=allow_leakage)
 
     # Ensure dataset.yaml exists for both fresh and resume runs.
     # Resume without dataset metadata can happen after Colab runtime resets.
@@ -471,6 +538,9 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
     if needs_build:
         print("🔄 Building dataset (hard-copy to local SSD)...", flush=True)
         build_dataset()
+
+    if resume:
+        _resume_preflight_check()
 
     # Use config values if not provided
     epochs = epochs if epochs is not None else TRAIN_CONFIG["epochs"]
@@ -590,6 +660,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
             phase2_batch = max(1, batch // 2)
 
         phase2_overrides = {
+            "nbs": phase2_batch,
             "mosaic": TRAIN_CONFIG.get("phase2_mosaic", 0.2),
             "close_mosaic": TRAIN_CONFIG.get("phase2_close_mosaic", 10),
             "lr0": TRAIN_CONFIG.get("phase2_lr0", TRAIN_CONFIG.get("lr0", 0.0015)),
@@ -622,6 +693,7 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, help="Model path or size (e.g. yolo11m.pt)")
     parser.add_argument("--resume", action="store_true", help="Resume training from last checkpoint")
     parser.add_argument("--two-phase", action="store_true", help="Run 50+15 two-phase training profile")
+    parser.add_argument("--allow-leakage", action="store_true", help="Override data leakage check from audit report")
 
     args = parser.parse_args()
 
@@ -640,4 +712,5 @@ if __name__ == "__main__":
         model_path=args.model,
         resume=args.resume,
         two_phase=args.two_phase,
+        allow_leakage=args.allow_leakage,
     )

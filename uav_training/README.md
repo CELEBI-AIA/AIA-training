@@ -89,7 +89,7 @@ artifacts/uav_model/dataset_uap_uai/
 
 For large datasets (e.g., `megaset` with 24k images):
 - **100%** of images with `human` annotations are kept
-- **10%** of vehicle-only images are kept
+- **30%** of vehicle-only images are kept
 - Oversampling is applied only to `train`, not `val`
 - `test` split is not merged into `val` by default (`include_test_in_val=False`)
 - This balances class distribution without leaking validation quality
