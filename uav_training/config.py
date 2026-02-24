@@ -230,7 +230,7 @@ def auto_detect_hardware() -> tuple:
         "nbs": batch,            # disable Ultralytics internal LR scaling
         "warmup_epochs": warmup_epochs,
         "weight_decay": 0.0005,
-        "smoothing": 0.05,
+        "label_smoothing": 0.05,
         "box": 7.5,
         "cls": 0.7,
         "dfl": 1.5,
@@ -320,7 +320,7 @@ TRAIN_CONFIG = {
     "nbs": 4,                 # match batch to disable internal LR scaling
     "warmup_epochs": 5.0,
     "weight_decay": 0.0005,
-    "smoothing": 0.05,
+    "label_smoothing": 0.05,
     "box": 7.5,
     "cls": 0.7,
     "dfl": 1.5,

@@ -307,7 +307,7 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         "optimizer", "momentum", "nbs",
         "patience", "cos_lr", "overlap_mask", "mosaic", "rect", "multi_scale",
         "close_mosaic", "deterministic", "save_period", "compile",
-        "lr0", "lrf", "warmup_epochs", "weight_decay", "smoothing", "label_smoothing",
+        "lr0", "lrf", "warmup_epochs", "weight_decay", "label_smoothing",
         "scale", "copy_paste", "copy_paste_mode", "flipud", "bgr",
         "box", "cls", "dfl",
     ]
@@ -319,9 +319,9 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         bf16_ok = torch.cuda.is_bf16_supported()
         print(f"[AMP] BF16 hardware support: {bf16_ok}", flush=True)
 
-    # Forward-compat shim for Ultralytics smoothing parameter migration.
-    if "smoothing" in train_args and "label_smoothing" in train_args:
-        train_args.pop("label_smoothing", None)
+    # Forward-compat shim: migrate legacy "smoothing" → "label_smoothing".
+    if "smoothing" in train_args:
+        train_args.setdefault("label_smoothing", train_args.pop("smoothing"))
 
     if phase_overrides:
         train_args.update(phase_overrides)
