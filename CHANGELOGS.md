@@ -324,3 +324,10 @@
 - **feat(uav_training/train)**: M-05 full_attempt_args.yaml kaydı; E-02/B-04 phase2 batch phase1'den alınıyor.
 - **feat(uav_training/train)**: M-06/E-05 audit raporu yoksa audit.py otomatik çalıştırılıyor.
 - **release**: Bumped module/script version from `0.8.21` to `0.8.22`.
+
+## 0.0.43 - 2026-02-25
+- **fix(uav_training/train)**: Ultralytics `compile` arg — only pass when version >= 8.3.196; avoids `SyntaxError: 'compile' is not a valid YOLO argument` on 8.3.0.
+- **chore(requirements)**: ultralytics pin updated from `8.3.0` to `>=8.3.196` for torch.compile support.
+- **feat(uav_training/config)**: Run name now versioned — `uav_v3_optimized_v{version}` from `__init__.py`; runs no longer overwrite across versions.
+- **feat(colab_bootstrap)**: Log filename now versioned — `log_v{VERSION}_%Y-%m-%d_%H-%M.txt` for easier log identification.
+- **release**: Bumped module/script version from `0.8.22` to `0.8.23`.

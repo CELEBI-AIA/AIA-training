@@ -490,7 +490,7 @@ if not os.path.isfile(train_script_path):
 # ── Prepare log file (Local SSD for max speed) ──
 log_dir = "/content/logs"
 os.makedirs(log_dir, exist_ok=True)
-log_name = datetime.now().strftime("log_%Y-%m-%d_%H-%M.txt")
+log_name = f"log_v{VERSION}_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.txt"
 log_path = os.path.join(log_dir, log_name)
 
 if FORCE_FRESH_START:

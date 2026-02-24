@@ -15,6 +15,19 @@ ARTIFACTS_DIR = PROJECT_ROOT / "artifacts" / "uav_model"
 ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _get_module_version() -> str:
+    """Read __version__ from uav_training/__init__.py without importing the package."""
+    vf = Path(__file__).resolve().parent / "__init__.py"
+    if vf.exists():
+        try:
+            for line in vf.read_text(encoding="utf-8").splitlines():
+                if "__version__" in line and "=" in line:
+                    return line.split("=", 1)[1].strip().strip("'\"")
+        except Exception:
+            pass
+    return "dev"
+
+
 def is_colab() -> bool:
     """Detect if running inside Google Colab."""
     return os.environ.get("COLAB_RELEASE_TAG") is not None or \
@@ -319,7 +332,7 @@ TRAIN_CONFIG = {
     "device": 0,
     "model": "yolo11m.pt",
     "project": Path(_project_dir),
-    "name": "uav_v3_optimized",
+    "name": f"uav_v3_optimized_v{_get_module_version()}",
     "workers": 8,
     "amp": True,
     "cache": "disk",
