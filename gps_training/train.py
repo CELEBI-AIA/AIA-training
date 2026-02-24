@@ -21,23 +21,31 @@ import argparse
 import sys
 import os
 import atexit
-import fcntl
+import platform
+if platform.system() == "Windows":
+    import msvcrt
+else:
+    import fcntl
 import random
 import numpy as np
-
-# ... imports ...
 
 
 def _acquire_file_lock(lock_path: Path) -> int:
     os.makedirs(lock_path.parent, exist_ok=True)
     fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
-    fcntl.flock(fd, fcntl.LOCK_EX)
+    if platform.system() == "Windows":
+        msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+    else:
+        fcntl.flock(fd, fcntl.LOCK_EX)
     return fd
 
 
 def _release_file_lock(fd: int, lock_path: Path) -> None:
     try:
-        fcntl.flock(fd, fcntl.LOCK_UN)
+        if platform.system() == "Windows":
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        else:
+            fcntl.flock(fd, fcntl.LOCK_UN)
     finally:
         os.close(fd)
     try:
@@ -76,10 +84,21 @@ def setup_seed(seed: int = 42, *, deterministic: bool = False) -> None:
 def _is_checkpoint_valid(ckpt_path: Path) -> bool:
     """Check if a PyTorch checkpoint is readable and not corrupt."""
     import torch
+    import gc
     if not ckpt_path.exists() or ckpt_path.stat().st_size < 1024 * 50:  # < 50KB is suspicious for ResNet
         return False
     try:
-        torch.load(ckpt_path, map_location='cpu')
+        torch.load(ckpt_path, map_location='cpu', weights_only=True)
+        return True
+    except TypeError:
+        pass
+    except Exception as e:
+        print(f"⚠️ Checkpoint {ckpt_path.name} is corrupt: {e}", flush=True)
+        return False
+    try:
+        data = torch.load(ckpt_path, map_location='cpu')
+        del data
+        gc.collect()
         return True
     except Exception as e:
         print(f"⚠️ Checkpoint {ckpt_path.name} is corrupt: {e}", flush=True)
@@ -206,25 +225,24 @@ def train(epochs=None, batch=None, device=None, resume=False):
         if 'epoch' in checkpoint:
             start_epoch = checkpoint['epoch'] + 1
             print(f"Resuming at epoch {start_epoch}")    
-    # Optional: compile (PyTorch 2.0)
     try:
-        model = torch.compile(model)
-        print("Model compiled with torch.compile!")
-    except:
-        pass
+        if sys.version_info < (3, 12):
+            model = torch.compile(model)
+            print("Model compiled with torch.compile!")
+    except Exception as e:
+        print(f"torch.compile skipped: {e}")
         
     optimizer = optim.AdamW(model.parameters(), lr=TRAIN_CONFIG["learning_rate"])
     max_lr = resolve_scheduler_max_lr(TRAIN_CONFIG)
+    remaining_epochs = TRAIN_CONFIG["epochs"] - start_epoch
     scheduler = optim.lr_scheduler.OneCycleLR(
         optimizer,
         max_lr=max_lr,
         steps_per_epoch=len(train_loader),
-        epochs=TRAIN_CONFIG["epochs"],
+        epochs=remaining_epochs,
     )
     criterion = nn.MSELoss()
 
-    # Load optimizer/scheduler state if resuming.
-    # Older checkpoints may not contain every key.
     if resume and checkpoint is not None:
         if "optimizer_state_dict" in checkpoint:
             try:
@@ -238,16 +256,30 @@ def train(epochs=None, batch=None, device=None, resume=False):
             try:
                 scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
             except Exception as e:
-                print(f"Warning: could not load scheduler state: {e}")
+                print(f"Warning: scheduler state incompatible (likely batch/epoch change), creating fresh OneCycleLR for remaining {remaining_epochs} epochs: {e}")
         else:
-            print("Warning: checkpoint missing scheduler_state_dict; continuing without it.")
+            print(f"Warning: checkpoint missing scheduler_state_dict; fresh OneCycleLR for remaining {remaining_epochs} epochs.")
 
     # Training Loop
     best_val_loss = float("inf")
     train_losses = []
     val_losses = []
     amp_enabled = bool(TRAIN_CONFIG.get("mixed_precision", True)) and device.type == "cuda"
-    
+
+    # Pre-Ampere GPUs (T4, V100) lack native BF16: use FP16 + GradScaler
+    use_grad_scaler = False
+    amp_dtype = torch.bfloat16
+    if amp_enabled and torch.cuda.is_available():
+        cc = torch.cuda.get_device_capability(0)
+        if cc[0] < 8:
+            amp_dtype = torch.float16
+            use_grad_scaler = True
+            print(f"[AMP] Pre-Ampere GPU (sm_{cc[0]}{cc[1]}): using FP16 + GradScaler", flush=True)
+        else:
+            print(f"[AMP] Ampere+ GPU (sm_{cc[0]}{cc[1]}): using BF16 (no scaler needed)", flush=True)
+
+    scaler = torch.amp.GradScaler(enabled=use_grad_scaler)
+
     for epoch in range(start_epoch, TRAIN_CONFIG["epochs"]):
         model.train()
         running_loss = 0.0
@@ -261,7 +293,7 @@ def train(epochs=None, batch=None, device=None, resume=False):
             optimizer.zero_grad(set_to_none=True)
             
             amp_ctx = (
-                torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp_enabled)
+                torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=amp_enabled)
                 if amp_enabled
                 else nullcontext()
             )
@@ -272,10 +304,12 @@ def train(epochs=None, batch=None, device=None, resume=False):
             if not torch.isfinite(loss):
                 raise RuntimeError(f"Non-finite loss detected: {loss.item()}")
 
-            loss.backward()
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             scheduler.step()
             
             running_loss += loss.item()
@@ -287,7 +321,7 @@ def train(epochs=None, batch=None, device=None, resume=False):
         model.eval()
         val_loss = 0.0
         val_amp_ctx = (
-            torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=amp_enabled)
+            torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=amp_enabled)
             if amp_enabled
             else nullcontext()
         )
@@ -337,12 +371,18 @@ def train(epochs=None, batch=None, device=None, resume=False):
                 tmp_ckpt_path.unlink()
 
 
-        # Checkpoint Best
+        # Checkpoint Best (atomic write: tmp → replace)
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            # Save raw weights for best to keep it simple for inference
-            torch.save(model.state_dict(), ARTIFACTS_DIR / "best_model.pt")
-            print("Saved Best Model")
+            best_tmp = (ARTIFACTS_DIR / "best_model.pt").with_suffix('.pt.tmp')
+            try:
+                torch.save(model.state_dict(), best_tmp)
+                os.replace(best_tmp, ARTIFACTS_DIR / "best_model.pt")
+                print("Saved Best Model")
+            except Exception as e:
+                print(f"CRITICAL: Failed to save best_model.pt atomically: {e}")
+                if best_tmp.exists():
+                    best_tmp.unlink()
             
     # Export ONNX
     print("Exporting ONNX...")

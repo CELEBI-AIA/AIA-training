@@ -34,7 +34,7 @@ if torch.cuda.is_available():
 
 
 # Version — keep in sync with uav_training/__init__.py
-__version__ = "0.8.8"
+__version__ = "0.8.11"
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -50,13 +50,28 @@ def kill_gpu_hogs():
 
 
 def _is_checkpoint_valid(ckpt_path: Path) -> bool:
-    """Check if a PyTorch checkpoint is readable and not corrupt."""
+    """Check if a PyTorch checkpoint is readable and not corrupt.
+
+    Uses weights_only=True to avoid loading full tensors into RAM.
+    Falls back to a header-only read if weights_only fails.
+    """
     import torch
+    import gc
     if not ckpt_path.exists() or ckpt_path.stat().st_size < 1024 * 1024:  # < 1MB is suspicious for YOLO
         return False
     try:
-        # Just map to CPU to test EOF/corruption without eating VRAM
-        torch.load(ckpt_path, map_location='cpu')
+        torch.load(ckpt_path, map_location='cpu', weights_only=True)
+        return True
+    except TypeError:
+        # Older PyTorch without weights_only support
+        pass
+    except Exception as e:
+        print(f"⚠️ Checkpoint {ckpt_path.name} is corrupt: {e}", flush=True)
+        return False
+    try:
+        data = torch.load(ckpt_path, map_location='cpu')
+        del data
+        gc.collect()
         return True
     except Exception as e:
         print(f"⚠️ Checkpoint {ckpt_path.name} is corrupt: {e}", flush=True)
@@ -199,7 +214,11 @@ _SYNC_LOCK = threading.Lock()
 _SYNC_IN_FLIGHT = False
 
 def _sync_to_drive(save_dir, run_name):
-    """Non-blocking Drive sync — checkpoint kaybını önler."""
+    """Non-blocking Drive sync — checkpoint kaybını önler.
+
+    Copies to a temp file first, then renames to avoid partially-written
+    checkpoints on the Drive side.
+    """
     try:
         target_dir = DRIVE_CP / run_name
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -207,31 +226,56 @@ def _sync_to_drive(save_dir, run_name):
             src = Path(save_dir) / f
             if src.exists():
                 dst = target_dir / Path(f).name
-                shutil.copy2(src, dst)
+                tmp = dst.with_suffix('.pt.tmp')
+                shutil.copy2(src, tmp)
+                tmp.replace(dst)
     except Exception as e:
         print(f"[DRIVE WARN] {e}", flush=True)
 
+_LAST_SYNC_EPOCH = -1
+
 def checkpoint_guard(trainer):
-    """Her 5 epoch'ta Drive'a async sync — GPU pipeline'ı bloklamaz."""
-    global _SYNC_IN_FLIGHT
-    if trainer.epoch > 0 and trainer.epoch % 5 == 0:
-        with _SYNC_LOCK:
-            if _SYNC_IN_FLIGHT:
-                return
-            _SYNC_IN_FLIGHT = True
+    """Drive sync every save_period epochs — GPU pipeline'ı bloklamaz."""
+    global _SYNC_IN_FLIGHT, _LAST_SYNC_EPOCH
+    save_period = int(TRAIN_CONFIG.get("save_period", 5))
+    epoch = trainer.epoch
 
-        def _sync_job():
-            global _SYNC_IN_FLIGHT
-            try:
-                _sync_to_drive(trainer.save_dir, trainer.save_dir.name)
-            finally:
-                with _SYNC_LOCK:
-                    _SYNC_IN_FLIGHT = False
+    # #region agent log
+    import json as _json, pathlib as _pl
+    _logf = _pl.Path("debug-4e729f.log")
+    with open(_logf, "a") as _lf:
+        _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-E","location":"train.py:checkpoint_guard","message":"callback fired","data":{"epoch":epoch,"save_period":save_period,"in_flight":_SYNC_IN_FLIGHT,"last_sync_epoch":_LAST_SYNC_EPOCH},"timestamp":int(time.time()*1000)}) + "\n")
+    # #endregion
 
-        threading.Thread(
-            target=_sync_job,
-            daemon=True
-        ).start()
+    if epoch <= 0 or epoch % save_period != 0:
+        return
+    with _SYNC_LOCK:
+        if _SYNC_IN_FLIGHT or epoch == _LAST_SYNC_EPOCH:
+            # #region agent log
+            with open(_logf, "a") as _lf:
+                _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-F","location":"train.py:checkpoint_guard:skip","message":"sync skipped","data":{"epoch":epoch,"in_flight":_SYNC_IN_FLIGHT,"last_sync_epoch":_LAST_SYNC_EPOCH},"timestamp":int(time.time()*1000)}) + "\n")
+            # #endregion
+            return
+        _SYNC_IN_FLIGHT = True
+        _LAST_SYNC_EPOCH = epoch
+
+    # #region agent log
+    with open(_logf, "a") as _lf:
+        _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-E","location":"train.py:checkpoint_guard:dispatch","message":"sync dispatched","data":{"epoch":epoch},"timestamp":int(time.time()*1000)}) + "\n")
+    # #endregion
+
+    def _sync_job():
+        global _SYNC_IN_FLIGHT
+        try:
+            _sync_to_drive(trainer.save_dir, trainer.save_dir.name)
+        finally:
+            with _SYNC_LOCK:
+                _SYNC_IN_FLIGHT = False
+
+    threading.Thread(
+        target=_sync_job,
+        daemon=True
+    ).start()
 
 def _sync_results_to_drive(results_dir: Path, run_name: str):
     """Final sync from local SSD runs to Drive."""
@@ -315,6 +359,17 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
     for attempt in range(1, max_attempts + 1):
         print(f"\n🔁 Training attempt {attempt}/{max_attempts}", flush=True)
         print_training_config(attempt_args)
+
+        # #region agent log
+        import json as _json, pathlib as _pl
+        _logf = _pl.Path("debug-4e729f.log")
+        _vram_data = {}
+        if torch.cuda.is_available():
+            _vram_data = {"allocated_mb": round(torch.cuda.memory_allocated(0)/1e6,1), "reserved_mb": round(torch.cuda.memory_reserved(0)/1e6,1), "max_allocated_mb": round(torch.cuda.max_memory_allocated(0)/1e6,1)}
+        with open(_logf, "a") as _lf:
+            _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-D","location":"train.py:pre_train_attempt","message":"VRAM before YOLO.train","data":{"attempt":attempt,"batch":attempt_args.get("batch"),"imgsz":attempt_args.get("imgsz"),"compile":attempt_args.get("compile"),"vram":_vram_data},"timestamp":int(time.time()*1000)}) + "\n")
+        # #endregion
+
         model = YOLO(model_path)
         model.add_callback("on_fit_epoch_end", checkpoint_guard)
         try:
@@ -322,6 +377,15 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
             break
         except RuntimeError as exc:
             last_exc = exc
+
+            # #region agent log
+            _oom_vram = {}
+            if torch.cuda.is_available():
+                _oom_vram = {"allocated_mb": round(torch.cuda.memory_allocated(0)/1e6,1), "reserved_mb": round(torch.cuda.memory_reserved(0)/1e6,1), "max_allocated_mb": round(torch.cuda.max_memory_allocated(0)/1e6,1)}
+            with open(_logf, "a") as _lf:
+                _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-D" if _is_cuda_oom_error(exc) else "H-B","location":"train.py:train_exception","message":"training exception","data":{"attempt":attempt,"is_oom":_is_cuda_oom_error(exc),"error":str(exc)[:200],"vram":_oom_vram},"timestamp":int(time.time()*1000)}) + "\n")
+            # #endregion
+
             if not _is_cuda_oom_error(exc) or attempt == max_attempts:
                 raise
 
@@ -461,6 +525,16 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
     if resume:
         latest_ckpt = None
 
+        # #region agent log
+        import json as _json, pathlib as _pl
+        _logf = _pl.Path("debug-4e729f.log")
+        _mem_before = {}
+        if torch.cuda.is_available():
+            _mem_before = {"allocated_mb": round(torch.cuda.memory_allocated(0)/1e6,1), "reserved_mb": round(torch.cuda.memory_reserved(0)/1e6,1)}
+        with open(_logf, "a") as _lf:
+            _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-A","location":"train.py:resume_start","message":"memory before checkpoint validation","data":{"vram":_mem_before},"timestamp":int(time.time()*1000)}) + "\n")
+        # #endregion
+
         # 1) CLI --model takes priority (bootstrap passes Drive checkpoint here)
         if model_path and Path(str(model_path)).exists() and _is_checkpoint_valid(Path(str(model_path))):
             latest_ckpt = Path(str(model_path))
@@ -489,6 +563,14 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                         if _is_checkpoint_valid(candidate):
                             latest_ckpt = candidate
                             print(f"[RESUME] source=drive checkpoint={latest_ckpt}", flush=True)
+
+        # #region agent log
+        _mem_after = {}
+        if torch.cuda.is_available():
+            _mem_after = {"allocated_mb": round(torch.cuda.memory_allocated(0)/1e6,1), "reserved_mb": round(torch.cuda.memory_reserved(0)/1e6,1)}
+        with open(_logf, "a") as _lf:
+            _lf.write(_json.dumps({"sessionId":"4e729f","hypothesisId":"H-A","location":"train.py:resume_end","message":"memory after checkpoint validation","data":{"vram":_mem_after,"found": latest_ckpt is not None},"timestamp":int(time.time()*1000)}) + "\n")
+        # #endregion
 
         if latest_ckpt is None:
             print("❌ No valid 'last.pt' found in CLI path, local runs, or Drive. Aborting resume.", flush=True)

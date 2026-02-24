@@ -160,6 +160,29 @@
 - **fix(uav_training/train)**: Removed `label_smoothing` from `optional_params` forwarding list and deleted the stale `smoothing` -> `label_smoothing` migration shim.
 - **release**: Bumped module/script version from `0.8.7` to `0.8.8`.
 
+## 0.0.29 - 2026-02-24
+- **docs(root)**: Created `statik_denetim_raporu.md` — comprehensive Turkish static audit report covering both UAV and GPS training pipelines with 14 findings across 7 categories.
+- **release**: Bumped module/script version from `0.8.8` to `0.8.9`.
+
+## 0.0.29 - 2026-02-24
+- **fix(gps_training/train)**: Replaced unconditional `import fcntl` with platform-aware import (`msvcrt` on Windows, `fcntl` on POSIX). Also updated `_acquire_file_lock` / `_release_file_lock` to use `msvcrt.locking` on Windows, fixing `ModuleNotFoundError` crash.
+- **fix(gps_training/train)**: Fixed `OneCycleLR` resume incompatibility — scheduler now uses `epochs=remaining_epochs` instead of total epochs, so LR profile stays correct after resume even if batch size or data changed.
+- **fix(gps_training/train)**: Added `GradScaler` for pre-Ampere GPUs (T4, V100). Auto-detects GPU capability: BF16 on Ampere+, FP16 + GradScaler on older hardware. Prevents silent gradient underflow/divergence.
+- **fix(gps_training/train)**: Applied atomic write pattern (tmp + `os.replace`) to `best_model.pt` — same as `last_model.pt` — to prevent half-written files on crash.
+- **fix(gps_training/train)**: Replaced bare `except` in `torch.compile` with `except Exception` and gated behind `sys.version_info < (3, 12)` to avoid swallowing meaningful errors and Dynamo incompatibility.
+- **fix(gps_training/train)**: `_is_checkpoint_valid` now uses `weights_only=True` to avoid loading full tensors into RAM, with `gc.collect()` fallback for older PyTorch.
+- **fix(uav_training/train)**: `_is_checkpoint_valid` now uses `weights_only=True` + explicit `gc.collect()` to reduce transient memory pressure during resume search (up to 3 checkpoint loads).
+- **fix(uav_training/config)**: Aligned `TARGET_CLASSES` mapping with `build_dataset.py` / `dataset.yaml` output (0=vehicle, 1=human, 2=uap, 3=uai). Previous mapping was inverted and would cause wrong class assignments in any code referencing `TARGET_CLASSES`.
+- **feat(gps_training/dataset)**: Added Siamese-aware data augmentation (horizontal flip with delta negation, color jitter, Gaussian blur) applied consistently to both frames during training. Reduces overfitting risk.
+- **fix(uav_training/train)**: Hardened `checkpoint_guard` with `_LAST_SYNC_EPOCH` dedup guard to prevent duplicate sync dispatches within the same epoch. Drive sync now uses atomic write (tmp + replace) to avoid partially-written checkpoint files.
+- **feat(.github/workflows/lint.yml)**: CI now installs full dependencies and runs `pytest tests/` alongside existing flake8 and compileall checks.
+- **release**: Bumped module/script version from `0.8.9` to `0.8.10`.
+
+## 0.0.29 - 2026-02-24
+- **docs(uav_training/build_dataset)**: Added inline comments to MAPPINGS explaining UAI-/UAP- semantics (unsuitable landing areas) and why they are merged with their suitable counterparts.
+- **docs(documentation/datasets.md)**: Created dataset reference documenting all 4 source datasets, their original class names, UAI-/UAP- meanings, and the unified 4-class target mapping.
+- **release**: Bumped module/script version from `0.8.10` to `0.8.11`.
+
 ## 0.0.28 - 2026-02-24
 - **perf(uav_training/config)**: Reduced A100-40GB batch from 32 to 28 at 1024px to provide ~6GB VRAM headroom for TaskAlignedAssigner dynamic allocations, eliminating repeated OOM CPU fallbacks.
 - **perf(uav_training/train)**: Added `max_split_size_mb:512` to `PYTORCH_CUDA_ALLOC_CONF` to reduce VRAM fragmentation.

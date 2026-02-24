@@ -29,18 +29,19 @@ else:
 
 AUDIT_REPORT = ARTIFACTS_DIR / "audit_report.json"
 
-# Filter criteria for datasets
+# Canonical class mapping — matches build_dataset.py / dataset.yaml output.
+# 0=vehicle, 1=human, 2=uap, 3=uai
 TARGET_CLASSES = {
-    "uap": 0,
-    "uai": 1,
-    "human": 2,
-    "person": 2,
-    "insan": 2,
-    "vehicle": 3,
-    "car": 3,
-    "tasit": 3,
-    "arac": 3,
-    "araba": 3
+    "vehicle": 0,
+    "car": 0,
+    "tasit": 0,
+    "arac": 0,
+    "araba": 0,
+    "human": 1,
+    "person": 1,
+    "insan": 1,
+    "uap": 2,
+    "uai": 3,
 }
 
 # ── Colab Auto Hardware Detection ────────────────────────────────────────────

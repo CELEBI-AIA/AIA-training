@@ -7,6 +7,7 @@ import json
 import os
 import atexit
 import logging
+import random
 from collections import OrderedDict
 from pathlib import Path
 from config import DATASETS_ROOT, TRAIN_CONFIG, is_colab
@@ -22,6 +23,7 @@ else:
 class GPSDataset(Dataset):
     def __init__(self, audit_report_path, split="train", val_split=0.1):
         self.img_size = TRAIN_CONFIG["img_size"]
+        self.split = split
         self.samples = []
         self._video_caps = {}
         self._frame_cache = OrderedDict()
@@ -211,6 +213,33 @@ class GPSDataset(Dataset):
             # Return blank to avoid crashing training? No, dataset should define valid data.
             raise FileNotFoundError(f"Frame {frame_idx} not found in {media_path}. Checked variants.")
 
+    def _augment_pair(self, img1, img2, delta):
+        """Apply identical augmentations to both Siamese frames.
+
+        Only active during training. Geometric transforms that flip the
+        spatial axis also negate the corresponding translation delta.
+        """
+        # Horizontal flip (50%)
+        if random.random() < 0.5:
+            img1 = cv2.flip(img1, 1)
+            img2 = cv2.flip(img2, 1)
+            delta[0] = -delta[0]  # negate translation_x
+
+        # Color jitter (brightness / contrast) — same params for both
+        if random.random() < 0.5:
+            alpha = random.uniform(0.8, 1.2)  # contrast
+            beta = random.uniform(-20, 20)     # brightness
+            img1 = np.clip(img1.astype(np.float32) * alpha + beta, 0, 255).astype(np.uint8)
+            img2 = np.clip(img2.astype(np.float32) * alpha + beta, 0, 255).astype(np.uint8)
+
+        # Gaussian blur (30%)
+        if random.random() < 0.3:
+            ksize = random.choice([3, 5])
+            img1 = cv2.GaussianBlur(img1, (ksize, ksize), 0)
+            img2 = cv2.GaussianBlur(img2, (ksize, ksize), 0)
+
+        return img1, img2, delta
+
     def __getitem__(self, idx):
         sample = self.samples[idx]
         
@@ -229,6 +258,12 @@ class GPSDataset(Dataset):
             # Resize
             img1 = cv2.resize(img1, self.img_size)
             img2 = cv2.resize(img2, self.img_size)
+
+            delta = sample["delta"].copy()
+
+            # Augmentation (train only)
+            if self.split == "train":
+                img1, img2, delta = self._augment_pair(img1, img2, delta)
             
             # BGR to RGB (Keep as uint8 to save RAM/PCI-e bandwidth)
             img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
@@ -238,7 +273,7 @@ class GPSDataset(Dataset):
             img1 = torch.from_numpy(img1).permute(2, 0, 1)
             img2 = torch.from_numpy(img2).permute(2, 0, 1)
             
-            delta = torch.from_numpy(sample["delta"]).float()
+            delta = torch.from_numpy(delta).float()
             
             return img1, img2, delta
             

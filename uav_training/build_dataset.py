@@ -32,6 +32,12 @@ from config import PROJECT_ROOT, DATASET_DIR, ARTIFACTS_DIR, TRAIN_CONFIG
 # Updated MAPPINGS for "TRAIN" folder
 MAPPINGS = {
     # 1. Uap-UaiAlanlariVeriSeti.v2i.yolov8 (Existed before, confirmed in TRAIN)
+    # nc: 6, names: ['UAI', 'UAI-', 'UAP', 'UAP-', 'car', 'people']
+    # UAI  = iniş yapmaya uygun UAI alanı (suitable landing area)
+    # UAI- = iniş yapmaya uygun OLMAYAN UAI alanı (unsuitable landing area)
+    # UAP  = iniş yapmaya uygun UAP alanı (suitable landing area)
+    # UAP- = iniş yapmaya uygun OLMAYAN UAP alanı (unsuitable landing area)
+    # Both suitable/unsuitable variants are merged into the same target class.
     "Uap-UaiAlanlariVeriSeti.v2i.yolov8": {
         "source_names": ['UAI', 'UAI-', 'UAP', 'UAP-', 'car', 'people'],
         "map": {
@@ -74,7 +80,12 @@ MAPPINGS = {
     },
     
     # 5. Uap-UaiAlanlariVeriSeti (Confirmed via data.yaml)
-    # names: ['UAI', 'UAI-', 'UAP', 'UAP-', 'car', 'people']
+    # nc: 6, names: ['UAI', 'UAI-', 'UAP', 'UAP-', 'car', 'people']
+    # UAI  = iniş yapmaya uygun UAI alanı (suitable landing area)
+    # UAI- = iniş yapmaya uygun OLMAYAN UAI alanı (unsuitable landing area)
+    # UAP  = iniş yapmaya uygun UAP alanı (suitable landing area)
+    # UAP- = iniş yapmaya uygun OLMAYAN UAP alanı (unsuitable landing area)
+    # Both suitable/unsuitable variants are merged into the same target class.
     "Uap-UaiAlanlariVeriSeti": {
         "source_names": ['UAI', 'UAI-', 'UAP', 'UAP-', 'car', 'people'],
         "map": {
