@@ -238,3 +238,6 @@
 
 ## 0.0.34 - 2026-02-24
 - **fix(uav_training/train)**: Resume path now auto-triggers `build_dataset()` when `dataset.yaml` is missing, preventing hard-fail (`Error: Dataset config not found at /content/dataset_built/dataset.yaml`) after Colab runtime resets.
+
+## 0.0.35 - 2026-02-24
+- **perf(scripts/colab_bootstrap)**: Added fast-path dataset readiness check (`/content/datasets_local/dataset.yaml` + file count) to skip extraction tooling, Drive→SSD copy, and tar extraction when local SSD dataset is already prepared in the current runtime.
