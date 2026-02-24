@@ -120,3 +120,9 @@
 - **perf(scripts/colab_bootstrap)**: Increased periodic Drive sync interval from 180s to 300s to reduce I/O contention during training.
 - **perf(uav_training/config)**: Raised A100-tier DataLoader worker cap from 8 to 10 for better GPU feed stability.
 - **chore(deps)**: Added upper bounds in `requirements.txt` (`ultralytics<9.0.0`, `torch<3.0.0`, `torchvision<1.0.0`) for better reproducibility against upstream breaking changes.
+
+## 0.0.22 - 2026-02-24
+- **log(uav_training/precision)**: Strengthened startup precision proof in `uav_training/train.py` with a single `[PRECISION]` line that now includes `gpu_capability`, `bf16_patch`, and `amp_dtype` (plus TF32/compile state) for deterministic BF16 observability.
+- **perf(scripts/colab_bootstrap)**: Added optional quiet-window control via `UAV_SYNC_QUIET_WINDOW_SEC` in periodic checkpoint sync flow so recent `last.pt` writes can settle before rsync.
+- **log(scripts/colab_bootstrap)**: Periodic sync log now includes checkpoint `mtime` and still syncs only when newest `last.pt` changes, improving I/O jitter diagnostics.
+- **fix(uav_training/inference)**: Updated default model in `uav_training/inference.py` from `yolov8n.pt` to `yolo11m.pt` to avoid operational model-selection confusion.

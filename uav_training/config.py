@@ -149,12 +149,14 @@ def auto_detect_hardware() -> tuple:
         batch = 4
 
     # ── CPU Worker & Thread Configuration ──
-    # DO NOT restrict DataLoader workers with OMP. Just limit torch inter-ops.
-    torch.set_num_threads(1)
-    torch.set_num_interop_threads(1)
-    os.environ["OMP_NUM_THREADS"] = "2"
-    os.environ["OPENBLAS_NUM_THREADS"] = "2"
-    os.environ["MKL_NUM_THREADS"] = "1"
+    # Keep thread limits conservative but not overly restrictive.
+    torch_threads = max(1, min(4, cpus // 2))
+    interop_threads = 1 if cpus <= 4 else 2
+    torch.set_num_threads(torch_threads)
+    torch.set_num_interop_threads(interop_threads)
+    os.environ["OMP_NUM_THREADS"] = str(max(2, min(6, cpus // 2)))
+    os.environ["OPENBLAS_NUM_THREADS"] = str(max(2, min(6, cpus // 2)))
+    os.environ["MKL_NUM_THREADS"] = str(max(1, min(2, cpus // 4)))
 
     workers = min(cpus, 10) if vram >= 35 else min(cpus, 8)
 
@@ -176,6 +178,8 @@ def auto_detect_hardware() -> tuple:
     # AdamW uses ~1/10 of SGD lr; nbs=batch disables Ultralytics internal scaling
     adamw_lr0 = 0.001
     warmup_epochs = 5.0
+
+    compile_mode = "reduce-overhead" if vram >= 35 else False
 
     config_overrides = {
         "epochs": 65,            # 50 + 15 two-phase profile
@@ -219,7 +223,7 @@ def auto_detect_hardware() -> tuple:
         "nbs": batch,            # disable Ultralytics internal LR scaling
         "warmup_epochs": warmup_epochs,
         "weight_decay": 0.0005,
-        "label_smoothing": 0.05,
+        "smoothing": 0.05,
         "box": 7.5,
         "cls": 0.7,
         "dfl": 1.5,
@@ -228,7 +232,7 @@ def auto_detect_hardware() -> tuple:
         "rect": False,
         "multi_scale": multi_scale,
         "deterministic": False,
-        "compile": True,
+        "compile": compile_mode,
         "save_period": 5,
     }
 
@@ -246,6 +250,7 @@ def auto_detect_hardware() -> tuple:
     print(f"  ImgSz      : {imgsz}")
     print(f"  Batch      : {batch}  (explicit, ~85-90% VRAM)")
     print(f"  Workers    : {workers}")
+    print(f"  Threads    : torch={torch_threads}, interop={interop_threads}")
     print(f"  Cache      : {cache}")
     print(f"  Multi-Scale: {multi_scale}")
     print(f"  Epochs     : 65 (phase1=50, phase2=15)")
@@ -305,7 +310,7 @@ TRAIN_CONFIG = {
     "nbs": 4,                 # match batch to disable internal LR scaling
     "warmup_epochs": 5.0,
     "weight_decay": 0.0005,
-    "label_smoothing": 0.05,
+    "smoothing": 0.05,
     "box": 7.5,
     "cls": 0.7,
     "dfl": 1.5,
@@ -314,7 +319,7 @@ TRAIN_CONFIG = {
     "rect": False,
     "multi_scale": False,
     "deterministic": False,
-    "compile": True,
+    "compile": False,
     "save_period": 5,
 }
 

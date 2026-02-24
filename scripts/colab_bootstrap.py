@@ -511,15 +511,41 @@ def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):
         print(f"  ⚠️  Periodic sync disabled (Drive runs path unavailable): {DRIVE_RUNS}", flush=True)
         return
 
+    last_synced_ckpt_mtime = None
+    quiet_window_sec = max(0, int(os.environ.get("UAV_SYNC_QUIET_WINDOW_SEC", "0")))
+    warned_no_ckpt = False
     while not stop_event.wait(interval_sec):
-        if os.path.isdir(runs_dir):
-            _run(f'rsync -a "{runs_dir}/" "{DRIVE_RUNS}/"', check=False, print_output=False)
-            now = datetime.now().strftime("%H:%M:%S")
-            print(f"\n  ☁️  [{now}] Periodic checkpoint sync completed", flush=True)
+        if not os.path.isdir(runs_dir):
+            continue
+
+        ckpt_candidates = glob.glob(os.path.join(runs_dir, "**", "weights", "last.pt"), recursive=True)
+        if not ckpt_candidates:
+            if not warned_no_ckpt:
+                print("  ℹ️  Periodic sync waiting for first checkpoint...", flush=True)
+                warned_no_ckpt = True
+            continue
+
+        warned_no_ckpt = False
+        latest_ckpt = max(ckpt_candidates, key=os.path.getmtime)
+        latest_mtime = os.path.getmtime(latest_ckpt)
+        if last_synced_ckpt_mtime is not None and latest_mtime <= last_synced_ckpt_mtime:
+            continue
+        if quiet_window_sec > 0 and (time.time() - latest_mtime) < quiet_window_sec:
+            continue
+
+        _run(f'rsync -a "{runs_dir}/" "{DRIVE_RUNS}/"', check=False, print_output=False)
+        last_synced_ckpt_mtime = latest_mtime
+        now = datetime.now().strftime("%H:%M:%S")
+        print(
+            f"\n  ☁️  [{now}] Periodic checkpoint sync completed "
+            f"({os.path.basename(latest_ckpt)} mtime={int(latest_mtime)})",
+            flush=True,
+        )
 
 
 _sync_stop = threading.Event()
-_sync_thread = threading.Thread(target=_periodic_runs_sync, args=(_sync_stop,), daemon=True)
+sync_interval = int(os.environ.get("UAV_SYNC_INTERVAL_SEC", "300"))
+_sync_thread = threading.Thread(target=_periodic_runs_sync, args=(_sync_stop, sync_interval), daemon=True)
 _sync_thread.start()
 
 with open(log_path, 'wb') as lf:

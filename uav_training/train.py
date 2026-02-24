@@ -243,6 +243,28 @@ def _is_cuda_oom_error(exc: Exception) -> bool:
     return "out of memory" in msg and ("cuda" in msg or "cublas" in msg or "cudnn" in msg)
 
 
+def _log_precision_policy() -> None:
+    """Emit a single precision policy line for run-to-run verification."""
+    bf16_patch = os.environ.get("FORCE_BF16_PATCH", "0") == "1"
+    amp_dtype = TRAIN_CONFIG.get("amp_dtype", "auto")
+    compile_mode = TRAIN_CONFIG.get("compile", False)
+    gpu_capability = "cpu"
+    bf16_hw = False
+    if torch.cuda.is_available():
+        cc = torch.cuda.get_device_capability(0)
+        gpu_capability = f"sm_{cc[0]}{cc[1]}"
+        bf16_hw = bool(getattr(torch.cuda, "is_bf16_supported", lambda: False)())
+    print(
+        "[PRECISION] "
+        f"gpu_capability={gpu_capability} "
+        f"tf32_matmul={torch.backends.cuda.matmul.allow_tf32} "
+        f"tf32_cudnn={torch.backends.cudnn.allow_tf32} "
+        f"bf16_hw={bf16_hw} bf16_patch={bf16_patch} amp_dtype={amp_dtype} "
+        f"compile={compile_mode}",
+        flush=True,
+    )
+
+
 def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=None, resume=False, phase_overrides=None):
     """Run one YOLO training phase and return summary metrics."""
     yaml_path = DATASET_DIR / "dataset.yaml"
@@ -271,13 +293,17 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         "optimizer", "momentum", "nbs",
         "patience", "cos_lr", "overlap_mask", "mosaic", "rect", "multi_scale",
         "close_mosaic", "deterministic", "save_period", "compile",
-        "lr0", "lrf", "warmup_epochs", "weight_decay", "label_smoothing",
+        "lr0", "lrf", "warmup_epochs", "weight_decay", "smoothing", "label_smoothing",
         "scale", "copy_paste", "copy_paste_mode", "flipud", "bgr",
         "box", "cls", "dfl",
     ]
     for p in optional_params:
         if p in TRAIN_CONFIG:
             train_args[p] = TRAIN_CONFIG[p]
+
+    # Forward-compat shim for Ultralytics smoothing parameter migration.
+    if "smoothing" in train_args and "label_smoothing" in train_args:
+        train_args.pop("label_smoothing", None)
 
     if phase_overrides:
         train_args.update(phase_overrides)
@@ -436,7 +462,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
         # 1) CLI --model takes priority (bootstrap passes Drive checkpoint here)
         if model_path and Path(str(model_path)).exists() and _is_checkpoint_valid(Path(str(model_path))):
             latest_ckpt = Path(str(model_path))
-            print(f"Resuming from CLI-provided checkpoint: {latest_ckpt}", flush=True)
+            print(f"[RESUME] source=cli checkpoint={latest_ckpt}", flush=True)
 
         # 2) Search local project directory
         if latest_ckpt is None:
@@ -447,7 +473,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                     candidate = max(checkpoints, key=lambda p: p.stat().st_mtime)
                     if _is_checkpoint_valid(candidate):
                         latest_ckpt = candidate
-                        print(f"Resuming from local checkpoint: {latest_ckpt}", flush=True)
+                        print(f"[RESUME] source=local checkpoint={latest_ckpt}", flush=True)
 
         # 3) Fallback: search Drive runs directory
         if latest_ckpt is None:
@@ -460,7 +486,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                         candidate = max(checkpoints, key=lambda p: p.stat().st_mtime)
                         if _is_checkpoint_valid(candidate):
                             latest_ckpt = candidate
-                            print(f"Resuming from Drive checkpoint: {latest_ckpt}", flush=True)
+                            print(f"[RESUME] source=drive checkpoint={latest_ckpt}", flush=True)
 
         if latest_ckpt is None:
             print("❌ No valid 'last.pt' found in CLI path, local runs, or Drive. Aborting resume.", flush=True)
@@ -468,6 +494,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
 
         model_path = latest_ckpt
     else:
+        print("[RESUME] mode=fresh", flush=True)
         print(f"🚀 Starting training: {model_path} on UAV dataset", flush=True)
 
     print(f"  Epochs: {epochs}  |  Batch: {batch}  |  Device: {device}", flush=True)
@@ -486,6 +513,8 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
             )
     except Exception:
         pass
+
+    _log_precision_policy()
 
     try:
         if not two_phase:

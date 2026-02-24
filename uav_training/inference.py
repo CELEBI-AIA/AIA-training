@@ -45,7 +45,7 @@ def smoke_infer(model_path, source=str(DATASET_DIR / "val" / "images"), num_imag
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="yolov8n.pt", help="Path to model file")
+    parser.add_argument("--model", type=str, default="yolo11m.pt", help="Path to model file")
     parser.add_argument("--source", type=str, default=str(DATASETS_ROOT / "TEST_DATA"), help="Source directory")
     parser.add_argument("--num", type=int, default=5, help="Number of images to test")
     
