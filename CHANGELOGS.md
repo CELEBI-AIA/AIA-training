@@ -154,6 +154,12 @@
 - **log(uav_training/precision)**: Added BF16 hardware support verification and TF32 status to `auto_detect_hardware()` output in `uav_training/config.py`; cleaned up `amp_dtype` reference in `_log_precision_policy()` in `uav_training/train.py`.
 - **release**: Bumped module/script version from `0.8.5` to `0.8.6`.
 
+## 0.0.29 - 2026-02-24
+- **fix(uav_training/config)**: Raised RAM cache threshold from 60GB to 100GB so A100 Colab (83.5GB RAM) correctly falls back to `cache="disk"` instead of silently skipping all caching; Ultralytics 1.5x safety margin made RAM caching impossible at 78.5GB available.
+- **fix(uav_training/config)**: Removed deprecated `label_smoothing` from `config_overrides` and `TRAIN_CONFIG` dicts.
+- **fix(uav_training/train)**: Removed `label_smoothing` from `optional_params` forwarding list and deleted the stale `smoothing` -> `label_smoothing` migration shim.
+- **release**: Bumped module/script version from `0.8.7` to `0.8.8`.
+
 ## 0.0.28 - 2026-02-24
 - **perf(uav_training/config)**: Reduced A100-40GB batch from 32 to 28 at 1024px to provide ~6GB VRAM headroom for TaskAlignedAssigner dynamic allocations, eliminating repeated OOM CPU fallbacks.
 - **perf(uav_training/train)**: Added `max_split_size_mb:512` to `PYTORCH_CUDA_ALLOC_CONF` to reduce VRAM fragmentation.
