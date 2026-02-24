@@ -261,3 +261,7 @@
 - **feat(gps_training/train)**: Training config is now persisted to `train_config.json` in artifacts directory at startup for post-hoc experiment comparison (MO-06).
 - **perf(scripts/colab_bootstrap)**: Added fast-path dataset readiness check (`/content/datasets_local/dataset.yaml` + file count) to skip extraction tooling, Drive→SSD copy, and tar extraction when local SSD dataset is already prepared in the current runtime.
 - **release**: Bumped module/script version from `0.8.14` to `0.8.15`.
+
+## 0.0.36 - 2026-02-24
+- **docs(statik_denetim_raporu)**: Güncellenmiş statik kod denetim raporu; önceki denetimde tespit edilen kritik risklerin giderildiği, kalan orta/yüksek risklerin ve genel sağlık skorunun (7.5/10) belgelenmesi.
+- **release**: Bumped module/script version from `0.8.15` to `0.8.16`.
