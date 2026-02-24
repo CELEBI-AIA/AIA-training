@@ -220,3 +220,18 @@
 - **fix(scripts/colab_bootstrap)**: Disabled periodic runs sync by default (`UAV_SYNC_INTERVAL_SEC=0`) so minute-level "Periodic checkpoint sync completed" log spam stops unless explicitly re-enabled.
 - **fix(uav_training/config)**: Changed `save_period` default from `5` to `1` for epoch-by-epoch checkpoint sync.
 - **fix(uav_training/train)**: Updated `checkpoint_guard` to 1-based epoch indexing and removed extra debug-file writes to reduce I/O overhead during training.
+
+## 0.0.32 - 2026-02-24
+- **docs(statik_denetim_raporu)**: Added comprehensive static code audit report covering both UAV and GPS training pipelines with 7 mandatory sections: findings summary, critical risks, performance evaluation, training stability analysis, MLOps maturity assessment, uncertainties, and health score (6.7/10).
+- **release**: Bumped module/script version from `0.8.12` to `0.8.13`.
+
+## 0.0.33 - 2026-02-24
+- **docs(README)**: Fixed version references `v0.8.6` → `v0.8.13` in title and repo structure.
+- **docs(README)**: Corrected A100 batch size `32` → `28` to match actual `config.py` value.
+- **docs(README)**: Fixed cache thresholds from `>60GB: ram` to `>100GB: ram, >20GB: disk` per current `auto_detect_hardware()`.
+- **docs(README)**: Updated save period from `Her 5 epoch` to `Her 1 epoch` to reflect `save_period=1` change.
+- **docs(README)**: Corrected megaset smart sampling vehicle keep rate from `10%` to `30%` per `DEFAULT_CLASS_KEEP_PROB`.
+- **docs(README)**: Fixed thread limiting description to match dynamic OMP/OpenBLAS/MKL values in `config.py`.
+- **docs(README)**: Added Python `<3.12` gate to `torch.compile` description.
+- **docs(README)**: Added missing `tests/`, `documentation/`, `CHANGELOGS.md` to repository structure.
+- **docs(README)**: Added ImgSz column to Auto Hardware Detection table.

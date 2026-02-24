@@ -1,4 +1,4 @@
-# 🛩️ UAV Training Pipeline — v0.8.6
+# 🛩️ UAV Training Pipeline — v0.8.13
 
 YOLO11m tabanlı İHA (UAV) tespit ve GPS tabanlı konum takibi eğitim altyapısı.
 Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücre ile çalışır.
@@ -11,7 +11,7 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 .
 ├── uav_training/              # YOLO object detection module
 │   ├── config.py              # Auto hardware detection & hyperparameters
-│   ├── train.py               # Training entrypoint (v0.8.6)
+│   ├── train.py               # Training entrypoint (v0.8.13)
 │   ├── build_dataset.py       # Dataset unification, smart sampling & dedup
 │   ├── audit.py               # Dataset audit & validation
 │   ├── inference.py           # Smoke test inference
@@ -31,9 +31,13 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 ├── notebooks/
 │   └── train_colab.ipynb      # Open in Colab notebook
 │
+├── tests/                     # Unit tests (audit, build, config, scheduler)
+├── documentation/             # System check prompts & dataset docs
+│
 ├── requirements.txt
+├── CHANGELOGS.md              # Version history
 ├── LICENSE
-└── .github/workflows/         # CI (lint)
+└── .github/workflows/         # CI (lint, compile, pytest)
 ```
 
 ---
@@ -108,21 +112,21 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 | Optimizations | `optimizer=AdamW`, `lr0=0.001`, `close_mosaic=5` |
 | Augmentations | `scale=0.4`, `copy_paste=0.3`, `flipud=0.5` |
 | AMP (BF16)    | ✅ Enabled (`amp=True`, Ampere+ GPU'da Ultralytics otomatik BF16 seçer) |
-| torch.compile | ✅ A100/H100 için `reduce-overhead`, düşük tier GPU'da kapalı |
-| Cache         | Dinamik (RAM >60GB: `ram`, >20GB: `disk`, diğer: off) |
+| torch.compile | ✅ VRAM ≥35GB **ve** Python <3.12 için `reduce-overhead`, diğer durumlarda kapalı |
+| Cache         | Dinamik (available RAM >100GB: `ram`, >20GB: `disk`, diğer: off) |
 | Deterministic | ❌ Off (Hızlı CUDA kernels)                 |
-| Save Period   | Her 5 epoch checkpoint (Colab güvenliği)   |
+| Save Period   | Her 1 epoch checkpoint + Drive sync         |
 | Label Filter  | `min_bbox_norm=0.004` ile filtrelenir       |
 
 ### Auto Hardware Detection (Colab)
 
-| GPU Tier   | Batch | VRAM Usage |
-|------------|-------|------------|
-| H100 80GB  | 64    | ~85-90%    |
-| A100 40GB  | 32    | ~85-90%    |
-| L4 24GB    | 32    | ~70-80%    |
-| T4 16GB    | 16    | ~75%       |
-| 8GB GPU    | 8     | ~80%       |
+| GPU Tier   | Batch | ImgSz | VRAM Usage |
+|------------|-------|-------|------------|
+| H100 80GB  | 64    | 1024  | ~85-90%    |
+| A100 40GB  | 28    | 1024  | ~85-90%    |
+| L4 24GB    | 32    | 640   | ~70-80%    |
+| T4 16GB    | 16    | 640   | ~75%       |
+| 8GB GPU    | 8     | 640   | ~80%       |
 
 ### Dataset (30,625 train / 12,217 val)
 
@@ -131,7 +135,7 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 | Uap-UaiAlanlariVeriSeti.v2i      | 3x         | —            |
 | Uap-UaiAlanlariVeriSeti          | 3x         | —            |
 | drone-vision-project             | 3x         | —            |
-| megaset (24k images)             | 2x         | ✅ 100% human, 10% vehicle |
+| megaset (24k images)             | 2x         | ✅ 100% human, 30% vehicle |
 
 ---
 
@@ -181,7 +185,7 @@ Siamese network (ResNet-18) ile ardışık frame'lerden Δ(x, y, z) konum tahmin
 
 - **Local SSD Training** — Drive FUSE bypass, tüm I/O NVMe SSD'de
 - **torch.compile** — %20-40 hız artışı (ilk epoch derleme süresi hariç)
-- **Thread Limiting** — OMP/OpenBLAS/MKL = 1 thread (DataLoader contention önleme)
+- **Thread Limiting** — OMP/OpenBLAS = cpus//2 (max 6), MKL = cpus//4 (max 2), torch threads = cpus//2 (max 4)
 - **No Redundant Validation** — model.train() sonucu kullanılır, ekstra model.val() yok
 - **Download Progress** — Python I/O loop ile gerçek zamanlı %, MB/s, ETA
 - **Disk Management** — Otomatik cleanup, tar.gz hemen silinir

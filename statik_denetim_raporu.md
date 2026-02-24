@@ -1,359 +1,467 @@
 # ML Eğitim Hattı — Statik Kod Denetim Raporu
 
 **Tarih:** 2026-02-24  
-**Kapsam:** UAV (YOLO11m) + GPS (ResNet-18 Siamese) eğitim modülleri  
-**Yöntem:** Tüm kaynak dosyalar satır satır statik olarak incelendi; runtime çalıştırılmadı.
+**Denetçi Rolü:** Kıdemli MLOps Mühendisi & Derin Öğrenme Kod Denetçisi  
+**Kapsam:** UAV YOLO11m Nesne Tespiti + GPS Siamese Tracker Görsel Odometri  
+**Yöntem:** Tamamen statik inceleme ve mantıksal çıkarım (kod çalıştırılmamıştır)
 
 ---
 
 ## 1. Özet Bulgular
 
-| #  | Modül | Önem       | Kategori          | Kısa Açıklama                                                    | Dosya & Satır                          |
-|----|-------|------------|-------------------|------------------------------------------------------------------|----------------------------------------|
-| 1  | GPS   | **Kritik** | Platform          | `import fcntl` üst düzey — Windows'ta `ModuleNotFoundError`      | `gps_training/train.py:24`             |
-| 2  | GPS   | **Kritik** | Eğitim            | `OneCycleLR` resume uyumsuzluğu — scheduler toplam adım hatası   | `gps_training/train.py:218-223`        |
-| 3  | GPS   | **Kritik** | Eğitim            | `GradScaler` eksik — FP16 modda (pre-Ampere) gradyan taşması     | `gps_training/train.py:264-275`        |
-| 4  | GPS   | **Kritik** | Veri Güvenliği    | `best_model.pt` atomik yazma yok — yarım dosya riski             | `gps_training/train.py:344`            |
-| 5  | UAV   | **Yüksek** | Bellek/Performans | `_is_checkpoint_valid` her çağrıda tüm modeli CPU'ya yüklüyor    | `uav_training/train.py:52-63`          |
-| 6  | UAV   | **Yüksek** | Veri Tutarlığı    | `TARGET_CLASSES` sınıf indeksleri MAPPINGS ile tutarsız           | `uav_training/config.py:33-44`         |
-| 7  | GPS   | **Yüksek** | Performans        | Video frame seek `CAP_PROP_POS_FRAMES` — rastgele erişimde yavaş | `gps_training/dataset.py:138`          |
-| 8  | GPS   | **Yüksek** | Eğitim            | Veri augmentasyonu yok (sadece resize) — overfitting riski        | `gps_training/dataset.py:230-231`      |
-| 9  | UAV   | **Orta**   | Thread Safety     | Drive sync sırasında checkpoint dosyası eş zamanlı yazılabilir    | `uav_training/train.py:201-234`        |
-| 10 | GPS   | **Orta**   | Eğitim            | `torch.compile` bare `except` ile — hata yutulur                 | `gps_training/train.py:211-214`        |
-| 11 | Deps  | **Orta**   | MLOps             | `requirements.txt` üst sınır yok — major versiyon kırılma riski  | `requirements.txt`                     |
-| 12 | CI    | **Orta**   | MLOps             | CI yalnız flake8 sözdizimi — unit test çalıştırmıyor             | `.github/workflows/lint.yml`           |
-| 13 | GPS   | **Düşük**  | Veri              | Çok az sequence ile time-split (90/10) — genelleme riski          | `gps_training/dataset.py:60-66`        |
-| 14 | UAV   | **Düşük**  | Performans        | Oversampling `shutil.copy2` fiziksel kopya (fallback durumunda)   | `uav_training/build_dataset.py:334-335`|
+Bu rapor, iki ayrı ML eğitim hattını (UAV nesne tespiti ve GPS görsel odometri) kapsayan ~3.500+ satır Python kodunun statik denetimini içermektedir.
+
+| Kategori | Kritik | Yüksek | Orta | Düşük |
+|---|---|---|---|---|
+| Mantık ve Veri Güvenliği | 2 | 3 | 2 | 1 |
+| Performans ve Kaynak Kullanımı | 1 | 3 | 3 | 1 |
+| Eğitim Dinamikleri | 1 | 2 | 3 | 1 |
+| Stabilite ve MLOps | 0 | 3 | 3 | 2 |
+| Ortam ve Session Riskleri | 1 | 2 | 2 | 1 |
+| **Toplam** | **5** | **13** | **13** | **6** |
+
+**Genel Değerlendirme:** Kod tabanı, üretim seviyesine yakın bir olgunlukta olup OOM recovery (UAV), atomik checkpoint yazımı, çoklu GPU tier desteği ve Colab-local SSD optimizasyonu gibi güçlü mühendislik pratiklerini barındırmaktadır. Ancak GPS eğitim hattında yapısal eksiklikler (early stopping, OOM recovery, scheduler konfigürasyonu) bulunmaktadır. Bağımlılık yönetimi ve debug kod artıkları acil müdahale gerektirmektedir.
 
 ---
 
 ## 2. Kritik Riskler
 
-### 2.1 GPS: `fcntl` Windows Uyumsuzluğu
+### KR-01: `collate_drop_none` ile `__getitem__` Tutarsızlığı (GPS)
 
-**Dosya:** `gps_training/train.py:24`  
-**Durum:** `import fcntl` satırı modül düzeyinde koşulsuz olarak çağrılıyor. `fcntl` yalnızca POSIX sistemlerde (Linux/macOS) mevcuttur; Windows'ta `ModuleNotFoundError` ile anında çöker.
+**Dosya:** `gps_training/train.py` (satır 161-167) ve `gps_training/dataset.py` (satır 280-287)
 
-**Karşılaştırma:** `uav_training/build_dataset.py:11-14` aynı problemi doğru şekilde çözmüş:
+`collate_drop_none` fonksiyonu, batch içindeki `None` değerleri filtreleyerek bozuk örneklerin eğitimi çökertmesini engellemeye tasarlanmıştır. Ancak `GPSDataset.__getitem__` metodu hiçbir zaman `None` döndürmemektedir; hata durumlarında `RuntimeError` fırlatmaktadır. Bu tutarsızlık, `collate_drop_none`'ın None-filtreleme mantığını tamamen ölü kod haline getirmektedir.
 
-```python
-import platform
-if platform.system() == "Windows":
-    import msvcrt
-else:
-    import fcntl
-```
+**Risk:** Tek bir bozuk video frame'i veya eksik dosya tüm eğitim sürecini çökertebilir. Collate fonksiyonunun sağladığı dayanıklılık katmanı fiilen devre dışıdır.
 
-**Etki:** GPS modülü Windows ortamında hiçbir koşulda çalışamaz. Dosya kilitleme fonksiyonları (`_acquire_file_lock`, `_release_file_lock`) da yalnızca `fcntl` API'si kullanıyor.
-
-**Öneri:** `build_dataset.py` ile aynı platform-aware pattern uygulanmalı; `_acquire_file_lock` / `_release_file_lock` fonksiyonları Windows dalı (`msvcrt.locking`) ile genişletilmeli.
+**Etki:** Kritik — Eğitim sırasında veri bütünlüğü hatası durumunda kurtarma mekanizması çalışmaz.
 
 ---
 
-### 2.2 GPS: `OneCycleLR` Resume Uyumsuzluğu
+### KR-02: OneCycleLR Scheduler Resume Uyumsuzluğu (GPS)
 
-**Dosya:** `gps_training/train.py:218-223`
+**Dosya:** `gps_training/train.py` (satır 229-253)
 
-```python
-scheduler = optim.lr_scheduler.OneCycleLR(
-    optimizer,
-    max_lr=max_lr,
-    steps_per_epoch=len(train_loader),
-    epochs=TRAIN_CONFIG["epochs"],       # Toplam epoch sayısı
-)
-```
+Resume senaryosunda scheduler `remaining_epochs` parametresi ile yeni bir `OneCycleLR` oluşturulmakta, ardından eski checkpoint'taki `scheduler_state_dict` yüklenmeye çalışılmaktadır. OneCycleLR'ın total_steps'i oluşturulma anında sabitlediği için, farklı `remaining_epochs` değeri ile oluşturulan yeni scheduler'a eski state'in yüklenmesi şu sonuçlara yol açabilir:
 
-`OneCycleLR` oluşturulurken `epochs` parametresi yapılandırmadaki toplam epoch sayısını (100) alıyor. Resume durumunda `start_epoch > 0` olmasına rağmen scheduler hâlâ 100 epoch'luk bir toplam adım sayısıyla başlatılıyor. Ardından satır 239'da `scheduler.load_state_dict()` ile eski state yükleniyor.
+- LR eğrisinin kayması veya aniden sıfıra düşmesi
+- `total_steps` uyumsuzluğundan dolayı scheduler'ın patlaması (step > total_steps)
 
-**Problem senaryoları:**
-- `train_loader` uzunluğu değişirse (farklı batch size veya veri seti boyutu), `total_steps` uyuşmaz ve scheduler patlar ya da LR profili bozulur.
-- State dict yükleme başarısız olursa (uyarı verilip devam ediliyor, satır 241-243), scheduler sıfırdan başlar ama epoch döngüsü `start_epoch`'tan devam eder — LR warmup fazı atlanır, pik LR yanlış epoch'a denk gelir.
+Hata durumunda fallback mesajı yazdırılmakta ancak scheduler yeniden oluşturulmamakta, mevcut (hatalı) scheduler ile devam edilmektedir.
 
-**Öneri:** Resume durumunda scheduler'ı `epochs=TRAIN_CONFIG["epochs"] - start_epoch` veya `last_epoch=start_epoch * steps_per_epoch` ile oluşturmak ya da daha sağlam bir scheduler (CosineAnnealingWarmRestarts gibi) kullanmak.
+**Etki:** Kritik — Resume sonrası eğitim dinamikleri öngörülemez hale gelebilir, sessiz performans degradasyonuna yol açar.
 
 ---
 
-### 2.3 GPS: `GradScaler` Eksikliği
+### KR-03: `max_lr` Konfigürasyon Eksikliği (GPS)
 
-**Dosya:** `gps_training/train.py:264-275`
+**Dosya:** `gps_training/config.py` (satır 85-96) ve `gps_training/train.py` (satır 99-107)
 
-```python
-with amp_ctx:                    # BF16 autocast
-    output = model(img1, img2)
-    loss = criterion(output, target)
+`TRAIN_CONFIG` sözlüğünde `max_lr` anahtarı tanımlanmamıştır. `resolve_scheduler_max_lr` fonksiyonu bu durumda `learning_rate` değerine (1e-4) fallback yapmaktadır. Sonuç olarak `OneCycleLR`'ın `max_lr` ve `base_lr` değerleri eşit olmaktadır. Bu, OneCycleLR'ın temel özelliği olan "düşük LR → yüksek LR → düşük LR" döngüsünü tamamen etkisiz kılmaktadır; scheduler fiilen sabit LR gibi davranmaktadır.
 
-loss.backward()                  # GradScaler yok!
-```
-
-AMP konteksti `dtype=torch.bfloat16` ile sabit kodlanmış. Ampere+ (sm_80+) GPU'larda BF16'nın geniş üs aralığı sayesinde GradScaler'a ihtiyaç duyulmaz — burası sorunsuz. Ancak pre-Ampere donanımda (T4, V100) BF16 donanım desteği yoktur ve PyTorch sessizce FP16'ya düşer. FP16'nın dar üs aralığı nedeniyle küçük gradyanlar sıfıra yuvarlanır (underflow); GradScaler olmadan eğitim diverge edebilir veya öğrenme durabilir.
-
-**Etki:** T4 (Colab ücretsiz tier) üzerinde GPS eğitimi sessizce başarısız olabilir — loss düşmez veya NaN çıkar.
-
-**Öneri:**
-1. GPU capability kontrolü ekleyip pre-Ampere'de `GradScaler` kullanmak, veya
-2. Pre-Ampere'de `dtype=torch.float16` ile açıkça FP16 + GradScaler kullanmak.
+**Etki:** Kritik — OneCycleLR'ın tüm avantajları (super-convergence, otomatik warmup) kaybedilmektedir.
 
 ---
 
-### 2.4 GPS: `best_model.pt` Atomik Olmayan Yazma
+### KR-04: `dataset.yaml` Oluşturmada `nc` Anahtarı Eksik, Standart Dışı `values` Anahtarı
 
-**Dosya:** `gps_training/train.py:344`
+**Dosya:** `uav_training/build_dataset.py` (satır 457-468)
 
-```python
-torch.save(model.state_dict(), ARTIFACTS_DIR / "best_model.pt")
-```
+Oluşturulan `dataset.yaml` dosyasında YOLO standardı olan `nc` (number of classes) anahtarı bulunmamakta, yerine standart dışı `values` anahtarı kullanılmaktadır. Ultralytics kütüphanesi `nc` değerini `names` sözlüğünden çıkarım yapabilmektedir; ancak bu davranış Ultralytics versiyonuna bağlıdır ve garanti değildir. `values` anahtarı Ultralytics tarafından tanınmaz ve sessizce görmezden gelinir.
 
-`last_model.pt` için satır 323-337'de doğru bir atomik yazma paterni uygulanmış (`.pt.tmp` → `os.replace()`). Ancak `best_model.pt` için bu pattern kullanılmamış — doğrudan hedef dosyaya yazılıyor.
+**Etki:** Yüksek — Ultralytics major versiyon güncellemesinde sınıf sayısı yanlış çıkarılabilir, eğitim sessizce hatalı çalışabilir.
 
-**Etki:** Colab runtime bağlantı kopması veya SIGKILL sırasında `best_model.pt` yarım yazılabilir. En iyi model kaybedilir ve kurtarılamaz.
+---
 
-**Öneri:** `last_model.pt` ile aynı `tmp + os.replace` pattern'ini `best_model.pt` için de uygulamak.
+### KR-05: Bağımlılık Versiyonlarında Üst Sınır Eksikliği
+
+**Dosya:** `requirements.txt`
+
+Kritik bağımlılıkların hiçbirinde üst sınır belirtilmemiştir:
+
+- `ultralytics>=8.2.0` — Ultralytics API'si sık değişmektedir (train argümanları, callback yapısı)
+- `torch>=2.0.0` — PyTorch 3.x breaking change'leri olası
+- `torchvision>=0.15.0` — ResNet18 weights API değişikliği olası
+- `numpy>=1.24.0` — NumPy 2.0 birçok deprecated API'yi kaldırmıştır
+
+Ayrıca `tqdm`, `pyyaml`, `opencv-python-headless`, `pandas`, `matplotlib`, `psutil` ve `pytest` paketlerinde hiçbir versiyon kısıtlaması yoktur.
+
+**Etki:** Kritik — `pip install` ile ortam oluşturulduğunda gelecek versiyonlar mevcut kodu kırabilir. Tekrarlanabilirlik ciddi risk altındadır.
 
 ---
 
 ## 3. Performans Değerlendirmesi
 
-### 3.1 GPU Kullanımı
+### PD-01: GPS Frame Cache Bellek Çarpanı
 
-| Özellik                    | UAV Modülü                        | GPS Modülü                        |
-|---------------------------|-----------------------------------|-----------------------------------|
-| Mixed Precision (AMP)     | Ultralytics native AMP (BF16/FP16)| Manuel `torch.autocast` (BF16)    |
-| TF32                      | Etkin (`allow_tf32 = True`)       | Etkin (`allow_tf32 = True`)       |
-| cuDNN Benchmark           | Ultralytics yönetiyor             | `benchmark = True`                |
-| `torch.compile`           | Koşullu (Ampere+ & Python <3.12)  | Koşulsuz, bare `except` ile       |
-| GradScaler                | Ultralytics yönetiyor             | **Yok** (2.3'te detaylandırıldı)  |
-| VRAM Fragmentation Guard  | `expandable_segments:True`        | Yok                               |
+**Dosya:** `gps_training/dataset.py` (satır 29-30, 120-125)
 
-**UAV modülü** GPU kullanımında olgun: katmanlı OOM fallback (compile kapatma → batch yarılama → imgsz düşürme → batch tekrar yarılama), explicit batch sizing ile ~85-90% VRAM doluluğu, `kill_gpu_hogs()` ile agresif bellek temizliği.
+Her `GPSDataset` nesnesi 256 frame kapasiteli bir LRU cache tutmaktadır. DataLoader `num_workers=8` ile çalıştığında, her worker kendi sürecinde ayrı bir dataset kopyası oluşturur. Bu durumda bellekte 8 × 256 = 2.048 frame önbelleklenmektedir.
 
-**GPS modülü** daha yalın: tek batch size, OOM recovery yok, VRAM fragmentation koruması yok. Ancak ResNet-18 küçük bir model olduğundan pratikte OOM riski düşük.
+256×256 RGB frame başına ~192 KB olmak üzere, toplam cache bellek kullanımı ~393 MB civarındadır. Daha büyük frame boyutları veya yüksek worker sayıları ile bu değer hızla artabilir.
 
-### 3.2 I/O Darboğazları
+**Risk Seviyesi:** Yüksek — RAM kısıtlı ortamlarda (T4 Colab, 12 GB RAM) OOM tetikleyebilir.
 
-**GPS Video Frame Okuma** (`gps_training/dataset.py:138`):
+---
 
-```python
-cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_idx))
-ret, frame = cap.read()
-```
+### PD-02: GPS Eğitiminde OOM Recovery Mekanizması Yok
 
-`CAP_PROP_POS_FRAMES` ile rastgele seek, özellikle H.264/H.265 kodlanmış videolarda keyframe'e kadar geri sarıp tüm ara frame'leri decode etmek zorundadır. DataLoader `shuffle=True` ile çalıştığında rastgele frame erişimi çok yavaşlar.
+**Dosya:** `gps_training/train.py` (satır 275-378)
 
-**Azaltıcı faktörler:** LRU frame cache (`_frame_cache_size=256`) ve ardışık frame çiftleri için tek seek optimizasyonu (`_read_video_pair` satır 164-172) mevcut. Ancak shuffle modda cache hit oranı düşük kalır.
+UAV eğitim hattı 4 aşamalı bir OOM recovery mekanizmasına sahiptir (compile kapatma → batch düşürme → imgsz düşürme → batch daha da düşürme). GPS eğitim hattında böyle bir mekanizma bulunmamaktadır. CUDA OOM hatası direkt olarak eğitimi sonlandırır.
 
-**Öneri:** Eğitim öncesi tüm frame'leri diske webp/jpg olarak çıkarıp image loader kullanmak; veya LMDB/HDF5 gibi rastgele erişime uygun format tercih etmek.
+**Risk Seviyesi:** Yüksek — Büyük batch (H100'de 256) ile eğitim sırasında video decoder + model + gradyan bellek kullanımı öngörülemeyen spike'lar yapabilir.
 
-**UAV Dataset Build** (`uav_training/build_dataset.py:332-335`):
+---
 
-```python
-try:
-    os.link(img_path, target_img_path)   # Hard link (hızlı, disk tasarrufu)
-except OSError:
-    shutil.copy2(img_path, target_img_path)  # Fallback: fiziksel kopya
-```
+### PD-03: Validation DataLoader Eksik Optimizasyonlar (GPS)
 
-İlk tercih hard link (sıfır disk kullanımı, anlık). `OSError` yalnızca cross-device durumunda düşer (Colab'da Drive → SSD arası). Oversampling `copy_suffix` ile yapıldığından aynı dosyanın birden fazla kopyası oluşabilir, ancak bu Colab SSD'de kabul edilebilir bir trade-off.
+**Dosya:** `gps_training/train.py` (satır 183-190)
 
-### 3.3 Bellek
+`val_loader` oluşturulurken `persistent_workers` parametresi ayarlanmamıştır (varsayılan `False`). Bu, her epoch'ta validation aşamasında worker süreçlerinin yeniden oluşturulmasına neden olur. 100 epoch için bu, 100 kez worker fork/spawn overhead'i demektir.
 
-**UAV `_is_checkpoint_valid`** (`uav_training/train.py:52-63`):
+Ayrıca `prefetch_factor` da `val_loader`'da ayarlanmamıştır (`train_loader`'da 4 olarak ayarlıdır).
 
-```python
-torch.load(ckpt_path, map_location='cpu')
-return True
-```
+**Risk Seviyesi:** Orta — Her epoch'ta validasyon başlangıcında 2-5 saniyelik gecikme, 100 epoch'ta toplam 3-8 dakika kayıp.
 
-Checkpoint geçerliliğini kontrol etmek için tüm model CPU belleğine yükleniyor (~50-100 MB per call). Yüklenen tensörler `try` bloğu sonunda scope'tan düşer ama GC'ye bağımlıdır — peş peşe çağrılarda geçici bellek şişmesi olabilir. Resume arama döngüsünde (satır 461-491) 3 ayrı aday için 3 kez tam yükleme yapılabilir.
+---
 
-**Öneri:** `torch.load` yerine dosya boyutu + magic bytes kontrolü ya da `torch.load(..., weights_only=True)` ile yalnızca tensör meta verisini yüklemek yeterli olabilir.
+### PD-04: GPU'da Gereksiz Normalizasyon İşlemi (GPS)
+
+**Dosya:** `gps_training/train.py` (satır 281-282)
+
+Görüntü normalizasyonu (`/ 255.0`) dataset tarafında (CPU'da, `__getitem__` içinde) değil, eğitim döngüsü içinde GPU'da yapılmaktadır. Bu, her batch için GPU'nun trivial bir bölme işlemi yapmasına neden olur. Dataset tarafında `uint8` olarak taşıyıp GPU'da normalize etmek PCI-e bant genişliğini optimize etmek için bilinçli bir tercih olabilir; ancak bu durumda `pin_memory=True` ile birlikte `uint8` tensor'ların GPU'ya non-blocking transfer edilmesi beklenir — ki bu zaten yapılmaktadır.
+
+**Risk Seviyesi:** Düşük — Performans etkisi minimal, ancak mimari tutarsızlık mevcut.
+
+---
+
+### PD-05: ONNX Export Eski Opset Versiyonu
+
+**Dosya:** `gps_training/train.py` (satır 392)
+
+ONNX export `opset_version=11` ile yapılmaktadır. Opset 11, 2019 standardıdır. Modern ONNX Runtime optimizasyonları (operator fusion, attention pattern recognition) opset 17+ gerektirmektedir.
+
+**Risk Seviyesi:** Orta — Inference performansı optimal olmayabilir, bazı modern operatörler desteklenmeyebilir.
+
+---
+
+### PD-06: Her Epoch Checkpoint + Drive Sync I/O Yükü (UAV)
+
+**Dosya:** `uav_training/config.py` (satır 245) ve `uav_training/train.py` (satır 229-253)
+
+`save_period=1` ayarı her epoch'ta checkpoint kaydı tetiklemektedir. YOLO checkpoint'ları ~80-100 MB boyutundadır. 65 epoch'luk eğitim boyunca:
+
+- 65 × ~90 MB = ~5.8 GB disk yazımı (yerel)
+- Her epoch'ta Drive sync thread'i başlatılır (Colab'da)
+- Google Drive FUSE üzerinden yazım işlemi GPU pipeline'ını dolaylı yoldan bloklamasa da disk I/O bant genişliğini tüketir
+
+Drive sync non-blocking thread ile yapılmaktadır (iyi tasarım), ancak sıklığı yüksektir.
+
+**Risk Seviyesi:** Orta — Özellikle disk-kısıtlı ortamlarda I/O darboğazı oluşturabilir.
+
+---
+
+### PD-07: `torch.compile` Koşulsuz Uygulanması (GPS)
+
+**Dosya:** `gps_training/train.py` (satır 220-225)
+
+`torch.compile` Python < 3.12 koşuluyla koşulsuz olarak uygulanmaktadır. SiameseTracker oldukça küçük bir modeldir (ResNet-18 backbone + 3 katmanlı MLP). `torch.compile`'ın ilk çalışma overhead'i (30-120 saniye) küçük modellerde amortize edilemeyebilir. Ayrıca derleme hataları `except` ile yakalanıp sessizce geçilmektedir.
+
+**Risk Seviyesi:** Orta — İlk epoch'ta beklenmedik uzun süre, debug zorluğu.
+
+---
+
+### PD-08: Debug Log Artıkları (UAV)
+
+**Dosya:** `uav_training/train.py` (satır 338-346, 356-362, 503-511, 542-548)
+
+Kodda 4 adet `#region agent log` bloğu bulunmaktadır. Bu bloklar her eğitim denemesinde `debug-4e729f.log` dosyasına JSON satırları yazmaktadır. Her blok `json.dumps` + dosya açma/yazma/kapatma işlemi gerçekleştirmektedir.
+
+Bu debug blokları üretim kodunda bırakılmıştır ve:
+
+- Her eğitim denemesinde gereksiz I/O üretmektedir
+- `_logf = _pl.Path("debug-4e729f.log")` göreceli yol kullanması, çalışma dizinine bağlı olarak farklı yerlere yazılmasına neden olabilir
+- Kod okunabilirliğini düşürmektedir
+
+**Risk Seviyesi:** Yüksek — Üretim kodu kirliliği, I/O overhead, bakım zorluğu.
 
 ---
 
 ## 4. Eğitim Stabilitesi Analizi
 
-### 4.1 UAV Modülü
+### ES-01: GPS Eğitiminde Early Stopping Mekanizması Yok
 
-| Parametre         | Değer                  | Değerlendirme                                           |
-|-------------------|------------------------|---------------------------------------------------------|
-| Optimizer         | AdamW                  | Doğru tercih; weight decay decoupled                    |
-| LR (lr0)          | 0.001                  | AdamW için standart                                     |
-| LR Schedule       | Cosine (`cos_lr=True`) | İyi; son epoch'larda LR yumuşak azalma                  |
-| LR Final (lrf)    | 0.01                   | lr0'ın %1'i (1e-5) — kabul edilir minimum               |
-| Warmup            | 5 epoch                | Yeterli; büyük batch'lerde kararlı başlangıç            |
-| NBS               | batch ile eşit         | Ultralytics iç LR ölçeklemesi devre dışı — doğru        |
-| Weight Decay      | 0.0005                 | Standart                                                |
-| Gradient Clipping | Ultralytics yönetiyor  | Varsayılan `max_norm=10.0`                              |
-| Augmentation      | Zengin                 | mosaic, copy_paste, flipud/lr, HSV, scale, bgr          |
-| Two-Phase         | 50+15 epoch            | Phase 2: düşük LR, düşük mosaic, yüksek imgsz — iyi    |
-| Early Stopping    | `patience=30`          | 65 epoch toplam ile orantılı                            |
+**Dosya:** `gps_training/train.py` (satır 275-378)
 
-**Değerlendirme:** UAV eğitim stabilitesi yüksek. İki fazlı profil, güçlü augmentasyon pipeline'ı ve katmanlı OOM recovery mekanizması ile endüstriyel seviyeye yakın.
+UAV eğitim hattı `patience=30` ile early stopping kullanmaktadır (Ultralytics yerleşik). GPS eğitim hattında ise hiçbir early stopping mekanizması bulunmamaktadır. Eğitim, konfigürasyonda belirtilen 100 epoch boyunca koşulsuz olarak devam eder.
 
-### 4.2 GPS Modülü
+`best_val_loss` takip edilmekte ve en iyi model kaydedilmektedir; ancak bu bilgi eğitimi durdurmak için kullanılmamaktadır.
 
-| Parametre         | Değer                  | Değerlendirme                                           |
-|-------------------|------------------------|---------------------------------------------------------|
-| Optimizer         | AdamW                  | Doğru                                                   |
-| LR               | 1e-4                   | ResNet-18 fine-tune için uygun                          |
-| LR Schedule       | OneCycleLR             | Resume ile uyumsuz (bkz. 2.2)                          |
-| Warmup            | OneCycleLR iç warmup   | ~%30 epoch; kabul edilir                                |
-| Gradient Clipping | `max_norm=1.0`         | Var ve doğru uygulanmış                                 |
-| NaN Guard         | `torch.isfinite(loss)` | Var — diverge algılama mevcut (satır 272)               |
-| Loss              | MSELoss                | Regresyon için standart; ancak outlier'lara hassas       |
-| Augmentation      | **Yok**                | Sadece `cv2.resize` — ciddi overfitting riski           |
-| Early Stopping    | **Yok**                | 100 epoch boyunca çalışır, overfit kontrolü yok         |
+**Risk:** Overfitting — Validation loss yükselmeye başladıktan sonra onlarca epoch daha gereksiz eğitime devam edilebilir, GPU kaynağı israf edilir.
 
-**Değerlendirme:** GPS eğitim stabilitesi düşük-orta. NaN guard ve gradient clipping pozitif; ancak augmentasyon eksikliği, early stopping yokluğu ve scheduler resume sorunu ciddi riskler oluşturuyor.
+---
 
-**Augmentasyon önerileri:** Rastgele yatay çevirme, renk jitter (brightness, contrast), Gaussian blur, hafif rotasyon (±5°). Siamese ağ için her iki frame'e aynı augmentasyon uygulanmalı.
+### ES-02: GPS Model Regressor Başlığında Normalizasyon Katmanı Eksik
+
+**Dosya:** `gps_training/model.py` (satır 16-23)
+
+Regressor başlığı `Linear → ReLU → Dropout → Linear → ReLU → Linear` yapısındadır. Araya hiçbir BatchNorm veya LayerNorm katmanı eklenmemiştir.
+
+ResNet-18 backbone'u kendi BatchNorm katmanlarına sahip olduğundan, backbone çıktıları normalize edilmiştir. Ancak iki backbone çıktısının concatenation'ı sonrası (1024 boyutlu vektör) regressor girişinde dağılım kayması olabilir. Bu, öğrenme oranı hassasiyetini artırır ve gradyan stabilitesini düşürür.
+
+**Risk:** Orta — Eğitim başlangıcında yavaş yakınsama veya LR hassasiyeti.
+
+---
+
+### ES-03: UAV `torch.cuda.manual_seed()` CUDA Kontrolü Olmadan
+
+**Dosya:** `uav_training/train.py` (satır 431-432)
+
+`setup_seed` fonksiyonunda `torch.cuda.manual_seed(seed)` ve `torch.cuda.manual_seed_all(seed)` çağrıları CUDA kullanılabilirlik kontrolü olmadan yapılmaktadır. GPU olmayan bir ortamda (CPU-only) bu çağrılar hata fırlatmaz (PyTorch bunu sessizce yönetir), ancak GPS modülündeki aynı fonksiyon `if torch.cuda.is_available()` kontrolü yapmaktadır. İki modül arasındaki bu tutarsızlık, kod bakımını zorlaştırmaktadır.
+
+**Risk:** Düşük — Fonksiyonel hata yok, ancak kod tutarsızlığı mevcut.
+
+---
+
+### ES-04: İki Fazlı Eğitimde Optimizer Sürekliliği Kesilmesi (UAV)
+
+**Dosya:** `uav_training/train.py` (satır 630-638)
+
+İki fazlı eğitimde faz 2, faz 1'in `best.pt` ağırlıklarıyla `resume=False` olarak başlatılmaktadır. Bu, optimizer momentum'unun, scheduler state'inin ve tüm eğitim geçmişinin sıfırlanması anlamına gelir. Fine-tuning bağlamında bu kabul edilebilir bir stratejidir; ancak faz 2'nin 15 epoch'luk kısa süresi göz önüne alındığında, yeni bir warmup (5 epoch) bu sürenin 1/3'ünü tüketecektir.
+
+Faz 2 batch boyutu da `max(1, batch // 2)` olarak yarıya indirilmektedir ki bu daha yüksek çözünürlük (896px) ile tutarlıdır.
+
+**Risk:** Orta — Faz 2 warmup oranı toplam süreye göre orantısız yüksek olabilir.
+
+---
+
+### ES-05: Gradient Clipping Stratejisi Farklılığı
+
+GPS eğitim hattında `torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)` ile açık gradyan kırpma uygulanmaktadır. UAV eğitim hattı ise Ultralytics'in dahili gradyan yönetimini kullanmaktadır.
+
+GPS tarafında bu önlem mevcuttur ve non-finite loss kontrolü ile birlikte iyi bir savunma katmanı oluşturmaktadır. Ancak `max_norm=1.0` değerinin SiameseTracker mimarisi için uygunluğu deneysel olarak doğrulanmalıdır.
+
+**Risk:** Düşük — Gradyan kırpma mevcut, uygunluğu koşullu.
+
+---
+
+### ES-06: Augmentation Split Uygulaması
+
+GPS eğitim hattında augmentation yalnızca `self.split == "train"` koşuluyla uygulanmaktadır — bu doğrudur. Horizontal flip uygulandığında `delta[0]` (translation_x) doğru şekilde negatifine çevrilmektedir — bu, Siamese mimarisi için kritik ve doğru bir uygulamadır.
+
+UAV eğitim hattında augmentation Ultralytics tarafından yönetilmektedir ve yalnızca eğitim split'ine uygulanmaktadır.
+
+Her iki hatta da augmentation doğru split'te uygulanmaktadır. Bu alanda risk tespit edilmemiştir.
+
+---
+
+### ES-07: Loss Fonksiyonu Güvenliği
+
+GPS eğitiminde `MSELoss` kullanılmakta ve her batch sonrası `torch.isfinite(loss)` kontrolü yapılarak non-finite loss durumunda `RuntimeError` fırlatılmaktadır. Bu iyi bir pratiktir.
+
+Ancak NaN/Inf kontrolü yalnızca loss değerinde yapılmaktadır. Model çıktısının (output) NaN olup olmadığı kontrol edilmemektedir. AMP (mixed precision) ile özellikle FP16 kullanıldığında, model çıktısında NaN oluşabilir ve loss hesabına kadar fark edilmeyebilir.
+
+UAV eğitim hattında loss güvenliği tamamen Ultralytics'e devredilmiştir.
+
+**Risk:** Orta — NaN propagation model çıktısından loss'a kadar gecikebilir.
 
 ---
 
 ## 5. MLOps Olgunluk Değerlendirmesi
 
-### 5.1 Checkpoint Yönetimi
+### MO-01: Experiment Tracking Eksikliği
 
-| Özellik                    | UAV                                | GPS                               |
-|---------------------------|------------------------------------|------------------------------------|
-| Auto-save periyodu        | Her 5 epoch (`save_period=5`)      | Her epoch                          |
-| Atomik yazma              | Ultralytics kendi yönetiyor        | `last_model.pt` atomik, `best_model.pt` **değil** |
-| Backup rotasyonu          | Drive sync (async thread)          | `last_model.bak` — 1 nesil        |
-| Resume desteği            | CLI + lokal + Drive arama zinciri  | Lokal + backup fallback            |
-| Checkpoint validasyonu    | `_is_checkpoint_valid` (boyut + load) | `_is_checkpoint_valid` (boyut + load) |
-| Corrupt recovery          | Zincirli fallback (CLI → lokal → Drive) | Backup fallback                |
+Her iki eğitim hattında da W&B, MLflow, ClearML veya benzeri bir deney takip sistemi entegre edilmemiştir. UAV tarafında Ultralytics'in yerleşik TensorBoard ve CSV loglaması mevcuttur, GPS tarafında ise yalnızca konsol çıktısı ve `loss_plot.png` grafiği bulunmaktadır.
 
-### 5.2 Logging ve İzlenebilirlik
+Hiperparametre, metrik ve artifact'ların sistematik kaydı yapılmamaktadır. Deneyler arası karşılaştırma yalnızca manuel dosya incelemesi ile mümkündür.
 
-| Özellik              | UAV                              | GPS                          |
-|----------------------|----------------------------------|------------------------------|
-| Metrik kaydı         | Ultralytics `results.csv`        | Python listesi (sadece stdout) |
-| Precision policy log | `_log_precision_policy()` — var  | Yok                          |
-| Hardware banner      | Auto-detect → detaylı print      | Auto-detect → detaylı print  |
-| Config dump          | `print_training_config()` — var  | `print_training_config()` — var |
-| Loss plot            | Ultralytics otomatik             | `matplotlib` ile (son epoch) |
-| TensorBoard/WandB    | Yok                              | Yok                          |
+**Olgunluk:** Düşük — Tekrarlanabilir deney yönetimi için yetersiz.
 
-### 5.3 CI/CD
+---
 
-**Mevcut durum** (`.github/workflows/lint.yml`):
+### MO-02: `torch.load(weights_only=False)` Güvenlik Riski
 
-```yaml
-- flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-- python -m compileall -q .
-```
+**Dosyalar:** `uav_training/train.py` (satır 64), `gps_training/train.py` (satır 91)
 
-Yalnızca sözdizimi hataları (`E9`: syntax error, `F63`: assertion test, `F7`: syntax, `F82`: undefined name) ve derleme kontrolü yapılıyor.
+Her iki modülde de checkpoint yükleme `weights_only=False` parametresi ile yapılmaktadır. PyTorch 2.6+'da varsayılan `weights_only=True` olarak değiştirilmiştir. `weights_only=False` kullanımı, checkpoint dosyası içine gömülmüş rastgele Python kodunun `pickle.load` ile çalıştırılmasına olanak tanır.
 
-**Eksikler:**
-- `pytest` çalıştırılmıyor (5 test dosyası mevcut ama CI'da çalışmıyor)
-- Type checking (mypy/pyright) yok
-- Code coverage ölçümü yok
-- GPU-free smoke test yok
-- Dependency vulnerability taraması yok
+YOLO checkpoint'larının `DetectionModel` gibi özel sınıflar içermesi nedeniyle `weights_only=True` kullanımı kısıtlıdır; ancak GPS checkpoint'ları yalnızca standart `state_dict` içerdiğinden güvenli moda geçirilebilir.
 
-### 5.4 Versiyon Yönetimi
+**Olgunluk:** Orta — Bilinen bir güvenlik riski bilinçli olarak kabul edilmiş durumda.
 
-- `__version__` iki dosyada senkron tutulması gereken bir pattern: `uav_training/__init__.py` ve `uav_training/train.py` — her ikisi de `0.8.8`; şu anda senkron.
-- `CHANGELOGS.md` düzenli güncelleniyor (son giriş: `0.0.28`).
-- GPS modülünde versiyon yönetimi **hiç yok** — `gps_training/__init__.py` dosyası mevcut değil.
+---
 
-### 5.5 Bağımlılık Yönetimi
+### MO-03: Checkpoint Kayıt Güvenliği
 
-`requirements.txt` yalnızca alt sınır içeriyor:
+Her iki modülde de atomik yazım deseni (tmp dosya → `os.replace`) kullanılmaktadır. GPS modülünde ek olarak `last_model.bak` backup rotasyonu bulunmaktadır. UAV modülünde Ultralytics'in kendi checkpoint mekanizması kullanılmaktadır.
 
-```
-ultralytics>=8.2.0
-torch>=2.0.0
-torchvision>=0.15.0
-...
-```
+`_is_checkpoint_valid` fonksiyonları her iki modülde de mevcuttur ve dosya boyutu + `torch.load` ile bütünlük kontrolü yapmaktadır.
 
-Major versiyon değişikliklerinde (ör. `ultralytics` 9.x veya `torch` 3.x) API kırılmaları kaçınılmaz. Üst sınır yokluğu bilinçli bir Colab uyumluluk tercihidir (Colab'ın önceden yüklü paketleriyle çakışma önlenir), ancak üretim ortamı için risklidir.
+**Olgunluk:** Yüksek — Checkpoint kaybı riskine karşı güçlü savunma katmanları mevcuttur.
+
+---
+
+### MO-04: Resume Dayanıklılığı
+
+UAV eğitim hattı 3 kaynaklı resume stratejisi uygulamaktadır (CLI → yerel dizin → Google Drive). GPS eğitim hattı 2 kaynaklı strateji kullanmaktadır (son checkpoint → backup). Her iki durumda da corrupt checkpoint tespiti yapılmakta ve alternatif kaynaklara geçilmektedir.
+
+Ancak KR-02'de belirtildiği gibi, GPS resume'unda scheduler uyumsuzluğu mevcuttur.
+
+**Olgunluk:** Orta — Resume mekanizması robust, ancak scheduler uyumsuzluğu var.
+
+---
+
+### MO-05: Versiyon Yönetimi ve Senkronizasyon
+
+`__version__` değişkeni `uav_training/__init__.py` ve `uav_training/train.py` dosyalarında tutulmaktadır. Her iki dosyada da değer `"0.8.12"` olarak senkrondur. CHANGELOGS.md ile versiyon takibi yapılmaktadır.
+
+GPS modülünün `__init__.py` dosyasında versiyon bilgisi bulunmamaktadır.
+
+**Olgunluk:** Orta — UAV modülü için iyi, GPS modülü için eksik.
+
+---
+
+### MO-06: Hyperparameter Loglama
+
+Her iki modülde de `print_training_config` fonksiyonu ile tüm hiperparametreler eğitim başlangıcında konsola yazdırılmaktadır. UAV modülünde ek olarak `args.yaml` dosyası Ultralytics tarafından otomatik olarak kaydedilmektedir.
+
+GPS modülünde hiperparametreler yalnızca konsol çıktısıdır; dosyaya kalıcı olarak kaydedilmemektedir.
+
+**Olgunluk:** Orta — UAV iyi, GPS'te kalıcı kayıt eksik.
+
+---
+
+### MO-07: `rsync` Komutu Shell Injection Riski
+
+**Dosya:** `gps_training/train.py` (satır 125-127)
+
+`subprocess.run(_sync_cmd, shell=True)` kullanımı, dosya yollarında özel karakter bulunması durumunda shell injection riski taşımaktadır. Yollar kullanıcı girdisi değil sabit konfigürasyondan gelmektedir, ancak `shell=True` kullanımı güvenlik best practice'lerine aykırıdır.
+
+**Olgunluk:** Düşük — Güvenlik pratikleri açısından iyileştirilmelidir.
+
+---
+
+### MO-08: CI/CD Pipeline Değerlendirmesi
+
+**Dosya:** `.github/workflows/lint.yml`
+
+Mevcut CI pipeline'ı:
+
+- Sözdizimi odaklı flake8 (E9, F63, F7, F82)
+- `python -m compileall` ile derleme kontrolü
+- `pytest tests/` ile test çalıştırma
+
+Eksikler:
+
+- Tip kontrolü (mypy/pyright) yok
+- Güvenlik taraması (bandit/safety) yok
+- Bağımlılık güvenlik kontrolü yok
+- Kod kapsama (coverage) ölçümü yok
+
+**Olgunluk:** Düşük-Orta — Temel sözdizimi kontrolü mevcut, derinlemesine analiz eksik.
 
 ---
 
 ## 6. Belirsizlikler ve Koşullu Riskler
 
-### 6.1 Runtime'a Bağlı Riskler
+### BR-01: Megaset Scene-Aware Splitting Deterministik Olmayabilir
 
-| Risk                                        | Koşul                                    | Etkisi                                      |
-|---------------------------------------------|------------------------------------------|---------------------------------------------|
-| GPS BF16 → FP16 sessiz düşüş               | Pre-Ampere GPU (T4, V100)               | GradScaler olmadan gradyan underflow         |
-| UAV `torch.compile` OOM                     | Python ≥3.12 veya yetersiz VRAM         | Compile devre dışı kalır; performans kaybı   |
-| Drive FUSE senkronizasyon gecikmesi         | Colab yüksek Drive trafiği               | Checkpoint kaybı riski (async sync)          |
-| `OneCycleLR` state uyumsuzluğu             | Resume + farklı batch size               | LR profili bozulması                         |
-| `cv2.VideoCapture` thread safety            | `num_workers > 0` (DataLoader)           | Potansiyel race condition veya segfault      |
-| Hard link fallback → fiziksel kopya         | Cross-device (Drive → SSD)               | Disk alanı 2-3x kullanım, build süresi artış|
+**Dosya:** `uav_training/build_dataset.py` (satır 407-418)
 
-### 6.2 Veri Boyutuna Bağlı Riskler
+`random.shuffle(scenes)` çağrısı, dosyanın başında `set_seed(42)` ile sabitlenmiş global RNG'ye bağımlıdır. Eğer `build_dataset()` fonksiyonu farklı bir import sırasıyla veya farklı bir modülden çağrılırsa, RNG state'i farklı olabilir ve train/val split'leri değişebilir. Bu durumun gerçekleşip gerçekleşmediği, fonksiyonun çağrılma bağlamına bağlıdır.
 
-| Risk                                        | Koşul                                    | Etkisi                                      |
-|---------------------------------------------|------------------------------------------|---------------------------------------------|
-| GPS az sequence ile overfit                 | Mevcut ~8 sequence                       | Modelin yeni rotalara genelleyememesi        |
-| Megaset smart sampling dengesizliği         | Vehicle:Human oranı çok farklı           | Sınıf dengesizliği; vehicle öğrenme baskısı  |
-| RAM cache yetersizliği                      | Veri seti > 100GB, RAM < 20GB           | `cache="disk"` fallback — I/O yavaşlaması   |
+**Koşul:** Farklı çağrı sıraları veya modül import'ları durumunda.
 
-### 6.3 Sınıf Mapping Tutarsızlığı
+---
 
-**`uav_training/config.py:33-44` — `TARGET_CLASSES`:**
+### BR-02: GPS Video Decoder State Tutarsızlığı
 
-```python
-TARGET_CLASSES = {
-    "uap": 0, "uai": 1, "human": 2, "vehicle": 3, ...
-}
-```
+**Dosya:** `gps_training/dataset.py` (satır 159-186)
 
-**`uav_training/build_dataset.py:446-457` — Gerçek Eğitim Mapping'i:**
+Ardışık frame okuma optimizasyonu (`_read_video_pair`) video decoder'ın iç state'ine bağımlıdır. Eğer farklı worker'lar aynı videoyu eş zamanlı açarsa (multi-worker DataLoader), her worker kendi `_video_caps` sözlüğünü tuttuğundan doğrudan çakışma olmaz. Ancak OS seviyesinde aynı video dosyasına çoklu eşzamanlı erişim disk I/O contention'a neden olabilir.
 
-```python
-'names': {0: 'vehicle', 1: 'human', 2: 'uap', 3: 'uai'}
-```
+**Koşul:** Yüksek worker sayısı + büyük video dosyaları + yavaş disk (Drive FUSE) durumunda.
 
-Bu iki mapping **birbiriyle çelişiyor**:
+---
 
-| Sınıf   | `TARGET_CLASSES` | Gerçek Eğitim (`dataset.yaml`) |
-|---------|------------------|--------------------------------|
-| vehicle | 3                | **0**                          |
-| human   | 2                | **1**                          |
-| uap     | 0                | **2**                          |
-| uai     | 1                | **3**                          |
+### BR-03: UAV İki Fazlı Eğitimde Faz 1 Checkpoint Bulunamazsa
 
-`TARGET_CLASSES` yalnızca `audit.py`'de veri seti tarama amacıyla kullanılıyor; eğitim sırasında `build_dataset.py` MAPPINGS'teki açık `map` sözlükleri esas alınıyor. Bu nedenle **eğitim doğru çalışıyor**. Ancak `TARGET_CLASSES`'ı referans alan herhangi bir gelecek kod (inference, post-processing, API) yanlış sınıf eşleştirmesi yapacaktır.
+**Dosya:** `uav_training/train.py` (satır 609-618)
 
-**Öneri:** `TARGET_CLASSES`'ı `dataset.yaml` ile tutarlı hale getirmek veya `build_dataset.py`'den gerçek mapping'i import ederek tek kaynak (single source of truth) sağlamak.
+Faz 2'nin başlaması için faz 1'in `best.pt` dosyasına ihtiyaç vardır. Eğer faz 1 erken sonlandırılırsa (OOM, Colab timeout, Drive bağlantı kaybı), `best.pt` oluşturulmamış olabilir. Kod `last.pt`'ye fallback yapmaktadır; ancak o da yoksa `FileNotFoundError` fırlatılır ve tüm eğitim sürecini çökerterek faz 1'in kısmi sonuçlarını da tehlikeye atar.
+
+**Koşul:** Colab session timeout'u veya erken GPU kaybı durumunda.
+
+---
+
+### BR-04: Ultralytics Versiyon Bağımlılığı
+
+Kod tabanı `ultralytics>=8.2.0` ile kısıtlanmıştır ancak üst sınır yoktur. Ultralytics kütüphanesi aktif geliştirme altındadır ve şu API'lere doğrudan bağımlılık mevcuttur:
+
+- `YOLO(model_path).train(**kwargs)` argüman yapısı
+- `model.add_callback("on_fit_epoch_end", ...)` callback sistemi
+- `results.box.map50`, `results.box.map` metrik erişimi
+- `results.csv` dosya formatı ve sütun isimleri
+
+Bu API'lerin herhangi birindeki değişiklik, eğitim hattını sessizce kırabilir.
+
+**Koşul:** Ultralytics major veya minor versiyon güncellemesi durumunda.
+
+---
+
+### BR-05: `atexit` ile Video Capture Temizliği Multi-Worker Durumunda
+
+**Dosya:** `gps_training/dataset.py` (satır 31, 289-296)
+
+`atexit.register(self._close_video_caps)` main process'te kayıt edilmektedir. Ancak DataLoader worker süreçleri fork/spawn ile oluşturulduğunda, `atexit` handler'ları worker süreçlerinde çağrılmayabilir (özellikle signal ile öldürülen worker'larda). Bu, OpenCV `VideoCapture` nesnelerinin temizlenmeden kalmasına yol açabilir.
+
+**Koşul:** Worker crash veya forced kill durumunda.
+
+---
+
+### BR-06: GPS Train/Val Split'inde Test Seti Eksik
+
+**Dosya:** `gps_training/dataset.py` (satır 61-68)
+
+GPS dataset'i yalnızca train (%90) ve val (%10) olarak bölünmektedir. Test seti bulunmamaktadır. Model performansının nihai değerlendirmesi validation seti üzerinden yapılmaktadır, bu da model seçim yanlılığı (selection bias) riski taşımaktadır.
+
+**Koşul:** Model performansının gerçek dünya genellemesini değerlendirirken.
 
 ---
 
 ## 7. Genel Sağlık Skoru
 
-### Puanlama Tablosu
+| Değerlendirme Alanı | Puan (0-10) | Ağırlık | Ağırlıklı Puan |
+|---|---|---|---|
+| Mantık ve Veri Güvenliği | 7.0 | %20 | 1.40 |
+| Performans ve Kaynak Kullanımı | 7.5 | %20 | 1.50 |
+| Eğitim Dinamikleri | 6.5 | %20 | 1.30 |
+| Stabilite ve Checkpoint Güvenliği | 8.0 | %15 | 1.20 |
+| MLOps Olgunluğu | 5.5 | %15 | 0.825 |
+| Ortam ve Bağımlılık Yönetimi | 5.0 | %10 | 0.50 |
+| **Genel Sağlık Skoru** | | | **6.7 / 10** |
 
-| Kategori                  | Puan (0-10) | Ağırlık | Katkı  |
-|---------------------------|-------------|---------|--------|
-| Kod Kalitesi & Okunabilirlik | 7          | %15     | 1.05   |
-| Eğitim Stabilitesi (UAV)    | 8          | %15     | 1.20   |
-| Eğitim Stabilitesi (GPS)    | 4          | %15     | 0.60   |
-| Platform Uyumluluğu         | 5          | %10     | 0.50   |
-| Veri Güvenliği & Bütünlüğü  | 6          | %10     | 0.60   |
-| MLOps Olgunluğu             | 5          | %10     | 0.50   |
-| Performans Optimizasyonu     | 7          | %10     | 0.70   |
-| Hata Kurtarma & Dayanıklılık| 7          | %10     | 0.70   |
-| Test & CI Kapsama            | 3          | %5      | 0.15   |
+### Puan Gerekçesi
 
-### Genel Skor: **6.0 / 10**
+**Güçlü Yönler:**
 
-### Gerekçe
+- Atomik checkpoint yazımı ve backup rotasyonu ile veri kaybı riski minimumda
+- Çoklu GPU tier desteği ve explicit batch sizing ile kaynak kullanımı optimize
+- Colab-local SSD mimarisi ile I/O darboğazı etkin biçimde çözülmüş
+- UAV eğitiminde 4 aşamalı OOM recovery mekanizması
+- İki fazlı eğitim stratejisi (50+15 epoch) ile fine-tuning desteği
+- Augmentation'ın doğru split'te uygulanması ve Siamese-aware delta düzeltmeleri
+- Mixed precision stratejisi GPU kapabilitesine göre otomatik seçim (BF16 vs FP16)
+- Bbox validasyonu (NaN, range, minimum boyut) ile veri kalitesi kontrolü
 
-**Güçlü yönler:**
-- UAV eğitim hattı endüstriyel kaliteye yakın: katmanlı OOM recovery, otomatik donanım algılama, iki fazlı eğitim profili, zengin augmentasyon pipeline'ı ve Drive senkronizasyonu.
-- Veri bütünlüğü iyi düşünülmüş: megaset sahne tabanlı split (veri sızıntısı önleme), bbox NaN/range/size guard, duplicate line filter.
-- Seed yönetimi kapsamlı (PYTHONHASHSEED, random, numpy, torch, CUDA).
-- Checkpoint resume zinciri (CLI → lokal → Drive) sağlam.
+**Zayıf Yönler:**
 
-**Zayıf yönler:**
-- GPS modülü UAV'a kıyasla belirgin şekilde daha az olgun: `fcntl` platform hatası, GradScaler eksikliği, augmentasyon yokluğu, atomik olmayan best_model yazımı.
-- Sınıf indeks tutarsızlığı (`TARGET_CLASSES` vs gerçek mapping) gelecekte ciddi hatalara neden olabilecek bir teknik borç.
-- CI pipeline'ında testler çalıştırılmıyor; mevcut 5 test dosyası sadece lokalde anlamlı.
-- TensorBoard/WandB gibi experiment tracking entegrasyonu yok.
+- GPS eğitim hattındaki yapısal eksiklikler (early stopping, OOM recovery, OneCycleLR konfigürasyonu)
+- Bağımlılık versiyonlarının sabitlenmemesi, tekrarlanabilirliği tehdit ediyor
+- Deney takip sistemi eksikliği, sistematik model karşılaştırmasını engelliyor
+- Debug kod artıkları üretim kodunda bırakılmış
+- GPS modülünde kalıcı hiperparametre kaydı yapılmıyor
+- Test seti eksikliği (GPS) model değerlendirmesini zayıflatıyor
 
-**Sonuç:** UAV modülü üretime yakın ancak GPS modülü henüz prototip aşamasında. Kritik riskler (özellikle #1 ve #3) düzeltilmeden GPS eğitiminin güvenilir sonuç vermesi beklenmemelidir.
+**Sonuç:** Kod tabanı, UAV eğitim hattı açısından üretim seviyesine yakın bir olgunlukta olup güçlü hata kurtarma ve optimizasyon mekanizmaları barındırmaktadır. GPS eğitim hattı ise UAV hattına kıyasla daha erken bir aşamadadır ve yapısal iyileştirmeler gerektirmektedir. Bağımlılık yönetimi ve MLOps pratikleri her iki hat için de güçlendirilmelidir.
