@@ -227,15 +227,20 @@ def audit_directory(dir_path):
         class_map = {}
         class_values = []
         
-    for target_name in TARGET_CLASSES:
+    CANONICAL_CLASSES = ["vehicle", "human", "uap", "uai"]
+    for target_name in CANONICAL_CLASSES:
         result.setdefault(f"{target_name}_count", 0)
 
     for idx, name in class_map.items():
         n = str(name).lower()
-        for target_name in TARGET_CLASSES:
-             if n == target_name or n == f"{target_name}-":
-                 key = f"{target_name}_count"
-                 result[key] += 1
+        if n in TARGET_CLASSES:
+            cls_id = TARGET_CLASSES[n]
+            if cls_id < len(CANONICAL_CLASSES):
+                result[f"{CANONICAL_CLASSES[cls_id]}_count"] += 1
+        elif n.endswith("-") and n[:-1] in TARGET_CLASSES:
+            cls_id = TARGET_CLASSES[n[:-1]]
+            if cls_id < len(CANONICAL_CLASSES):
+                result[f"{CANONICAL_CLASSES[cls_id]}_count"] += 1
             
     # Include Decision
     if result["image_count"] < 10:

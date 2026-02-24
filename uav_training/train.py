@@ -7,7 +7,7 @@ import torch
 # Reduce VRAM fragmentation — must be set before any CUDA allocation
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True,max_split_size_mb:512")
 
-from config import ARTIFACTS_DIR, AUDIT_REPORT, DATASET_DIR, TRAIN_CONFIG, setup_torch_backend
+from config import ARTIFACTS_DIR, AUDIT_REPORT, DATASET_DIR, TRAIN_CONFIG, setup_torch_backend, ensure_colab_config
 setup_torch_backend()
 try:
     from ultralytics import YOLO
@@ -36,7 +36,7 @@ if torch.cuda.is_available():
 try:
     from uav_training import __version__
 except ImportError:
-    __version__ = "0.8.19"  # fallback when uav_training not installed as package
+    __version__ = "0.8.20"  # fallback when uav_training not installed as package
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -98,7 +98,7 @@ def get_best_metrics(results_dir: Path) -> dict:
                     except (ValueError, AttributeError):
                         continue
 
-                    if "map50-95" in k or "map50_95" in k or k.endswith("map"):
+                    if "map50-95" in k or "map50_95" in k or k.endswith("map50-95"):
                         best_map50_95 = max(best_map50_95, v)
                     elif "map50" in k:
                         best_map50 = max(best_map50, v)
@@ -200,10 +200,6 @@ def print_training_config(train_args: dict):
     print(f"{'─'*60}")
     for k, v in train_args.items():
         print(f"  {k:<20}: {v}")
-    print(f"{'─'*60}\n", flush=True)
-
-
-DRIVE_CP = Path(os.environ.get("UAV_PROJECT_DIR", "/content/drive/MyDrive/AIA/checkpoints"))
 _SYNC_LOCK = threading.Lock()
 _SYNC_IN_FLIGHT = False
 
@@ -214,7 +210,8 @@ def _sync_to_drive(save_dir, run_name):
     checkpoints on the Drive side.
     """
     try:
-        target_dir = DRIVE_CP / run_name
+        drive_cp_path = Path(os.environ.get("UAV_PROJECT_DIR", "/content/drive/MyDrive/AIA/checkpoints"))
+        target_dir = drive_cp_path / run_name
         target_dir.mkdir(parents=True, exist_ok=True)
         for f in ["weights/best.pt", "weights/last.pt"]:
             src = Path(save_dir) / f
@@ -442,7 +439,8 @@ def _check_leakage_from_audit(*, allow_leakage: bool = False) -> None:
         import json
         with open(AUDIT_REPORT, encoding="utf-8") as f:
             results = json.load(f)
-    except Exception:
+    except Exception as e:
+        print(f"⚠️  Warning: Failed to read audit report for leakage check: {e}", flush=True)
         return
     for r in results:
         if r.get("status") != "INCLUDE":
@@ -504,6 +502,7 @@ def setup_seed(seed: int = 42, *, deterministic: bool = False) -> None:
 
 
 def train(epochs=None, batch=None, device=None, model_path=None, resume=False, two_phase=False, allow_leakage=False):
+    ensure_colab_config()  # Lazy hardware detection — avoids import side effect in config
     det = bool(TRAIN_CONFIG.get("deterministic", False))
     setup_seed(42, deterministic=det)
     kill_gpu_hogs()

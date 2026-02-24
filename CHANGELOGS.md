@@ -300,3 +300,8 @@
 - **feat(uav_training/build_dataset)**: Dışlanan etiket satırları (short_format, invalid_coords) raporlanıyor.
 - **fix(uav_training/inference)**: CLI ve fonksiyon varsayılan path tutarlı; `DEFAULT_INFER_SOURCE`.
 - **release**: Bumped module/script version from `0.8.18` to `0.8.19`.
+
+## 0.0.40 - 2026-02-24
+- **refactor(uav_training/config)**: Import side effect kaldırıldı; `auto_detect_hardware()` lazy `ensure_colab_config()` ile sadece train başında çağrılıyor (sistem_denetim_raporu §2.1).
+- **feat(uav_training/visualize_dataset)**: `--split train|val|test` ve `--num` CLI argümanları eklendi; val/test split görselleştirmesi destekleniyor (sistem_denetim_raporu §6.5).
+- **release**: Bumped module/script version from `0.8.19` to `0.8.20`.

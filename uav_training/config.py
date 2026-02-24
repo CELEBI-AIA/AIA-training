@@ -311,7 +311,7 @@ TRAIN_CONFIG = {
     "phase2_imgsz": 896,
     "phase2_mosaic": 0.2,
     "phase2_close_mosaic": 10,
-    "phase2_lr0": 0.0015,
+    "phase2_lr0": 0.0001,
     "batch": 4,           # Conservative for local 6GB VRAM
     "imgsz": 640,
     "device": 0,
@@ -320,7 +320,7 @@ TRAIN_CONFIG = {
     "name": "uav_v3_optimized",
     "workers": 8,
     "amp": True,
-    "cache": True,
+    "cache": "disk",
     "exist_ok": True,
     "patience": 30,
     "cos_lr": True,
@@ -355,14 +355,22 @@ TRAIN_CONFIG = {
     "save_period": 1,
 }
 
-# Auto-override when running on Colab
-if is_colab():
+# Lazy Colab config — avoids import side effect (torch/CUDA/psutil on every import).
+# Call ensure_colab_config() from train.py before training; other modules use default config.
+_colab_config_initialized = False
+
+
+def ensure_colab_config() -> None:
+    """Run auto_detect_hardware and update TRAIN_CONFIG when on Colab. Idempotent."""
+    global _colab_config_initialized
+    if not is_colab() or _colab_config_initialized:
+        return
     try:
         _overrides, _hw_info = auto_detect_hardware()
-        # Preserve project/name, override the rest
         _overrides["project"] = TRAIN_CONFIG["project"]
         _overrides["name"] = TRAIN_CONFIG["name"]
         TRAIN_CONFIG.update(_overrides)
+        _colab_config_initialized = True
     except Exception as e:
         print(f"⚠️ Auto hardware detection failed: {e}", flush=True)
         print("  Falling back to default config")

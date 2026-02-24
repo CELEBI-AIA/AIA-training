@@ -23,8 +23,6 @@ def set_seed(seed=42):
     except NameError:
         pass
 
-set_seed(42)
-
 # Use configuration from config.py if needed, or define constants here for standalone utility
 from config import PROJECT_ROOT, DATASET_DIR, DATASETS_TRAIN_DIR, ARTIFACTS_DIR, TRAIN_CONFIG
 
@@ -421,7 +419,7 @@ def build_dataset():
                 for p in all_megaset_images:
                     stem = Path(p).stem
                     parts = stem.rsplit("_frame_", 1)
-                    scene_id = parts[0] if len(parts) > 1 else stem[:8]
+                    scene_id = parts[0] if len(parts) > 1 else stem
                     scene_groups.setdefault(scene_id, []).append(p)
 
                 scenes = list(scene_groups.keys())

@@ -1,4 +1,5 @@
 
+import argparse
 import random
 import cv2
 import numpy as np
@@ -6,10 +7,6 @@ from pathlib import Path
 from tqdm import tqdm
 
 from config import DATASET_DIR, ARTIFACTS_DIR
-
-# Use the dataset directory verified in config
-IMAGES_DIR = DATASET_DIR / "train" / "images"
-LABELS_DIR = DATASET_DIR / "train" / "labels"
 
 OUTPUT_DIR = ARTIFACTS_DIR / "verification_output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -29,15 +26,19 @@ CLASS_NAMES = {
     3: 'uai'
 }
 
-def verify_dataset(num_samples=20):
-    print(f"Verifying dataset in {DATASET_DIR}...")
-    
-    if not IMAGES_DIR.exists():
-        print(f"Error: {IMAGES_DIR} does not exist. Run build_dataset.py first.")
+def verify_dataset(num_samples=20, split="train"):
+    """Visualize labeled images from the specified split (train, val, or test)."""
+    images_dir = DATASET_DIR / split / "images"
+    labels_dir = DATASET_DIR / split / "labels"
+
+    print(f"Verifying dataset in {DATASET_DIR} (split={split})...")
+
+    if not images_dir.exists():
+        print(f"Error: {images_dir} does not exist. Run build_dataset.py first.")
         return
 
     # Get all image files
-    image_files = list(IMAGES_DIR.glob("*.jpg")) + list(IMAGES_DIR.glob("*.png"))
+    image_files = list(images_dir.glob("*.jpg")) + list(images_dir.glob("*.png"))
     
     if not image_files:
         print("No images found.")
@@ -57,7 +58,7 @@ def verify_dataset(num_samples=20):
         h, w = img.shape[:2]
         
         # Determine label path
-        label_path = LABELS_DIR / f"{img_path.stem}.txt"
+        label_path = labels_dir / f"{img_path.stem}.txt"
         
         if label_path.exists():
             with open(label_path, 'r') as f:
@@ -85,10 +86,24 @@ def verify_dataset(num_samples=20):
                     cv2.putText(img, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
         
         # Save output
-        out_path = OUTPUT_DIR / f"vis_{img_path.name}"
+        out_path = OUTPUT_DIR / f"vis_{split}_{img_path.name}"
         cv2.imwrite(str(out_path), img)
-        
+
     print(f"Verification samples saved to {OUTPUT_DIR}")
 
 if __name__ == "__main__":
-    verify_dataset()
+    parser = argparse.ArgumentParser(description="Visualize dataset labels")
+    parser.add_argument(
+        "--split",
+        choices=["train", "val", "test"],
+        default="train",
+        help="Dataset split to visualize (default: train)",
+    )
+    parser.add_argument(
+        "--num",
+        type=int,
+        default=20,
+        help="Number of samples to visualize (default: 20)",
+    )
+    args = parser.parse_args()
+    verify_dataset(num_samples=args.num, split=args.split)
