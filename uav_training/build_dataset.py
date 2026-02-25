@@ -482,7 +482,7 @@ def build_dataset():
 
     # Generate data.yaml
     final_data_yaml = {
-        'path': '.',
+        'path': str(DATASET_DIR.absolute()),
         'train': 'train/images',
         'val': 'val/images',
         'nc': 4,
