@@ -431,3 +431,9 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **perf(CI)**: Compile job no longer installs requirements.txt — syntax-only check, faster CI.
 - **docs(CHANGELOGS)**: Version format note — UAV uses 0.8.XX; new entries follow this format.
 - **release**: Bumped module/script version from `0.8.35` to `0.8.36`.
+
+## 0.8.37 - 2026-02-25
+- **feat(uav_training/config)**: High RAM vs Normal RAM detection — Colab A100 (~167GB vs ~80GB).
+- **feat(uav_training/config)**: A100 80GB tier (separate from H100); High RAM: cache=ram, workers up to 12.
+- **docs(README)**: RAM detection and A100 80GB tier documentation.
+- **release**: Bumped module/script version from `0.8.36` to `0.8.37`.

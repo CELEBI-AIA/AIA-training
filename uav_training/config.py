@@ -123,6 +123,10 @@ def auto_detect_hardware() -> tuple:
     ram = float(info["ram_gb"])
     cpus = int(info["cpu_count"])
 
+    # ── High RAM vs Normal RAM (Colab A100/H100: ~80GB normal, ~167GB high) ──
+    is_high_ram = ram > 120
+    info["is_high_ram"] = is_high_ram
+
     # ── TPU Detection ──
     # YOLO/Ultralytics requires CUDA. TPUs (v6e-1, v5e-1) use XLA which
     # is NOT compatible with YOLO's training loop. Detect and warn.
@@ -158,8 +162,12 @@ def auto_detect_hardware() -> tuple:
         info["gpu_name"] = f"TPU ({os.environ.get('TPU_NAME', 'unknown')})"
 
     elif vram >= 70:
-        # ── H100 80GB ──
-        tier = "H100-80GB"
+        # ── H100 80GB / A100 80GB ──
+        gpu_name = info.get("gpu_name", "") or ""
+        if "A100" in gpu_name:
+            tier = "A100-80GB"
+        else:
+            tier = "H100-80GB"
         model = "yolo11m.pt"
         imgsz = 1024        # High-res for small objects
         batch = 32          # Reduced from 64 due to 1024px peaks (fix for P-04)
@@ -205,22 +213,18 @@ def auto_detect_hardware() -> tuple:
     os.environ["MKL_NUM_THREADS"] = str(max(1, min(2, cpus // 4)))
 
     # Multi-scale OFF — variable sizes cause OOM with large batches
-    workers = min(max(cpus * 2, 4), 10) if vram >= 35 else min(max(cpus * 2, 4), 8)
+    # High RAM (167GB): more workers for faster data prefetch; Normal (~80GB): conservative
+    workers = min(max(cpus * 2, 4), 12) if (vram >= 35 and is_high_ram) else \
+             min(max(cpus * 2, 4), 10) if vram >= 35 else min(max(cpus * 2, 4), 8)
 
     # Multi-scale OFF — variable sizes cause OOM with large batches
     multi_scale = False
 
-    # Dynamic cache: use RAM when available (A100 Colab has ~83GB),
-    # fall back to disk or no cache on constrained machines.
-    try:
-        import psutil
-        total_ram_gb = psutil.virtual_memory().total / (1024 ** 3)
-    except ImportError:
-        total_ram_gb = ram
-
-    if total_ram_gb > 100:
+    # Dynamic cache: High RAM (167GB) → ram; Normal A100 (~80GB) → disk; low RAM → off
+    # Colab: Normal ~80GB, High RAM ~167GB
+    if is_high_ram or ram > 100:
         cache = "ram"
-    elif total_ram_gb > 20:
+    elif ram > 20:
         cache = "disk"
     else:
         cache = False
@@ -295,12 +299,13 @@ def auto_detect_hardware() -> tuple:
     }
 
     # Print detected hardware — flush=True so it appears instantly in Colab
+    ram_mode = "High RAM (167GB)" if is_high_ram else "Normal (~80GB)"
     print(f"\n{'='*60}", flush=True)
     print("  🖥️  AUTO HARDWARE DETECTION")
     print(f"{'='*60}")
     print(f"  GPU        : {info['gpu_name']}")
     print(f"  VRAM       : {info['vram_gb']} GB")
-    print(f"  RAM        : {info['ram_gb']} GB")
+    print(f"  RAM        : {info['ram_gb']} GB  ({ram_mode})")
     print(f"  CPU Cores  : {info['cpu_count']}")
     print(f"  Tier       : {tier}")
     print(f"{'─'*60}")

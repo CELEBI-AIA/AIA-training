@@ -1,4 +1,4 @@
-# 🛩️ UAV Training Pipeline — v0.8.36
+# 🛩️ UAV Training Pipeline — v0.8.37
 
 YOLO11m tabanlı İHA (UAV) tespit eğitim altyapısı.
 Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücre ile çalışır.
@@ -117,7 +117,7 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 | Augmentations | `scale=0.4`, `copy_paste=0.3`, `flipud=0.5` |
 | AMP (BF16)    | ✅ Enabled (`amp=True`, Ampere+ GPU'da Ultralytics otomatik BF16 seçer) |
 | torch.compile | ✅ VRAM ≥35GB **ve** Python <3.12 için `reduce-overhead`, diğer durumlarda kapalı |
-| Cache         | Dinamik (available RAM >100GB: `ram`, >20GB: `disk`, diğer: off) |
+| Cache         | Dinamik (High RAM >120GB: `ram`, Normal ~80GB: `disk`, düşük: off) |
 | Deterministic | ❌ Off (Hızlı CUDA kernels)                 |
 | Save Period   | Her 1 epoch checkpoint + Drive sync         |
 | Label Filter  | `min_bbox_norm=0.002` ile filtrelenir       |
@@ -126,9 +126,12 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 
 ### Auto Hardware Detection (Colab)
 
+**Sistem RAM:** High RAM (~167GB) vs Normal (~80GB) otomatik algılanır; High RAM'de `cache=ram` ve daha fazla worker kullanılır.
+
 | GPU Tier   | Batch | ImgSz | VRAM Usage |
 |------------|-------|-------|------------|
 | H100 80GB  | 32    | 1024  | ~85-90%    |
+| A100 80GB  | 32    | 1024  | ~85-90%    |
 | A100 40GB  | 24    | 1024  | ~85-90%    |
 | L4 24GB    | 32    | 640   | ~70-80%    |
 | T4 16GB    | 16    | 640   | ~75%       |
