@@ -109,7 +109,7 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 | Cache         | Dinamik (available RAM >100GB: `ram`, >20GB: `disk`, diğer: off) |
 | Deterministic | ❌ Off (Hızlı CUDA kernels)                 |
 | Save Period   | Her 1 epoch checkpoint + Drive sync         |
-| Label Filter  | `min_bbox_norm=0.004` ile filtrelenir       |
+| Label Filter  | `min_bbox_norm=0.002` ile filtrelenir       |
 
 ### Auto Hardware Detection (Colab)
 

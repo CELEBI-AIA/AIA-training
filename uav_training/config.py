@@ -62,6 +62,9 @@ TARGET_CLASSES = {
     "uai": 3,
 }
 
+# Supported image extensions for build_dataset, audit, inference, visualize_dataset, val_utils
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif", ".gif")
+
 # ── Colab Auto Hardware Detection ────────────────────────────────────────────
 
 # is_colab() is defined at top of file (needed early for DATASET_DIR)

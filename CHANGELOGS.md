@@ -384,3 +384,13 @@
 - **fix(requirements.txt)**: ultralytics==8.4.16 (version pinned).
 - **fix(scripts)**: Colab paths — run_per_class_val and cleanup_checkpoints prefer /content/runs on Colab.
 - **release**: Bumped module/script version from `0.8.29` to `0.8.30`.
+
+## 0.8.31 - 2026-02-25
+- **fix(scripts/run_per_class_val)**: Local runs now use `TRAIN_CONFIG["project"]` instead of `PROJECT_ROOT/runs` so models are found after local training.
+- **fix(uav_training/build_dataset)**: `min_bbox_norm` fallback aligned to 0.002 (config consistency).
+- **fix(docs)**: README and uav_training/README `min_bbox_norm` updated to 0.002.
+- **feat(uav_training/config)**: Added `IMAGE_EXTENSIONS` for webp, bmp, tiff, tif, gif support.
+- **feat(uav_training)**: build_dataset, audit, val_utils, inference, visualize_dataset now support all IMAGE_EXTENSIONS (webp, bmp, tiff, gif).
+- **fix(uav_training/train)**: Corrected raise indentation in phase2 fallback block.
+- **fix(uav_training/val_utils)**: `check_temporal_leakage` accepts str or Path; defensive `Path(dataset_dir)`.
+- **release**: Bumped module/script version from `0.8.30` to `0.8.31`.

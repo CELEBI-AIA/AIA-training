@@ -28,7 +28,7 @@ def set_seed(seed=42):
         pass
 
 # Use configuration from config.py if needed, or define constants here for standalone utility
-from config import PROJECT_ROOT, DATASET_DIR, DATASETS_TRAIN_DIR, ARTIFACTS_DIR, TRAIN_CONFIG
+from config import PROJECT_ROOT, DATASET_DIR, DATASETS_TRAIN_DIR, ARTIFACTS_DIR, TRAIN_CONFIG, IMAGE_EXTENSIONS
 
 # Using the optimized MAPPINGS from the successful unify_datasets.py
 # Updated MAPPINGS for "TRAIN" folder
@@ -118,8 +118,8 @@ def resolve_target_split(split_name: str, include_test_in_val: bool) -> str:
 
 def _list_images(base_path: Path) -> list[Path]:
     image_files = []
-    for ext in ("*.jpg", "*.jpeg", "*.png"):
-        image_files.extend(base_path.glob(ext))
+    for ext in IMAGE_EXTENSIONS:
+        image_files.extend(base_path.glob(f"*{ext}"))
     return image_files
 
 
@@ -170,7 +170,7 @@ def build_dataset():
     (DATASET_DIR / "test" / "images").mkdir(parents=True, exist_ok=True)
     (DATASET_DIR / "test" / "labels").mkdir(parents=True, exist_ok=True)
 
-    min_bbox_norm = float(TRAIN_CONFIG.get("min_bbox_norm", 0.004))
+    min_bbox_norm = float(TRAIN_CONFIG.get("min_bbox_norm", 0.002))
     include_test_in_val = bool(TRAIN_CONFIG.get("include_test_in_val", False))
 
     print("Starting optimized dataset unification (UAV Optimized)...")

@@ -5,7 +5,7 @@ import argparse
 from ultralytics import YOLO
 from pathlib import Path
 
-from config import DATASET_DIR, ARTIFACTS_DIR
+from config import DATASET_DIR, ARTIFACTS_DIR, IMAGE_EXTENSIONS
 
 DEFAULT_INFER_SOURCE = str(DATASET_DIR / "val" / "images")
 
@@ -17,8 +17,10 @@ def smoke_infer(model_path, source=DEFAULT_INFER_SOURCE, num_images=5):
         print(f"Error loading model: {e}")
         return
 
-    # Select random images
-    all_images = glob.glob(os.path.join(source, "*.jpg")) + glob.glob(os.path.join(source, "*.png"))
+    # Select random images (jpg, png, webp, bmp, tiff, gif, etc.)
+    all_images = []
+    for ext in IMAGE_EXTENSIONS:
+        all_images.extend(glob.glob(os.path.join(source, f"*{ext}")))
     
     if not all_images:
         print(f"No images found in {source}")

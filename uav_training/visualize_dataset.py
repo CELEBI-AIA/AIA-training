@@ -6,7 +6,7 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 
-from config import DATASET_DIR, ARTIFACTS_DIR
+from config import DATASET_DIR, ARTIFACTS_DIR, IMAGE_EXTENSIONS
 
 OUTPUT_DIR = ARTIFACTS_DIR / "verification_output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -37,8 +37,10 @@ def verify_dataset(num_samples=20, split="train"):
         print(f"Error: {images_dir} does not exist. Run build_dataset.py first.")
         return
 
-    # Get all image files
-    image_files = list(images_dir.glob("*.jpg")) + list(images_dir.glob("*.png"))
+    # Get all image files (jpg, png, webp, bmp, tiff, gif, etc.)
+    image_files = []
+    for ext in IMAGE_EXTENSIONS:
+        image_files.extend(images_dir.glob(f"*{ext}"))
     
     if not image_files:
         print("No images found.")

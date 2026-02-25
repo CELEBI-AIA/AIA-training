@@ -3,6 +3,8 @@ Validation utilities — per-class AP50, temporal leakage check.
 """
 from pathlib import Path
 
+from config import IMAGE_EXTENSIONS
+
 TARGET_THRESHOLDS = {
     "vehicle": (0.90, 0.95),
     "human": (0.88, 0.93),
@@ -61,18 +63,19 @@ def print_per_class_report(result: dict) -> None:
         print("\nTüm sınıflar minimum eşiğin üzerinde.", flush=True)
 
 
-def check_temporal_leakage(dataset_dir: Path) -> dict:
+def check_temporal_leakage(dataset_dir) -> dict:
     """
     Build sonrası train/val overlap kontrolü.
     Returns: {"exact_match": n, "video_prefix_overlap": n, "train_stems": n, "val_stems": n}
     """
+    dataset_dir = Path(dataset_dir)
     train_imgs = dataset_dir / "train" / "images"
     val_imgs = dataset_dir / "val" / "images"
     if not train_imgs.exists() or not val_imgs.exists():
         return {"exact_match": 0, "video_prefix_overlap": 0, "train_stems": 0, "val_stems": 0}
 
-    train_stems = {p.stem for p in train_imgs.glob("*") if p.suffix.lower() in (".jpg", ".jpeg", ".png")}
-    val_stems = {p.stem for p in val_imgs.glob("*") if p.suffix.lower() in (".jpg", ".jpeg", ".png")}
+    train_stems = {p.stem for p in train_imgs.glob("*") if p.suffix.lower() in IMAGE_EXTENSIONS}
+    val_stems = {p.stem for p in val_imgs.glob("*") if p.suffix.lower() in IMAGE_EXTENSIONS}
     exact_match = len(train_stems & val_stems)
 
     def get_prefix(s: str) -> str:

@@ -10,7 +10,7 @@ except ImportError:
     # simple fallback if tqdm missing
     def tqdm(x, **kwargs): return x
 
-from config import PROJECT_ROOT, DATASETS_TRAIN_DIR, AUDIT_REPORT, ARTIFACTS_DIR, TARGET_CLASSES, DATASET_DIR
+from config import PROJECT_ROOT, DATASETS_TRAIN_DIR, AUDIT_REPORT, ARTIFACTS_DIR, TARGET_CLASSES, DATASET_DIR, IMAGE_EXTENSIONS
 
 
 def get_subdirs(path):
@@ -38,8 +38,8 @@ def read_txt_classes(path):
 
 def _list_images(path: Path):
     images = []
-    for ext in ("*.jpg", "*.jpeg", "*.png"):
-        images.extend(path.glob(ext))
+    for ext in IMAGE_EXTENSIONS:
+        images.extend(path.glob(f"*{ext}"))
     return images
 
 
@@ -205,7 +205,9 @@ def audit_directory(dir_path):
 
         result["classes"] = read_txt_classes(c_path)
         
-        imgs = list(search_root.glob("*.jpg")) + list(search_root.glob("*.png"))
+        imgs = []
+        for ext in IMAGE_EXTENSIONS:
+            imgs.extend(search_root.glob(f"*{ext}"))
         lbls = list(search_root.glob("*.txt"))
         # remove classes.txt from label count
         lbls = [l for l in lbls if l.name != "classes.txt"]
@@ -230,7 +232,9 @@ def audit_directory(dir_path):
     else:
         result["reason"] = "No data.yaml or classes.txt found"
         result["status"] = "SKIP"
-        imgs = list(dir_path.rglob("*.jpg")) + list(dir_path.rglob("*.png"))
+        imgs = []
+        for ext in IMAGE_EXTENSIONS:
+            imgs.extend(dir_path.rglob(f"*{ext}"))
         result["image_count"] = len(imgs)
         if len(imgs) > 0:
              result["reason"] = "Raw images found but no standard labeling detected"

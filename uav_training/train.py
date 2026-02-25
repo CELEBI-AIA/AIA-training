@@ -36,7 +36,7 @@ if torch.cuda.is_available():
 try:
     from uav_training import __version__
 except ImportError:
-    __version__ = "0.8.30"  # fallback when uav_training not installed as package
+    __version__ = "0.8.31"  # fallback when uav_training not installed as package
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -770,7 +770,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                 print("⚠️  phase1 best.pt not found or invalid! Falling back to last.pt", flush=True)
                 phase2_model_path = str(Path(phase1_result["results_dir"]) / "weights" / "last.pt")
                 if not os.path.exists(phase2_model_path) or not _is_checkpoint_valid(Path(phase2_model_path)):
-                     raise FileNotFoundError(f"Failed to find any valid phase1 weights in {phase1_result['results_dir']}")
+                    raise FileNotFoundError(f"Failed to find any valid phase1 weights in {phase1_result['results_dir']}")
 
         # Otomatik per-class validation (Phase 1 sonrası UAP/UAI durumu)
         try:

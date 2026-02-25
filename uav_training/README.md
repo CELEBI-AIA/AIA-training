@@ -82,7 +82,7 @@ TRAIN_CONFIG = {
     "mosaic": 1.0,
     "close_mosaic": 5,
     "box": 7.5, "cls": 0.7, "dfl": 1.5,
-    "min_bbox_norm": 0.004,
+    "min_bbox_norm": 0.002,
     "include_test_in_val": False,
 }
 ```

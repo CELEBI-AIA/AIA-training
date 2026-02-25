@@ -28,9 +28,9 @@ def main():
     args = parser.parse_args()
 
     if not args.model_path:
-        # Colab: eğitim /content/runs'ta; local: PROJECT_ROOT/runs
-        from uav_training.config import is_colab
-        runs = Path("/content/runs") if is_colab() else (PROJECT_ROOT / "runs")
+        # Colab: eğitim /content/runs'ta; local: TRAIN_CONFIG["project"] (artifacts/uav_model/training_results)
+        from uav_training.config import is_colab, TRAIN_CONFIG
+        runs = Path("/content/runs") if is_colab() else Path(TRAIN_CONFIG.get("project", "."))
         if not runs.exists() and runs != Path("/content/runs"):
             runs = Path("/content/runs")
         if runs.exists():
