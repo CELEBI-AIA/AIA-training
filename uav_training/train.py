@@ -36,7 +36,7 @@ if torch.cuda.is_available():
 try:
     from uav_training import __version__
 except ImportError:
-    __version__ = "0.8.28"  # fallback when uav_training not installed as package
+    __version__ = "0.8.29"  # fallback when uav_training not installed as package
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -629,6 +629,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
             project_results = TRAIN_CONFIG["project"]
             if project_results.exists():
                 checkpoints = list(project_results.rglob("last.pt"))
+                checkpoints = [c for c in checkpoints if f"v{__version__}" in str(c)]
                 if checkpoints:
                     candidate = max(checkpoints, key=lambda p: p.stat().st_mtime)
                     if _is_checkpoint_valid(candidate):
@@ -642,6 +643,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                 drive_path = Path(drive_runs)
                 if drive_path.exists():
                     checkpoints = list(drive_path.rglob("last.pt"))
+                    checkpoints = [c for c in checkpoints if f"v{__version__}" in str(c)]
                     if checkpoints:
                         candidate = max(checkpoints, key=lambda p: p.stat().st_mtime)
                         if _is_checkpoint_valid(candidate):

@@ -359,3 +359,16 @@
 - **feat(uav_training/train)**: Exported `git_commit` and `audit_md5` to `full_attempt_args.yaml` for complete tracking and experiment integrity (M-01).
 - **fix(uav_training/config)**: Moved `ARTIFACTS_DIR.mkdir()` inside `ensure_colab_config()` to avoid breaking simple test-level imports via side-effect creation (M-02).
 - **release**: Bumped module/script version from `0.8.27` to `0.8.28`.
+
+## 0.0.49 - 2026-02-25
+- **fix(scripts/colab_bootstrap)**: Mitigated shell injection — all `_run()` interpolations now use `shlex.quote()` for paths and env vars (KR-2).
+- **fix(scripts/colab_bootstrap)**: Parallel download uses `os.pwrite()` with per-worker fd to avoid seek/write race (KR-3).
+- **fix(scripts/colab_bootstrap)**: Fast-path dataset skip now requires `CACHE_MARKER` file; partial extraction no longer falsely triggers skip (KR-5).
+- **fix(scripts/colab_bootstrap)**: Periodic sync default changed from `UAV_SYNC_INTERVAL_SEC=0` to `300` to reduce checkpoint loss on Colab disconnect (KR-1).
+- **fix(uav_training/build_dataset)**: `resolve_target_split` unknown split now raises `ValueError` instead of silently mapping to `val` (R-04).
+- **fix(uav_training/train)**: Resume checkpoint search filters by version (`v{__version__}`) to avoid loading incompatible checkpoints.
+- **fix(scripts/colab_bootstrap)**: `find_latest_checkpoint` filters by version for consistent resume across version bumps.
+- **docs(system_check)**: Restructured static audit prompt — performance/quality focus, mandatory headings, evidence-based findings.
+- **docs(reports)**: Replaced `ml_pipeline_denetim_raporu.md` with `UAV_Pipeline_Statik_Denetim_Raporu.md`.
+- **docs(README)**: Version references updated to v0.8.28.
+- **release**: Bumped module/script version from `0.8.28` to `0.8.29`.

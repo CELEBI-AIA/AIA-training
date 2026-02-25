@@ -1,4 +1,4 @@
-# 🛩️ UAV Training Pipeline — v0.8.21
+# 🛩️ UAV Training Pipeline — v0.8.29
 
 YOLO11m tabanlı İHA (UAV) tespit eğitim altyapısı.
 Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücre ile çalışır.
@@ -11,7 +11,7 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 .
 ├── uav_training/              # YOLO object detection module
 │   ├── config.py              # Auto hardware detection & hyperparameters
-│   ├── train.py               # Training entrypoint (v0.8.21)
+│   ├── train.py               # Training entrypoint (v0.8.29)
 │   ├── build_dataset.py       # Dataset unification, smart sampling & dedup
 │   ├── audit.py               # Dataset audit & validation
 │   ├── inference.py           # Smoke test inference

@@ -113,7 +113,7 @@ def resolve_target_split(split_name: str, include_test_in_val: bool) -> str:
         return "val"
     if split in {"test", "testing"}:
         return "val" if include_test_in_val else "test"
-    return "val"
+    raise ValueError(f"Unknown split name '{split_name}'. Cannot safely map to target split.")
 
 
 def _list_images(base_path: Path) -> list[Path]:

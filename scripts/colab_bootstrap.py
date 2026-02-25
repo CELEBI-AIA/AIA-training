@@ -17,7 +17,7 @@ TWO_PHASE_TRAINING = True  # Run 50+15 optimized profile by default (M-01)
 FORCE_FRESH_START  = False # Ignore existing checkpoints and start fresh (B-05)
 # ────────────────────────────────────────────────────────────────────────────
 
-import subprocess, sys, os, glob, shutil, time, threading
+import subprocess, sys, os, glob, shutil, time, threading, shlex
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
@@ -148,11 +148,11 @@ REPO_DIR = "/content/repo"
 
 if os.path.isdir(os.path.join(REPO_DIR, ".git")):
     print("  ↻ Repo exists — pulling latest changes …", flush=True)
-    _run(f"git -C {REPO_DIR} fetch --all")
-    _run(f"git -C {REPO_DIR} reset --hard origin/{REPO_BRANCH}")
+    _run(f"git -C {shlex.quote(REPO_DIR)} fetch --all")
+    _run(f"git -C {shlex.quote(REPO_DIR)} reset --hard origin/{shlex.quote(REPO_BRANCH)}")
 else:
     print(f"  ↓ Cloning {REPO_URL} …", flush=True)
-    _run(f"git clone --depth 1 -b {REPO_BRANCH} {REPO_URL} {REPO_DIR}")
+    _run(f"git clone --depth 1 -b {shlex.quote(REPO_BRANCH)} {shlex.quote(REPO_URL)} {shlex.quote(REPO_DIR)}")
 
 # Show repo info
 _run(f"git -C {REPO_DIR} log --oneline -1")
@@ -171,7 +171,7 @@ req_file = os.path.join(REPO_DIR, "requirements.txt")
 if os.path.isfile(req_file):
     print("  📦 Installing requirements.txt …", flush=True)
     install_result = _run(
-        f"{sys.executable} -m pip install --disable-pip-version-check --progress-bar off -r {req_file}",
+        f"{sys.executable} -m pip install --disable-pip-version-check --progress-bar off -r {shlex.quote(req_file)}",
         print_output=False,
     )
 
@@ -301,22 +301,15 @@ dataset_yaml = os.path.join(LOCAL_CACHE, "dataset.yaml")
 
 # Fast path: if dataset is already materialized on local SSD, skip tool install
 # and all Drive→SSD copy/extract work.
-if os.path.isfile(dataset_yaml) and existing > 5000:
+if os.path.isfile(dataset_yaml) and existing > 5000 and os.path.isfile(CACHE_MARKER):
     print(f"  ⚡ Local SSD dataset already ready ({existing} files) — SKIP copy/extract", flush=True)
-    with open(CACHE_MARKER, 'w') as f:
-        f.write("1")
 else:
     # Install extraction tools only when download/extract may be needed.
     print("  📦 Installing extraction tools …", flush=True)
     _run("apt-get update -qq && apt-get install -y pigz pv eatmydata 2>&1 | tail -3", check=False)
 
-    if os.path.isfile(CACHE_MARKER):
+    if os.path.isfile(CACHE_MARKER) and existing > 5000:
         print(f"  ⚡ Cache complete ({existing} files) — SKIP", flush=True)
-
-    elif existing > 5000:
-        print(f"  ⚡ Dataset detected ({existing} files) — SKIP", flush=True)
-        with open(CACHE_MARKER, 'w') as f:
-            f.write("1")
 
     else:
         # ── Disk cleanup before download ──
@@ -365,20 +358,25 @@ else:
 
             def _copy_range(start: int, end: int) -> int:
                 n = 0
-                with open(DRIVE_DATASET, "rb") as src, open(LOCAL_TAR, "r+b") as dst:
-                    src.seek(start)
-                    dst.seek(start)
-                    remaining = end - start
-                    while remaining > 0:
-                        to_read = min(CHUNK, remaining)
-                        buf = src.read(to_read)
-                        if not buf:
-                            break
-                        dst.write(buf)
-                        n += len(buf)
-                        remaining -= len(buf)
-                        with _copied_lock:
-                            _copied[0] += len(buf)
+                fd_dst = os.open(LOCAL_TAR, os.O_RDWR)
+                try:
+                    with open(DRIVE_DATASET, "rb") as src:
+                        src.seek(start)
+                        remaining = end - start
+                        current_offset = start
+                        while remaining > 0:
+                            to_read = min(CHUNK, remaining)
+                            buf = src.read(to_read)
+                            if not buf:
+                                break
+                            os.pwrite(fd_dst, buf, current_offset)
+                            n += len(buf)
+                            remaining -= len(buf)
+                            current_offset += len(buf)
+                            with _copied_lock:
+                                _copied[0] += len(buf)
+                finally:
+                    os.close(fd_dst)
                 return n
 
             def _progress_loop():
@@ -450,8 +448,8 @@ else:
         if existing > 100:
             print(f"  ♻️  Incremental extraction ({existing} existing files) …", flush=True)
             _ext_cmd = (
-                f'stdbuf -o {PIPE_BUF} pigz -d -c -p {NCPU} "{LOCAL_TAR}" '
-                f'| stdbuf -i {PIPE_BUF} {_eatmydata}tar -xf - -C "{LOCAL_CACHE}" '
+                f'stdbuf -o {PIPE_BUF} pigz -d -c -p {NCPU} {shlex.quote(LOCAL_TAR)} '
+                f'| stdbuf -i {PIPE_BUF} {_eatmydata}tar -xf - -C {shlex.quote(LOCAL_CACHE)} '
                 f'{TAR_FAST} --skip-old-files '
                 f'--checkpoint={CKPT} --checkpoint-action=echo="  %u files checked…"'
             )
@@ -459,8 +457,8 @@ else:
             _ed = "eatmydata, " if _eatmydata else ""
             print(f"  🚀 Full extraction → {LOCAL_CACHE} ({_ed}pigz {NCPU} cores, 64MB pipe)", flush=True)
             _ext_cmd = (
-                f'stdbuf -o {PIPE_BUF} pigz -d -c -p {NCPU} "{LOCAL_TAR}" '
-                f'| stdbuf -i {PIPE_BUF} {_eatmydata}tar -xf - -C "{LOCAL_CACHE}" '
+                f'stdbuf -o {PIPE_BUF} pigz -d -c -p {NCPU} {shlex.quote(LOCAL_TAR)} '
+                f'| stdbuf -i {PIPE_BUF} {_eatmydata}tar -xf - -C {shlex.quote(LOCAL_CACHE)} '
                 f'{TAR_FAST} '
                 f'--checkpoint={CKPT} --checkpoint-action=echo="  %u files extracted…"'
             )
@@ -504,7 +502,7 @@ print(f"\n  ✓ Total time: {elapsed:.0f}s — {final_count} files ready on SSD"
 # Symlink repo's datasets/ → local cache so training scripts find it
 repo_datasets = os.path.join(REPO_DIR, "datasets")
 if os.path.islink(repo_datasets) or os.path.isdir(repo_datasets):
-    _run(f'rm -rf "{repo_datasets}"')
+    _run(f'rm -rf {shlex.quote(repo_datasets)}')
 os.symlink(LOCAL_CACHE, repo_datasets)
 print(f"  🔗 Symlinked {repo_datasets} → {LOCAL_CACHE}")
 
@@ -523,6 +521,8 @@ _banner("6/8 — Starting training")
 def find_latest_checkpoint(*dirs) -> str | None:
     for d in dirs:
         candidates = glob.glob(os.path.join(d, "**", "weights", "last.pt"), recursive=True)
+        # Filter for the exact version
+        candidates = [c for c in candidates if f"v{VERSION}" in c]
         if candidates:
             candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
             return candidates[0]
@@ -607,7 +607,7 @@ def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):
         if quiet_window_sec > 0 and (time.time() - latest_mtime) < quiet_window_sec:
             continue
 
-        _run(f"rsync -am --include='*/' --include='weights/***' --exclude='*' \"{runs_dir}/\" \"{DRIVE_RUNS}/\"", check=False, print_output=False)
+        _run(f"rsync -am --include='*/' --include='weights/***' --exclude='*' {shlex.quote(runs_dir + '/')} {shlex.quote(DRIVE_RUNS + '/')}", check=False, print_output=False)
         last_synced_ckpt_mtime = latest_mtime
         now = datetime.now().strftime("%H:%M:%S")
         print(
@@ -619,7 +619,7 @@ def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):
 
 _sync_stop = threading.Event()
 _sync_thread = None
-sync_interval = int(os.environ.get("UAV_SYNC_INTERVAL_SEC", "0"))
+sync_interval = int(os.environ.get("UAV_SYNC_INTERVAL_SEC", "300"))
 if sync_interval > 0:
     _sync_thread = threading.Thread(target=_periodic_runs_sync, args=(_sync_stop, sync_interval), daemon=True)
     _sync_thread.start()
@@ -661,13 +661,13 @@ _banner("7/8 — Syncing outputs to Google Drive")
 drive_log_dir = os.path.join(DRIVE_UPLOAD, "logs")
 os.makedirs(drive_log_dir, exist_ok=True)
 print(f"  ☁️  Syncing logs to: {drive_log_dir}", flush=True)
-_run(f'rsync -a "{log_dir}/" "{drive_log_dir}/"', check=False)
+_run(f'rsync -a {shlex.quote(log_dir + "/")} {shlex.quote(drive_log_dir + "/")}', check=False)
 
 # Results are synced by train.py itself, but we can do a fallback sync here just in case
 runs_dir = "/content/runs"
 if os.path.exists(runs_dir):
     print(f"  ☁️  Syncing runs to: {DRIVE_RUNS}", flush=True)
-    _run(f'rsync -a "{runs_dir}/" "{DRIVE_RUNS}/"', check=False)
+    _run(f'rsync -a {shlex.quote(runs_dir + "/")} {shlex.quote(DRIVE_RUNS + "/")}', check=False)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 8. Post-Training Summary
@@ -675,7 +675,7 @@ if os.path.exists(runs_dir):
 _banner("8/8 — Post-training summary")
 
 print(f"\n  📁 Training outputs: {DRIVE_RUNS}", flush=True)
-_run(f'du -sh "{DRIVE_RUNS}" 2>/dev/null | awk \'{{print "     Size: "$1}}\'', check=False)
+_run(f'du -sh {shlex.quote(DRIVE_RUNS)} 2>/dev/null | awk \'{{print "     Size: "$1}}\'', check=False)
 
 # List exported model folders
 models_dir = os.path.join(DRIVE_UPLOAD, "models")
