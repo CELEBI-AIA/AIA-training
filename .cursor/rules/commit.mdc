@@ -1,24 +1,24 @@
 ---
-description: Commit mesajı üret — changelog, version bump, README sync; AI commit yapmaz, sadece mesaj verir
+description: Generate commit message — changelog, version bump, README sync; AI does not commit, only provides message
 alwaysApply: false
 ---
 # Commit Rule
 
-When this rule file is invoked for commit-related tasks (e.g. "commit yap", "commit mesajı oluştur", or when the user references `@commit.mdc`):
+When this rule file is invoked for commit-related tasks (e.g. "commit", "create commit message", or when the user references `@commit.mdc`):
 
-**AI sadece commit mesajını üretir ve verir.** Git commit komutunu kullanıcı kendisi çalıştırır.
+**AI only generates and provides the commit message.** The user runs the git commit command themselves.
 
-## Adımlar (Sırayla Uygula)
+## Steps (Apply in Order)
 
-### 1. Pre-Commit Kontrolleri (Değişiklik varsa uygula)
+### 1. Pre-Commit Checks (Apply if there are changes)
 
-- **Changelog**: Kod değişiklikleri varsa ama CHANGELOGS.md'de yeni sürüm yoksa, yeni `## X.X.XX - YYYY-MM-DD` bloğu ekle.
-- **Version bump**: `uav_training/__init__.py` ve `uav_training/train.py` içindeki `__version__` değerini artır (örn. 0.8.37 → 0.8.38).
-- **README sync**: `README.md` ve `uav_training/README.md` başlıklarındaki versiyon numarasını güncelle.
+- **Changelog**: If there are code changes but no new version in CHANGELOGS.md, add a new `## X.X.XX - YYYY-MM-DD` block.
+- **Version bump**: Increment `__version__` in `uav_training/__init__.py` and `uav_training/train.py` (e.g. 0.8.37 → 0.8.38).
+- **README sync**: Update version number in headers of `README.md` and `uav_training/README.md`.
 
-### 2. Commit Mesajı Oluştur ve Kullanıcıya Ver
+### 2. Create Commit Message and Give to User
 
-`CHANGELOGS.md` son ~20 satırını oku. En son sürüm girişlerinden commit mesajı üret ve **kullanıcıya metin olarak ver**. Git komutu çalıştırma.
+Read the last ~20 lines of `CHANGELOGS.md`. Generate commit message from the latest version entries and **provide it to the user as text**. Do not run git commands.
 
 Format:
 
@@ -31,11 +31,11 @@ type(scope): Brief summary from changelog
 
 `type`: `fix`, `feat`, `perf`, `refactor`, `chore`, `docs`, `test`, `log`, `release`.
 
-### 3. Git Commit — Kullanıcı Yapar
+### 3. Git Commit — User Does It
 
-AI `git add` veya `git commit` çalıştırmaz. Kullanıcıya hazır mesajı ver; kullanıcı kendi terminalinde commit yapar.
+AI does not run `git add` or `git commit`. Provide the ready message to the user; the user commits in their own terminal.
 
-## Changelog Formatı
+## Changelog Format
 
 ```markdown
 ## X.X.XX - YYYY-MM-DD

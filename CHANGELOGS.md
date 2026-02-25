@@ -457,3 +457,7 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **feat(notebook)**: Clone repo first, run bootstrap from repo — always latest, no wget cache.
 - **chore(colab_bootstrap)**: Removed unused _write_stdout_bytes.
 - **release**: Bumped module/script version from `0.8.40` to `0.8.41`.
+
+## 0.8.42 - 2026-02-25
+- **perf(colab_bootstrap)**: Parallel download default — 4 workers (UAV_DOWNLOAD_METHOD=parallel); set pv for sequential.
+- **release**: Bumped module/script version from `0.8.41` to `0.8.42`.

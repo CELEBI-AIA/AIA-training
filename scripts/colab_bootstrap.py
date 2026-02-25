@@ -387,9 +387,8 @@ else:
                 os.remove(LOCAL_TAR)
 
         if _need_download:
-            # Drive FUSE often throttles parallel reads — sequential + large buffer
-            # typically yields 2–4x better throughput (e.g. 200 MB/s vs 50 MB/s).
-            _dl_method = os.environ.get("UAV_DOWNLOAD_METHOD", "pv").strip().lower()
+            # Parallel (4 workers) default; set UAV_DOWNLOAD_METHOD=pv for sequential.
+            _dl_method = os.environ.get("UAV_DOWNLOAD_METHOD", "parallel").strip().lower()
             _pv_buf = os.environ.get("UAV_PV_BUFFER", "128m").strip().lower()
             _use_pv = _dl_method == "pv" and shutil.which("pv")
 
@@ -453,7 +452,7 @@ else:
                 )
             else:
                 # Parallel fallback (UAV_DOWNLOAD_METHOD=parallel or pv missing)
-                N_WORKERS = max(1, min(8, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "2"))))
+                N_WORKERS = max(1, min(8, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "4"))))
                 CHUNK = 32 * 1024 * 1024  # 32 MB — larger = fewer syscalls, less contention
                 print(
                     f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD ({N_WORKERS} workers, 32MB chunks) …",
