@@ -189,6 +189,7 @@ def build_dataset():
             original_count = len(image_files)
             k = int(original_count * sampling_rate)
             if k > 0:
+                set_seed(42) # R-01 Fix: Make sampling deterministic
                 image_files = random.sample(image_files, k)
             print(f"  Downsampled {split}: {original_count} -> {len(image_files)}")
         else:

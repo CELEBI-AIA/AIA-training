@@ -12,7 +12,8 @@ DATASETS_TRAIN_DIR = PROJECT_ROOT / "datasets" / "TRAIN"
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts" / "uav_model"
 
 # Ensure directories exist
-ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+# M-02 Fix: defer mkdirs to ensure_colab_config() instead of import side effects
+# ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _get_module_version() -> str:
@@ -164,7 +165,7 @@ def auto_detect_hardware() -> tuple:
         tier = "A100-40GB"
         model = "yolo11m.pt"
         imgsz = 1024        # High-res for small objects
-        batch = 28          # ~85% VRAM; headroom for TaskAlignedAssigner peaks
+        batch = 24          # Reduced from 28 to avoid TaskAlignedAssigner OOM
     elif vram >= 20:
         # ── L4 24GB ──
         tier = "L4-24GB"
@@ -377,6 +378,9 @@ _colab_config_initialized = False
 
 def ensure_colab_config() -> None:
     """Run auto_detect_hardware and update TRAIN_CONFIG when on Colab. Idempotent."""
+    # M-02 Fix: Move mkdir side effect here
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+
     global _colab_config_initialized
     if not is_colab() or _colab_config_initialized:
         return

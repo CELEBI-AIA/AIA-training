@@ -36,7 +36,7 @@ if torch.cuda.is_available():
 try:
     from uav_training import __version__
 except ImportError:
-    __version__ = "0.8.27"  # fallback when uav_training not installed as package
+    __version__ = "0.8.28"  # fallback when uav_training not installed as package
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -382,6 +382,8 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
                 recovery_action = f"batch={next_args['batch']},nbs={next_args['batch']}"
             elif int(next_args.get("imgsz", 0)) > 640:
                 next_args["imgsz"] = 640
+                if isinstance(next_args.get("batch"), int):
+                    next_args["nbs"] = next_args["batch"]
                 recovery_action = "imgsz=640"
             elif isinstance(next_args.get("batch"), int) and next_args["batch"] > 4:
                 next_args["batch"] = max(4, next_args["batch"] // 2)
@@ -402,6 +404,30 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
     # M-05 Fix: Explicitly log complete combined attempt_args for unified tracking
     try:
         import yaml
+        import subprocess
+        import hashlib
+        
+        # M-01 Fix: Append Git Hash
+        try:
+            repo_dir = Path(__file__).parent.parent
+            git_hash = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=str(repo_dir), stderr=subprocess.DEVNULL
+            ).decode("utf-8").strip()
+            attempt_args["git_commit"] = git_hash
+        except Exception:
+            attempt_args["git_commit"] = "unknown"
+
+        # M-01 Fix: Append Audit Checksum
+        try:
+            from config import AUDIT_REPORT
+            if AUDIT_REPORT.exists():
+                with open(AUDIT_REPORT, "rb") as f:
+                    attempt_args["audit_md5"] = hashlib.md5(f.read()).hexdigest()
+            else:
+                attempt_args["audit_md5"] = "missing"
+        except Exception:
+            attempt_args["audit_md5"] = "error"
+
         out_args_file = Path(str(TRAIN_CONFIG["project"])) / run_name / "full_attempt_args.yaml"
         out_args_file.parent.mkdir(parents=True, exist_ok=True)
         with open(out_args_file, "w") as f:
@@ -701,11 +727,15 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
             "mosaic": TRAIN_CONFIG.get("phase2_mosaic", 0.2),
             "close_mosaic": TRAIN_CONFIG.get("phase2_close_mosaic", 10),
             "lr0": TRAIN_CONFIG.get("phase2_lr0", TRAIN_CONFIG.get("lr0", 0.001)),
+            "lrf": TRAIN_CONFIG.get("phase2_lrf", TRAIN_CONFIG.get("lrf", 0.01)),  # S-01 Fix: explicit LRF inheritance
             "warmup_epochs": 0.0,
         }
 
         # S-05: Reset seed before Phase 2 explicitly
         setup_seed(42, deterministic=det)
+        
+        # S-03 Fix: Call kill_gpu_hogs before starting phase 2 to wipe VRAM fragmentation
+        kill_gpu_hogs()
 
         phase2_result = _train_single_phase(
             phase2_model_path,

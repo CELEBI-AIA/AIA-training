@@ -607,7 +607,7 @@ def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):
         if quiet_window_sec > 0 and (time.time() - latest_mtime) < quiet_window_sec:
             continue
 
-        _run(f'rsync -a "{runs_dir}/" "{DRIVE_RUNS}/"', check=False, print_output=False)
+        _run(f"rsync -am --include='*/' --include='weights/***' --exclude='*' \"{runs_dir}/\" \"{DRIVE_RUNS}/\"", check=False, print_output=False)
         last_synced_ckpt_mtime = latest_mtime
         now = datetime.now().strftime("%H:%M:%S")
         print(

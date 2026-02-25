@@ -141,8 +141,7 @@ def audit_directory(dir_path):
         try:
             content = r.read_text(errors='ignore').lower()
             if any(x in content for x in ["test only", "inference only", "sample", "ornek", "örnek"]):
-                if "örnek" in r.name.lower() or "sample" in r.name.lower():
-                     is_sample = True
+                is_sample = True
         except Exception as e:
             # Silently pass errors from reading unstructured README files
             pass

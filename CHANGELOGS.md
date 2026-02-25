@@ -349,3 +349,13 @@
 ## 0.0.47 - 2026-02-25
 - **perf(colab_bootstrap)**: Extraction optimization — 64MB pipe buffer (stdbuf), eatmydata (skip fsync), checkpoint 50k; install eatmydata for faster tar writes.
 - **release**: Bumped module/script version from `0.8.26` to `0.8.27`.
+
+## 0.0.48 - 2026-02-25
+- **fix(uav_training/build_dataset)**: Made sampling deterministic with `set_seed(42)` for non-megaset datasets (R-01).
+- **fix(uav_training/train)**: Synced `nbs` updates with batch size dynamically during OOM recovery to preserve LR scaling (R-02).
+- **refactor(uav_training/audit)**: Updated `is_sample` keyword detection logic strictly via content scan instead of filename constraints (R-04).
+- **perf(scripts/colab_bootstrap)**: Limited periodic rsync exclusively to the `weights/` subdirectory to reduce unnecessary I/O latency (P-01).
+- **feat(uav_training/train)**: Explicitly inherited `lrf` configuration inside `phase2_overrides` instead of dropping it entirely (S-01).
+- **feat(uav_training/train)**: Exported `git_commit` and `audit_md5` to `full_attempt_args.yaml` for complete tracking and experiment integrity (M-01).
+- **fix(uav_training/config)**: Moved `ARTIFACTS_DIR.mkdir()` inside `ensure_colab_config()` to avoid breaking simple test-level imports via side-effect creation (M-02).
+- **release**: Bumped module/script version from `0.8.27` to `0.8.28`.
