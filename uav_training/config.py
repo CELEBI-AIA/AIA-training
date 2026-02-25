@@ -32,7 +32,7 @@ def _get_module_version() -> str:
 def is_colab() -> bool:
     """Detect if running inside Google Colab."""
     return os.environ.get("COLAB_RELEASE_TAG") is not None or \
-           os.path.exists("/content")
+        os.path.exists("/content")
 
 
 # On Colab: dataset lives entirely on LOCAL SSD for max I/O speed.
@@ -120,15 +120,15 @@ def auto_detect_hardware() -> tuple:
     # autobatch (-1) only uses ~60% VRAM → wastes 40% of expensive cloud GPU.
     # These are tested batch sizes that safely fill ~85-90% VRAM with AMP.
     vram = float(info["vram_gb"])
-    ram  = float(info["ram_gb"])
+    ram = float(info["ram_gb"])
     cpus = int(info["cpu_count"])
 
     # ── TPU Detection ──
     # YOLO/Ultralytics requires CUDA. TPUs (v6e-1, v5e-1) use XLA which
     # is NOT compatible with YOLO's training loop. Detect and warn.
     is_tpu = os.environ.get("TPU_NAME") is not None or \
-             os.environ.get("COLAB_TPU_ADDR") is not None or \
-             os.path.exists("/dev/accel0")
+        os.environ.get("COLAB_TPU_ADDR") is not None or \
+        os.path.exists("/dev/accel0")
     if is_tpu and vram == 0:
         print("\n" + "!" * 60, flush=True)
         print("  ⚠️  TPU RUNTIME DETECTED — YOLO EĞİTİMİ İÇİN UYGUN DEĞİL!")
@@ -296,7 +296,7 @@ def auto_detect_hardware() -> tuple:
 
     # Print detected hardware — flush=True so it appears instantly in Colab
     print(f"\n{'='*60}", flush=True)
-    print(f"  🖥️  AUTO HARDWARE DETECTION")
+    print("  🖥️  AUTO HARDWARE DETECTION")
     print(f"{'='*60}")
     print(f"  GPU        : {info['gpu_name']}")
     print(f"  VRAM       : {info['vram_gb']} GB")
@@ -313,9 +313,9 @@ def auto_detect_hardware() -> tuple:
     print(f"  Multi-Scale: {multi_scale}")
     bf16_ok = torch.cuda.is_bf16_supported() if torch.cuda.is_available() else False
     print(f"  BF16      : {'Supported' if bf16_ok else 'Not supported'}")
-    print(f"  TF32      : Enabled (matmul + cuDNN)")
-    print(f"  Epochs     : 65 (phase1=50, phase2=15)")
-    print(f"  AMP        : True (BF16 auto-selected on Ampere+)")
+    print("  TF32      : Enabled (matmul + cuDNN)")
+    print("  Epochs     : 65 (phase1=50, phase2=15)")
+    print("  AMP        : True (BF16 auto-selected on Ampere+)")
     print(f"{'='*60}\n", flush=True)
 
     return config_overrides, info

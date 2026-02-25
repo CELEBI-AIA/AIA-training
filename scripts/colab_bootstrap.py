@@ -6,20 +6,27 @@
 VERSION = "dev"
 
 # ── Configuration ───────────────────────────────────────────────────────────
-REPO_URL       = "https://github.com/CELEBI-AIA/AIA-training.git"
-REPO_BRANCH    = "main"
-DRIVE_DATASET  = "/content/drive/MyDrive/AIA/datasets.tar.gz"
-LOCAL_CACHE    = "/content/datasets_local"
-DRIVE_RUNS     = "/content/drive/MyDrive/AIA/runs"
-DRIVE_UPLOAD   = "/content/drive/MyDrive/AIA"     # best.pt upload destination
-TRAIN_SCRIPT   = "uav_training/train.py"
+REPO_URL = "https://github.com/CELEBI-AIA/AIA-training.git"
+REPO_BRANCH = "main"
+DRIVE_DATASET = "/content/drive/MyDrive/AIA/datasets.tar.gz"
+LOCAL_CACHE = "/content/datasets_local"
+DRIVE_RUNS = "/content/drive/MyDrive/AIA/runs"
+DRIVE_UPLOAD = "/content/drive/MyDrive/AIA"  # best.pt upload destination
+TRAIN_SCRIPT = "uav_training/train.py"
 TWO_PHASE_TRAINING = True  # Run 50+15 optimized profile by default (M-01)
-FORCE_FRESH_START  = False # Ignore existing checkpoints and start fresh (B-05)
+FORCE_FRESH_START = False  # Ignore existing checkpoints and start fresh (B-05)
 # ────────────────────────────────────────────────────────────────────────────
 
-import subprocess, sys, os, glob, shutil, time, threading, shlex
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+import os  # noqa: E402
+import glob  # noqa: E402
+import shutil  # noqa: E402
+import time  # noqa: E402
+import threading  # noqa: E402
+import shlex  # noqa: E402
+from concurrent.futures import ThreadPoolExecutor, as_completed  # noqa: E402
+from datetime import datetime  # noqa: E402
 
 
 def _read_repo_version(repo_dir: str) -> str:
@@ -40,8 +47,10 @@ def _read_repo_version(repo_dir: str) -> str:
 
     return "dev"
 
+
 # ── Force unbuffered output → ALL print/log lines appear in Colab INSTANTLY ──
 os.environ["PYTHONUNBUFFERED"] = "1"
+
 
 def _run(cmd: str, *, check: bool = True, print_output: bool = True, **kw):
     """Run a shell command — capture output and print to Colab cell explicitly.
@@ -73,15 +82,18 @@ def _resolve_drive_path(path: str) -> str:
             return target
     return path
 
+
 def _banner(msg: str):
     print(f"\n{'='*60}\n  {msg}\n{'='*60}", flush=True)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 0. Pre-Flight Cleanup
 # ═══════════════════════════════════════════════════════════════════════════
 _banner("0/8 — Pre-flight cleanup")
 
-import gc
+
+import gc  # noqa: E402
 
 # Kill leftover training processes
 print("  🧹 Killing stale processes …", flush=True)
@@ -117,7 +129,7 @@ print("  ✓ Cleanup done\n", flush=True)
 # 1. Mount Google Drive
 # ═══════════════════════════════════════════════════════════════════════════
 _banner("1/8 — Mounting Google Drive")
-from google.colab import drive
+from google.colab import drive  # noqa: E402
 drive.mount("/content/drive", force_remount=False)
 
 DRIVE_UPLOAD = _resolve_drive_path(DRIVE_UPLOAD)
@@ -132,7 +144,7 @@ if not os.path.isfile(DRIVE_DATASET):
 
 os.makedirs(DRIVE_RUNS, exist_ok=True)
 os.makedirs(DRIVE_UPLOAD, exist_ok=True)
-print(f"  ✓ Drive mounted", flush=True)
+print("  ✓ Drive mounted", flush=True)
 print(f"  ✓ Dataset archive: {DRIVE_DATASET}")
 # Print archive size
 tar_size = os.path.getsize(DRIVE_DATASET) / (1024**3)
@@ -193,7 +205,7 @@ if os.path.isfile(req_file):
     else:
         print("  ✓ Dependency check completed", flush=True)
 else:
-    print("  ⚠ No requirements.txt found")
+    print("  ⚠ No requirements.txt found")  # noqa: F541
 
 # Ensure ultralytics + psutil are available
 print("  📦 Verifying ultralytics & psutil …", flush=True)
@@ -201,15 +213,26 @@ print("  📦 Verifying ultralytics & psutil …", flush=True)
 
 # Print key package versions
 print("\n  📊 Package versions:", flush=True)
-_run(f'{sys.executable} -c "import ultralytics; print(f\'     ultralytics: {{ultralytics.__version__}}\')"', check=False)
-_run(f'{sys.executable} -c "import torch; print(f\'     torch: {{torch.__version__}}, CUDA: {{torch.version.cuda}}\')"', check=False)
+_run(
+    f'{sys.executable} -c "import ultralytics; '
+    'print(f\'     ultralytics: {ultralytics.__version__}\')"',
+    check=False,
+)
+_run(
+    f'{sys.executable} -c "import torch; '
+    'print(f\'     torch: {torch.__version__}, CUDA: {torch.version.cuda}\')"',
+    check=False,
+)
 print("  ✓ Dependencies installed", flush=True)
 
 # Run full test suite before dataset download — catch build issues early
 print("  🧪 Running tests (automatic) …", flush=True)
-_run("cd {0} && {1} -m pytest tests/ -v --tb=short -q".format(
-    shlex.quote(REPO_DIR), shlex.quote(sys.executable)
-), check=True)
+_run(
+    "cd {0} && {1} -m pytest tests/ -v --tb=short -q".format(
+        shlex.quote(REPO_DIR), shlex.quote(sys.executable)
+    ),
+    check=True,
+)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 4. Auto Hardware Detection + Configure (BEFORE dataset download!)
@@ -230,12 +253,17 @@ try:
     print(f"  CUDA available: {_has_cuda}", flush=True)
     if _has_cuda:
         _p = _t.cuda.get_device_properties(0)
-        print(f"  GPU: {_p.name}  |  VRAM: {_p.total_memory / 1024**3:.1f} GB", flush=True)
+        vram_gb = _p.total_memory / 1024**3
+        print(f"  GPU: {_p.name}  |  VRAM: {vram_gb:.1f} GB", flush=True)
         _cc = _t.cuda.get_device_capability(0)
         print(f"  Compute capability: {_cc[0]}.{_cc[1]}", flush=True)
         if _cc[0] >= 8:
             os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-            print(f"  Ampere+ (sm_{_cc[0]}{_cc[1]}): native AMP BF16, expandable VRAM segments enabled", flush=True)
+            print(
+                f"  Ampere+ (sm_{_cc[0]}{_cc[1]}): native AMP BF16, "
+                "expandable VRAM segments enabled",
+                flush=True,
+            )
         del _p, _cc
     del _t
 except Exception as _e:
@@ -278,17 +306,18 @@ os.environ["VECLIB_MAXIMUM_THREADS"] = str(max(2, data_threads // 4))
 os.environ["NUMEXPR_NUM_THREADS"] = str(max(2, data_threads // 4))
 os.environ["OPENCV_FOR_THREADS_NUM"] = str(max(2, data_threads // 4))
 
-# Force inter/intra op threads for PyTorch 
+# Force inter/intra op threads for PyTorch
 _run(
-    f'{sys.executable} -c "import torch; torch.set_num_threads({intra_threads}); torch.set_num_interop_threads({interop_threads})"',
+    f'{sys.executable} -c "import torch; torch.set_num_threads({intra_threads}); '
+    f'torch.set_num_interop_threads({interop_threads})"',
     check=False,
 )
 
 # Point YOLO settings to local SSD
 _run('yolo settings runs_dir="/content/runs"', check=False)
 _run('yolo settings datasets_dir="/content/datasets_local"', check=False)
-print(f"  ✓ Training output → /content/runs/ (local SSD)", flush=True)
-print(f"  ✓ Datasets dir → /content/datasets_local/ (local SSD)", flush=True)
+print("  ✓ Training output → /content/runs/ (local SSD)", flush=True)
+print("  ✓ Datasets dir → /content/datasets_local/ (local SSD)", flush=True)
 print(f"  ✓ Post-training sync → {DRIVE_RUNS} (Google Drive)", flush=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -331,10 +360,10 @@ else:
             _shutil.rmtree(LOCAL_CACHE, ignore_errors=True)
             os.makedirs(LOCAL_CACHE, exist_ok=True)
             existing = 0
-            print(f"  🗑️  Removed incomplete old dataset", flush=True)
+            print("  🗑️  Removed incomplete old dataset", flush=True)
 
         # Show disk space before we start
-        _run(f"df -h /content | tail -1 | awk '{{print \"  📊 Disk: used \"$3\"  free \"$4\"  (\"$5\" full)\"}}'")
+        _run("df -h /content | tail -1 | awk '{print \"  📊 Disk: used \"$3\"  free \"$4\"  (\"$5\" full)\"}'")
 
         # ── PHASE 1: Download tar.gz from Drive → Local SSD ──
         # Uses Python file I/O with real-time progress — dd/pv output is
@@ -345,16 +374,20 @@ else:
         _need_download = True
         if os.path.isfile(LOCAL_TAR):
             if os.path.getsize(LOCAL_TAR) == tar_size_bytes:
-                print(f"  ⚡ tar.gz already on local SSD ({tar_size_gb:.1f} GB) — skip download", flush=True)
+                print(
+                    f"  ⚡ tar.gz already on local SSD ({tar_size_gb:.1f} GB) "
+                    "— skip download",
+                    flush=True,
+                )
                 _need_download = False
             else:
-                print(f"  ♻️  Partial file — re-downloading", flush=True)
+                print("  ♻️  Partial file — re-downloading", flush=True)
                 os.remove(LOCAL_TAR)
 
         if _need_download:
             N_WORKERS = max(1, min(8, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "4"))))
             print(f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD ({N_WORKERS} workers) …", flush=True)
-            print(f"     {DRIVE_DATASET} → {LOCAL_TAR}", flush=True)
+            print(f"     {DRIVE_DATASET} -> {LOCAL_TAR}", flush=True)  # has placeholders
             CHUNK = 8 * 1024 * 1024  # 8 MB — smaller to reduce lock contention & memory
             chunk_size = (tar_size_bytes + N_WORKERS - 1) // N_WORKERS
             _dl_start = time.time()
@@ -439,7 +472,11 @@ else:
             sys.stdout.flush()
 
         dl_elapsed = time.time() - t0
-        print(f"  ✓ Download done in {dl_elapsed:.0f}s ({tar_size_gb/max(dl_elapsed,1)*1024:.0f} MB/s)", flush=True)
+        print(
+            f"  ✓ Download done in {dl_elapsed:.0f}s "
+            f"({tar_size_gb/max(dl_elapsed, 1)*1024:.0f} MB/s)",
+            flush=True,
+        )
 
         # ── PHASE 2: Extract from local copy (full NVMe speed) ──
         # stdbuf: 64MB pipe buffer for pigz→tar throughput
@@ -452,7 +489,10 @@ else:
         _eatmydata = "eatmydata " if shutil.which("eatmydata") else ""
 
         if existing > 100:
-            print(f"  ♻️  Incremental extraction ({existing} existing files) …", flush=True)
+            print(
+                f"  ♻️  Incremental extraction ({existing} existing files) …",
+                flush=True,
+            )
             _ext_cmd = (
                 f'stdbuf -o {PIPE_BUF} pigz -d -c -p {NCPU} {shlex.quote(LOCAL_TAR)} '
                 f'| stdbuf -i {PIPE_BUF} {_eatmydata}tar -xf - -C {shlex.quote(LOCAL_CACHE)} '
@@ -461,7 +501,11 @@ else:
             )
         else:
             _ed = "eatmydata, " if _eatmydata else ""
-            print(f"  🚀 Full extraction → {LOCAL_CACHE} ({_ed}pigz {NCPU} cores, 64MB pipe)", flush=True)
+            print(
+                f"  🚀 Full extraction → {LOCAL_CACHE} "
+                f"({_ed}pigz {NCPU} cores, 64MB pipe)",
+                flush=True,
+            )
             _ext_cmd = (
                 f'stdbuf -o {PIPE_BUF} pigz -d -c -p {NCPU} {shlex.quote(LOCAL_TAR)} '
                 f'| stdbuf -i {PIPE_BUF} {_eatmydata}tar -xf - -C {shlex.quote(LOCAL_CACHE)} '
@@ -499,22 +543,29 @@ else:
             with open(CACHE_MARKER, 'w') as f:
                 f.write("1")
         else:
-            print(f"  ⚠️  Only {final_count} files extracted — re-run to retry from Drive", flush=True)
+            print(
+                f"  ⚠️  Only {final_count} files extracted — "
+                "re-run to retry from Drive",
+                flush=True,
+            )
 
 elapsed = time.time() - t0
 final_count = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
-print(f"\n  ✓ Total time: {elapsed:.0f}s — {final_count} files ready on SSD", flush=True)
+print(
+    f"\n  ✓ Total time: {elapsed:.0f}s — {final_count} files ready on SSD",
+    flush=True,
+)
 
 # Symlink repo's datasets/ → local cache so training scripts find it
 repo_datasets = os.path.join(REPO_DIR, "datasets")
 if os.path.islink(repo_datasets) or os.path.isdir(repo_datasets):
     _run(f'rm -rf {shlex.quote(repo_datasets)}')
 os.symlink(LOCAL_CACHE, repo_datasets)
-print(f"  🔗 Symlinked {repo_datasets} → {LOCAL_CACHE}")
+print(f"  🔗 Symlinked {repo_datasets} -> {LOCAL_CACHE}")
 
 # Disk usage report
 print("\n  📊 Disk usage:", flush=True)
-_run(f"df -h /content | tail -1 | awk '{{print \"     /content  — used: \"$3\"  free: \"$4\"  (\"$5\" full)\"}}'")
+_run("df -h /content | tail -1 | awk '{print \"     /content  — used: \"$3\"  free: \"$4\"  (\"$5\" full)\"}'")
 _run(f"du -sh {LOCAL_CACHE} | awk '{{print \"     Dataset   — \"$1}}'")
 
 
@@ -524,7 +575,7 @@ _run(f"du -sh {LOCAL_CACHE} | awk '{{print \"     Dataset   — \"$1}}'")
 _banner("6/8 — Starting training")
 
 # Search for the latest checkpoint (Local SSD first, then Drive)
-def find_latest_checkpoint(*dirs) -> str | None:
+def find_latest_checkpoint(*dirs) -> str | None:  # noqa: E302
     for d in dirs:
         candidates = glob.glob(os.path.join(d, "**", "weights", "last.pt"), recursive=True)
         # Filter for the exact version
@@ -534,7 +585,9 @@ def find_latest_checkpoint(*dirs) -> str | None:
             return candidates[0]
     return None
 
+
 checkpoint = find_latest_checkpoint("/content/runs", DRIVE_RUNS)
+
 
 train_script_path = os.path.join(REPO_DIR, TRAIN_SCRIPT)
 if not os.path.isfile(train_script_path):
@@ -581,7 +634,7 @@ proc = subprocess.Popen(
 )
 
 
-def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):
+def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):  # noqa: E305
     """
     Periodically sync /content/runs to Drive during training to avoid
     checkpoint loss when Colab runtime disconnects/restarts.
@@ -613,7 +666,11 @@ def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):
         if quiet_window_sec > 0 and (time.time() - latest_mtime) < quiet_window_sec:
             continue
 
-        _run(f"rsync -am --include='*/' --include='weights/***' --exclude='*' {shlex.quote(runs_dir + '/')} {shlex.quote(DRIVE_RUNS + '/')}", check=False, print_output=False)
+        rsync_cmd = (
+            f"rsync -am --include='*/' --include='weights/***' --exclude='*' "
+            f"{shlex.quote(runs_dir + '/')} {shlex.quote(DRIVE_RUNS + '/')}"
+        )
+        _run(rsync_cmd, check=False, print_output=False)
         last_synced_ckpt_mtime = latest_mtime
         now = datetime.now().strftime("%H:%M:%S")
         print(
@@ -630,7 +687,11 @@ if sync_interval > 0:
     _sync_thread = threading.Thread(target=_periodic_runs_sync, args=(_sync_stop, sync_interval), daemon=True)
     _sync_thread.start()
 else:
-    print("  ℹ️  Periodic runs sync disabled (UAV_SYNC_INTERVAL_SEC<=0). Using epoch-end Drive sync.", flush=True)
+    print(
+        "  ℹ️  Periodic runs sync disabled (UAV_SYNC_INTERVAL_SEC<=0). "
+        "Using epoch-end Drive sync.",
+        flush=True,
+    )
 
 with open(log_path, 'wb') as lf:
     fd = proc.stdout.fileno()
@@ -654,7 +715,7 @@ print(f"\n{'─'*60}", flush=True)
 if exit_code != 0:
     print(f"  ❌ Training exited with code {exit_code}", flush=True)
 else:
-    print(f"  ✅ Training completed successfully", flush=True)
+    print("  ✅ Training completed successfully", flush=True)
 
 print(f"  📝 Full log saved: {log_path}", flush=True)
 

@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from uav_training.audit import (
     _compute_split_overlap,
     audit_directory,
@@ -7,17 +5,19 @@ from uav_training.audit import (
     read_yaml,
 )
 
+
 def test_read_txt_classes_success(tmp_path):
     # Setup dummy file
     test_file = tmp_path / "classes.txt"
     test_file.write_text("car\nperson\nbicycle\n")
-    
+
     # Execute
     classes = read_txt_classes(test_file)
-    
+
     # Assert
     assert classes == ["car", "person", "bicycle"]
     assert len(classes) == 3
+
 
 def test_read_txt_classes_missing_file(tmp_path):
     """Missing file returns []. Uses tmp_path for cross-platform path."""

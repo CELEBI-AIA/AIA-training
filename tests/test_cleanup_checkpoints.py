@@ -6,7 +6,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.cleanup_checkpoints import (
+from scripts.cleanup_checkpoints import (  # noqa: E402
     cleanup_checkpoints,
     cleanup_run,
     KEEP_EPOCHS,

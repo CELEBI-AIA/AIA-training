@@ -15,8 +15,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from uav_training.config import DATASET_DIR
-from uav_training.val_utils import run_per_class_val, print_per_class_report
+from uav_training.config import DATASET_DIR  # noqa: E402
+from uav_training.val_utils import run_per_class_val, print_per_class_report  # noqa: E402
 
 
 def main():

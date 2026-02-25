@@ -1,7 +1,4 @@
 """Unit tests for uav_training.val_utils."""
-import pytest
-from pathlib import Path
-
 from uav_training.val_utils import (
     check_temporal_leakage,
     print_per_class_report,

@@ -8,25 +8,27 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-import torch
+import torch  # noqa: E402
 
 # Reduce VRAM fragmentation — must be set before any CUDA allocation
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True,max_split_size_mb:512")
 
-from uav_training.config import ARTIFACTS_DIR, AUDIT_REPORT, DATASET_DIR, TRAIN_CONFIG, setup_torch_backend, ensure_colab_config
+from uav_training.config import (  # noqa: E402
+    AUDIT_REPORT, DATASET_DIR, TRAIN_CONFIG, setup_torch_backend, ensure_colab_config
+)
 setup_torch_backend()
 try:
-    from ultralytics import YOLO
+    from ultralytics import YOLO  # noqa: E402
 except ImportError:
     print("Error: ultralytics package not found. Please install it using:")
     print("  pip install ultralytics")
     sys.exit(1)
 
-from uav_training.build_dataset import build_dataset
-import time
-import csv
-import shutil
-import threading
+from uav_training.build_dataset import build_dataset  # noqa: E402
+import time  # noqa: E402
+import csv  # noqa: E402
+import shutil  # noqa: E402
+import threading  # noqa: E402
 
 # Enable V8 cuDNN API for better A100 performance
 os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
@@ -51,8 +53,7 @@ def kill_gpu_hogs():
     """Clear GPU memory aggressively — sync, collect, then release cached blocks."""
     import gc
     import torch
-    import time
-    
+
     # Wait for any active Drive sync from previous epochs (M-02)
     while True:
         with _SYNC_LOCK:
@@ -183,7 +184,7 @@ def rename_and_export_best(results_dir: Path, drive_dest: str | None = None) -> 
         last_pt = results_dir / "weights" / "last.pt"
         if last_pt.exists():
             shutil.copy2(last_pt, os.path.join(models_dir, "last.pt"))
-            print(f"  ✓ last.pt", flush=True)
+            print("  ✓ last.pt", flush=True)
 
         # Copy all analysis files
         copied = 0
@@ -207,12 +208,15 @@ def rename_and_export_best(results_dir: Path, drive_dest: str | None = None) -> 
 def print_training_config(train_args: dict):
     """Print the full training configuration so it's visible in logs."""
     print(f"\n{'─'*60}", flush=True)
-    print(f"  📋 TRAINING CONFIGURATION")
+    print("  📋 TRAINING CONFIGURATION")
     print(f"{'─'*60}")
     for k, v in train_args.items():
         print(f"  {k:<20}: {v}")
+
+
 _SYNC_LOCK = threading.Lock()
 _SYNC_IN_FLIGHT = False
+
 
 def _sync_to_drive(save_dir, run_name):
     """Non-blocking Drive sync — checkpoint kaybını önler.
@@ -234,7 +238,9 @@ def _sync_to_drive(save_dir, run_name):
     except Exception as e:
         print(f"[DRIVE WARN] {e}", flush=True)
 
+
 _LAST_SYNC_EPOCH = -1
+
 
 def _cleanup_old_checkpoints(weights_dir: Path) -> int:
     """Keep best.pt, last.pt and last 3 epoch*.pt; delete older epoch checkpoints."""
@@ -318,10 +324,11 @@ def checkpoint_guard(trainer):
 
         threading.Thread(target=_sync_job, daemon=True).start()
 
+
 def _sync_results_to_drive(results_dir: Path, run_name: str):
     """Final sync from local SSD runs to Drive."""
     _sync_to_drive(results_dir, run_name)
-    print(f"\n☁️  Final sync to Drive completed", flush=True)
+    print("\n☁️  Final sync to Drive completed", flush=True)
 
 
 def _is_cuda_oom_error(exc: Exception) -> bool:
@@ -378,7 +385,8 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         "patience", "cos_lr", "overlap_mask", "mosaic", "rect", "multi_scale",
         "close_mosaic", "deterministic", "save_period", "compile",
         "lr0", "lrf", "warmup_epochs", "weight_decay",
-        "scale", "copy_paste", "copy_paste_mode", "degrees", "flipud", "fliplr", "hsv_h", "hsv_s", "hsv_v", "bgr",
+        "scale", "copy_paste", "copy_paste_mode", "degrees", "flipud", "fliplr",
+        "hsv_h", "hsv_s", "hsv_v", "bgr",
         "box", "cls", "dfl",
     ]
     for p in optional_params:
@@ -414,8 +422,16 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
             # Optimizer state mismatch when resuming across Ultralytics versions (e.g. 8.3→8.4)
             if isinstance(exc, ValueError) and "parameter group" in str(exc).lower():
                 if attempt_args.get("resume") and attempt == 1:
-                    print(f"⚠️ Optimizer state incompatible (likely Ultralytics version upgrade): {exc}", flush=True)
-                    print("🛟 Retrying with resume=False — loading model weights only, restarting optimizer.", flush=True)
+                    print(
+                        f"⚠️ Optimizer state incompatible "
+                        f"(likely Ultralytics version upgrade): {exc}",
+                        flush=True
+                    )
+                    print(
+                        "🛟 Retrying with resume=False — loading model weights "
+                        "only, restarting optimizer.",
+                        flush=True
+                    )
                     next_args = attempt_args.copy()
                     next_args["resume"] = False
                     del model
@@ -458,13 +474,13 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
 
     if results is None and last_exc is not None:
         raise last_exc
-        
+
     # M-05 Fix: Explicitly log complete combined attempt_args for unified tracking
     try:
         import yaml
         import subprocess
         import hashlib
-        
+
         # M-01 Fix: Append Git Hash
         try:
             repo_dir = Path(__file__).parent.parent
@@ -547,7 +563,7 @@ def _check_leakage_from_audit(*, allow_leakage: bool = False) -> None:
     if allow_leakage:
         return
     if not AUDIT_REPORT.exists():
-        print(f"⚠️ Audit report missing. Running audit.py to generate it... (M-06/E-05 Fix)", flush=True)
+        print("⚠️ Audit report missing. Running audit.py to generate it... (M-06/E-05 Fix)", flush=True)
         import subprocess
         try:
             audit_script = Path(__file__).parent / "audit.py"
@@ -569,16 +585,11 @@ def _check_leakage_from_audit(*, allow_leakage: bool = False) -> None:
             continue
         overlap = r.get("split_overlap", {})
         if overlap.get("has_overlap"):
-            total = (
-                overlap.get("train_val_overlap", 0)
-                + overlap.get("train_test_overlap", 0)
-                + overlap.get("val_test_overlap", 0)
-            )
             raise RuntimeError(
                 f"Data leakage detected in dataset '{r.get('name', '?')}': "
-                f"split overlap (train_val={overlap.get('train_val_overlap',0)}, "
-                f"train_test={overlap.get('train_test_overlap',0)}, "
-                f"val_test={overlap.get('val_test_overlap',0)}). "
+                f"split overlap (train_val={overlap.get('train_val_overlap', 0)}, "
+                f"train_test={overlap.get('train_test_overlap', 0)}, "
+                f"val_test={overlap.get('val_test_overlap', 0)}). "
                 "Run audit.py and fix overlaps, or use --allow-leakage to override."
             )
 
@@ -728,7 +739,8 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
             vram_free = (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / (1024**3)
             bf16_native = "Yes" if cc[0] >= 8 else "No"
             print(
-                f"  GPU: {gpu} (sm_{cc[0]}{cc[1]})  |  VRAM: {vram_free:.1f}/{vram_total:.1f} GB free  |  BF16 native: {bf16_native}",
+                f"  GPU: {gpu} (sm_{cc[0]}{cc[1]})  |  VRAM: {vram_free:.1f}/"
+                f"{vram_total:.1f} GB free  |  BF16 native: {bf16_native}",
                 flush=True,
             )
     except Exception:
@@ -756,7 +768,11 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
 
         phase1_name = f"{TRAIN_CONFIG['name']}_phase1"
         phase2_name = f"{TRAIN_CONFIG['name']}_phase2"
-        print(f"\n🚀 Two-phase training active (phase1={phase1_epochs}, phase2={phase2_epochs})", flush=True)
+        print(
+            f"\n🚀 Two-phase training active "
+            f"(phase1={phase1_epochs}, phase2={phase2_epochs})",
+            flush=True
+        )
 
         phase1_result = _train_single_phase(
             model_path,
@@ -769,18 +785,29 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
 
         phase2_model_path = phase1_result.get("best_pt")
         if not phase2_model_path or not os.path.exists(phase2_model_path):
-            phase2_model_path = str(Path(phase1_result["results_dir"]) / "weights" / "best.pt")
-            
+            phase2_model_path = str(
+                Path(phase1_result["results_dir"]) / "weights" / "best.pt"
+            )
+
             # Safeguard: if best.pt wasn't saved/renamed properly, fallback to last.pt
-            if not os.path.exists(phase2_model_path) or not _is_checkpoint_valid(Path(phase2_model_path)):
-                print("⚠️  phase1 best.pt not found or invalid! Falling back to last.pt", flush=True)
+            if (not os.path.exists(phase2_model_path) or
+                    not _is_checkpoint_valid(Path(phase2_model_path))):
+                print(
+                    "⚠️  phase1 best.pt not found or invalid! "
+                    "Falling back to last.pt",
+                    flush=True
+                )
                 phase2_model_path = str(Path(phase1_result["results_dir"]) / "weights" / "last.pt")
-                if not os.path.exists(phase2_model_path) or not _is_checkpoint_valid(Path(phase2_model_path)):
-                    raise FileNotFoundError(f"Failed to find any valid phase1 weights in {phase1_result['results_dir']}")
+                if (not os.path.exists(phase2_model_path) or
+                        not _is_checkpoint_valid(Path(phase2_model_path))):
+                    raise FileNotFoundError(
+                        f"Failed to find any valid phase1 weights in "
+                        f"{phase1_result['results_dir']}"
+                    )
 
         # Otomatik per-class validation (Phase 1 sonrası UAP/UAI durumu)
         try:
-            from val_utils import run_per_class_val, print_per_class_report
+            from uav_training.val_utils import run_per_class_val, print_per_class_report
             print("\n📊 Phase 1 sonrası per-class validation...", flush=True)
             per_class = run_per_class_val(phase2_model_path, str(DATASET_DIR), verbose=False)
             print_per_class_report(per_class)
@@ -807,7 +834,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
 
         # S-05: Reset seed before Phase 2 explicitly
         setup_seed(42, deterministic=det)
-        
+
         # S-03 Fix: Call kill_gpu_hogs before starting phase 2 to wipe VRAM fragmentation
         kill_gpu_hogs()
 
@@ -830,6 +857,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
         traceback.print_exc()
         sys.exit(1)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train YOLO11 on UAV dataset")
     parser.add_argument("--epochs", type=int, help="Number of epochs")
@@ -848,7 +876,7 @@ if __name__ == "__main__":
         try:
             batch_val = int(batch_val)
         except ValueError:
-            pass # Keep as string if it's something like 'auto' or '-1'
+            pass  # Keep as string if it's something like 'auto' or '-1'
 
     train(
         epochs=args.epochs,

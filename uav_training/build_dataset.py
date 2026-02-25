@@ -7,15 +7,14 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-import hashlib
-import shutil
-from tqdm import tqdm
-import yaml
-import json
-import random
-import atexit
-import math
-import platform
+import hashlib  # noqa: E402
+import shutil  # noqa: E402
+from tqdm import tqdm  # noqa: E402
+import yaml  # noqa: E402
+import random  # noqa: E402
+import atexit  # noqa: E402
+import math  # noqa: E402
+import platform  # noqa: E402
 
 _EPS = 1e-6
 
@@ -24,8 +23,11 @@ if platform.system() == "Windows":
 else:
     import fcntl
 
+
 def set_seed(seed=42):
-    import random, numpy, torch
+    import random
+    import numpy
+    import torch
     random.seed(seed)
     numpy.random.seed(seed)
     # ultralytics/torch might be imported later but we set it just in case
@@ -34,8 +36,16 @@ def set_seed(seed=42):
     except NameError:
         pass
 
+
 # Use configuration from config.py if needed, or define constants here for standalone utility
-from uav_training.config import PROJECT_ROOT, DATASET_DIR, DATASETS_TRAIN_DIR, ARTIFACTS_DIR, TRAIN_CONFIG, IMAGE_EXTENSIONS
+from uav_training.config import (  # noqa: E402
+    DATASET_DIR,
+    DATASETS_TRAIN_DIR,
+    ARTIFACTS_DIR,
+    TRAIN_CONFIG,
+    IMAGE_EXTENSIONS,
+)
+
 
 # Using the optimized MAPPINGS from the successful unify_datasets.py
 # Updated MAPPINGS for "TRAIN" folder
@@ -50,15 +60,15 @@ MAPPINGS = {
     "Uap-UaiAlanlariVeriSeti.v2i.yolov8": {
         "source_names": ['UAI', 'UAI-', 'UAP', 'UAP-', 'car', 'people'],
         "map": {
-            'UAI': 3, 'UAI-': 3, 
-            'UAP': 2, 'UAP-': 2, 
-            'car': 0, 
+            'UAI': 3, 'UAI-': 3,
+            'UAP': 2, 'UAP-': 2,
+            'car': 0,
             'people': 1
         },
-        "oversample": 3, 
+        "oversample": 3,
         "sampling_rate": 1.0
     },
-    
+
     # REMOVED Teknofest.v2 as per user request (Archived)
 
     # 3. drone-vision-project (New found in TRAIN)
@@ -69,7 +79,7 @@ MAPPINGS = {
             'car': 0,
             'pedestrian': 1
         },
-        "oversample": 3, 
+        "oversample": 3,
         "sampling_rate": 1.0
     },
 
@@ -77,17 +87,17 @@ MAPPINGS = {
     # HUGE dataset (24k images).
     # SMART SAMPLING: Keep 100% of humans, 30% of vehicles.
     "megaset": {
-        "source_names": ['vehicle', 'pedestrian'], 
+        "source_names": ['vehicle', 'pedestrian'],
         "map": {
             'vehicle': 0,
             'pedestrian': 1
         },
         "id_map": {0: 0, 1: 1},
         "oversample": 2,
-        "sampling_rate": 1.0, # Process ALL images effectively, but filter inside
+        "sampling_rate": 1.0,  # Process ALL images effectively, but filter inside
         "smart_sample": True  # Enable class-based filtering
     },
-    
+
     # 5. Uap-UaiAlanlariVeriSeti (Confirmed via data.yaml)
     # nc: 6, names: ['UAI', 'UAI-', 'UAP', 'UAP-', 'car', 'people']
     # UAI  = iniş yapmaya uygun UAI alanı (suitable landing area)
@@ -98,12 +108,12 @@ MAPPINGS = {
     "Uap-UaiAlanlariVeriSeti": {
         "source_names": ['UAI', 'UAI-', 'UAP', 'UAP-', 'car', 'people'],
         "map": {
-            'UAI': 3, 'UAI-': 3, 
-            'UAP': 2, 'UAP-': 2, 
-            'car': 0, 
+            'UAI': 3, 'UAI-': 3,
+            'UAP': 2, 'UAP-': 2,
+            'car': 0,
             'people': 1
         },
-        "oversample": 3, # High priority UAP/UAI data
+        "oversample": 3,  # High priority UAP/UAI data
         "sampling_rate": 1.0
     }
 }
@@ -120,14 +130,14 @@ def resolve_target_split(split_name: str, include_test_in_val: bool) -> str:
         return "val"
     if split in {"test", "testing"}:
         return "val" if include_test_in_val else "test"
-    raise ValueError(f"Unknown split name '{split_name}'. Cannot safely map to target split.")
+    raise ValueError(
+        f"Unknown split name '{split_name}'. Cannot safely map to target split."
+    )
 
 
 def _list_images(base_path: Path) -> list[Path]:
-    image_files = []
-    for ext in IMAGE_EXTENSIONS:
-        image_files.extend(base_path.glob(f"*{ext}"))
-    return image_files
+    ext_set = set(IMAGE_EXTENSIONS)
+    return [p for p in base_path.glob("*") if p.is_file() and p.suffix.lower() in ext_set]
 
 
 def _acquire_file_lock(lock_path: Path) -> int:
@@ -182,7 +192,6 @@ def _remove_train_val_duplicates(dataset_dir: Path) -> int:
     """Remove from val any image that has same content hash as train. Returns count removed."""
     train_imgs = dataset_dir / "train" / "images"
     val_imgs = dataset_dir / "val" / "images"
-    train_lbls = dataset_dir / "train" / "labels"
     val_lbls = dataset_dir / "val" / "labels"
     if not train_imgs.exists() or not val_imgs.exists():
         return 0
@@ -226,6 +235,7 @@ def _release_file_lock(fd: int, lock_path: Path) -> None:
     except OSError:
         pass
 
+
 def build_dataset():
     lock_path = ARTIFACTS_DIR / ".build_dataset.lock"
     lock_fd = _acquire_file_lock(lock_path)
@@ -234,7 +244,7 @@ def build_dataset():
     if DATASET_DIR.exists():
         print(f"Removing existing {DATASET_DIR}...")
         shutil.rmtree(DATASET_DIR)
-    
+
     (DATASET_DIR / "train" / "images").mkdir(parents=True, exist_ok=True)
     (DATASET_DIR / "train" / "labels").mkdir(parents=True, exist_ok=True)
     (DATASET_DIR / "val" / "images").mkdir(parents=True, exist_ok=True)
@@ -247,7 +257,10 @@ def build_dataset():
 
     print("Starting optimized dataset unification (UAV Optimized)...")
 
-    def _process_image_files(target_split, image_files, split, config, dataset_name, dataset_path, base_oversample_count, smart_sample):
+    def _process_image_files(
+        target_split, image_files, split, config, dataset_name, dataset_path,
+        base_oversample_count, smart_sample
+    ):
         oversample_count = base_oversample_count if target_split == "train" else 1
         split_smart_sample = smart_sample and target_split == "train"
         sampling_rate = config.get("sampling_rate", 1.0)
@@ -262,7 +275,7 @@ def build_dataset():
             original_count = len(image_files)
             k = int(original_count * sampling_rate)
             if k > 0:
-                set_seed(42) # R-01 Fix: Make sampling deterministic
+                set_seed(42)  # R-01 Fix: Make sampling deterministic
                 image_files = random.sample(image_files, k)
             print(f"  Downsampled {split_display}: {original_count} -> {len(image_files)}")
         else:
@@ -293,7 +306,7 @@ def build_dataset():
             out_of_range_bbox_count = 0
             nan_bbox_count = 0
             too_small_bbox_count = 0
-            short_line_count = 0  # len(parts) < 5 (segmentation/keypoint format)
+            short_line_count = 0  # len(parts)<5 (segmentation/keypoint format)
             invalid_coords_count = 0
             total_bbox_kept = 0
 
@@ -301,7 +314,9 @@ def build_dataset():
             file_iter = tqdm(image_files, desc=f"{dataset_name} - {target_split}{desc_suffix}")
 
             for img_path in file_iter:
-                src_split_path = dataset_path / split if split else img_path.parent.parent  # fallback for megaset direct paths
+                src_split_path = (
+                    dataset_path / split if split else img_path.parent.parent
+                )  # fallback for megaset direct paths
                 label_path = None
                 possible_label_dirs = [src_split_path / "labels", src_split_path]
 
@@ -412,7 +427,10 @@ def build_dataset():
                         if not present_target_ids:
                             skipped_smart += 1
                             continue
-                        keep_prob = max(class_keep_prob.get(cls_id, 0.25) for cls_id in present_target_ids)
+                        keep_prob = max(
+                            class_keep_prob.get(cls_id, 0.25)
+                            for cls_id in present_target_ids
+                        )
                         if random.random() > keep_prob:
                             skipped_smart += 1
                             continue
@@ -447,7 +465,10 @@ def build_dataset():
                     continue
 
             if split_smart_sample:
-                print(f"  Smart Sampling Stats ({split}): KeptByClass={kept_by_class}, Skipped={skipped_smart}")
+                print(
+                    f"  Smart Sampling Stats ({split}): "
+                    f"KeptByClass={kept_by_class}, Skipped={skipped_smart}"
+                )
             if out_of_range_cls > 0:
                 print(f"  ⚠️ {dataset_name}/{split}: out-of-range class_id count = {out_of_range_cls}")
             if unmapped_cls > 0:
@@ -464,26 +485,32 @@ def build_dataset():
             )
             if excluded > 0:
                 print(
-                    f"  [EXCLUDED LABELS] {dataset_name}/{target_split}{desc_suffix}: "
-                    f"short_format={short_line_count} invalid_coords={invalid_coords_count} "
+                    f"  [EXCLUDED LABELS] {dataset_name}/{target_split}"
+                    f"{desc_suffix}: short_format={short_line_count} "
+                    f"invalid_coords={invalid_coords_count} "
                     f"(unsupported segmentation/keypoint or malformed lines)"
                 )
 
-    def _execute_megaset_process(synthetic_splits, config, dataset_name, dataset_path, base_oversample_count, smart_sample):
+    def _execute_megaset_process(
+        synthetic_splits, config, dataset_name, dataset_path,
+        base_oversample_count, smart_sample
+    ):
         for target_split, image_files in synthetic_splits:
-            _process_image_files(target_split, image_files, None, config, dataset_name, dataset_path, base_oversample_count, smart_sample)
-    
+            _process_image_files(
+                target_split, image_files, None, config, dataset_name,
+                dataset_path, base_oversample_count, smart_sample
+            )
+
     # Actually run the processing here (so it's defined and visible to megaset)
     # Re-apply the earlier block loops since we extracted logic out
     for dataset_name, config in MAPPINGS.items():
         dataset_path = DATASETS_TRAIN_DIR / dataset_name
         if not dataset_path.exists():
             continue
-            
+
         base_oversample_count = config.get("oversample", 1)
-        sampling_rate = config.get("sampling_rate", 1.0)
         smart_sample = config.get("smart_sample", False)
-        
+
         source_splits = ["train", "valid", "val", "test"]
 
         if dataset_name == "megaset":
@@ -518,7 +545,10 @@ def build_dataset():
                         train_imgs.extend(imgs)
 
                 synthetic_splits = [("train", train_imgs), ("val", val_imgs)]
-                _execute_megaset_process(synthetic_splits, config, dataset_name, dataset_path, base_oversample_count, smart_sample)
+                _execute_megaset_process(
+                    synthetic_splits, config, dataset_name, dataset_path,
+                    base_oversample_count, smart_sample
+                )
 
             # Process explicit test split with strict mapping policy.
             test_split_path = dataset_path / "test"
@@ -526,7 +556,9 @@ def build_dataset():
                 test_images_dir = test_split_path / "images"
                 test_images = _list_images(test_images_dir if test_images_dir.exists() else test_split_path)
                 if test_images:
-                    mapped_split = resolve_target_split("test", include_test_in_val)
+                    mapped_split = resolve_target_split(
+                        "test", include_test_in_val
+                    )
                     _process_image_files(
                         mapped_split,
                         test_images,
@@ -552,8 +584,10 @@ def build_dataset():
             if not image_files:
                 continue
 
-            _process_image_files(target_split, image_files, split, config, dataset_name, dataset_path, base_oversample_count, smart_sample)
-
+            _process_image_files(
+                target_split, image_files, split, config, dataset_name,
+                dataset_path, base_oversample_count, smart_sample
+            )
 
     # Generate data.yaml
     final_data_yaml = {
@@ -573,11 +607,11 @@ def build_dataset():
     if test_images_dir.exists() and any(test_images_dir.iterdir()):
         final_data_yaml["test"] = "test/images"
     else:
-        final_data_yaml["test"] = "val/images"  # Safe fallback to prevent KeyError in val(split="test")
-    
+        final_data_yaml["test"] = "val/images"  # Safe fallback for val/test
+
     with open(DATASET_DIR / "dataset.yaml", 'w') as f:
         yaml.dump(final_data_yaml, f)
-        
+
     print(f"Dataset built successfully at {DATASET_DIR}")
 
     # Orphan cleanup: remove images without labels, labels without images
@@ -594,7 +628,7 @@ def build_dataset():
 
     # Otomatik temporal leakage kontrolü
     try:
-        from val_utils import check_temporal_leakage
+        from uav_training.val_utils import check_temporal_leakage
         leak = check_temporal_leakage(DATASET_DIR)
         if leak["exact_match"] > 0:
             print(f"⚠️ [LEAKAGE] Tam eşleşen train/val: {leak['exact_match']} görüntü", flush=True)

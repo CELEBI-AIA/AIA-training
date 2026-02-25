@@ -1,5 +1,4 @@
 """Unit tests for uav_training.config — no torch/CUDA loading."""
-import os
 import pytest
 
 from uav_training.config import (

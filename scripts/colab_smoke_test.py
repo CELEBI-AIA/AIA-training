@@ -20,7 +20,7 @@ def smoke_test():
 
     # 1. Import checks
     try:
-        from uav_training.config import TRAIN_CONFIG, IMAGE_EXTENSIONS, is_colab
+        from uav_training.config import TRAIN_CONFIG, IMAGE_EXTENSIONS
     except Exception as e:
         errors.append(f"uav_training.config: {e}")
         return errors
@@ -32,13 +32,13 @@ def smoke_test():
         return errors
 
     try:
-        from uav_training.audit import read_yaml, read_txt_classes
+        from uav_training.audit import read_yaml, read_txt_classes  # noqa: F401
     except Exception as e:
         errors.append(f"uav_training.audit: {e}")
         return errors
 
     try:
-        from uav_training.val_utils import check_temporal_leakage, TARGET_THRESHOLDS
+        from uav_training.val_utils import check_temporal_leakage, TARGET_THRESHOLDS  # noqa: F401
     except Exception as e:
         errors.append(f"uav_training.val_utils: {e}")
         return errors
