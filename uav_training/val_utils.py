@@ -3,7 +3,7 @@ Validation utilities — per-class AP50, temporal leakage check.
 """
 from pathlib import Path
 
-from config import IMAGE_EXTENSIONS
+from uav_training.config import IMAGE_EXTENSIONS
 
 TARGET_THRESHOLDS = {
     "vehicle": (0.90, 0.95),

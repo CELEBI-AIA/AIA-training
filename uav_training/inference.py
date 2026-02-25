@@ -2,10 +2,16 @@ import glob
 import os
 import random
 import argparse
-from ultralytics import YOLO
+import sys
 from pathlib import Path
 
-from config import DATASET_DIR, ARTIFACTS_DIR, IMAGE_EXTENSIONS
+# Ensure project root on path when run as script
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from ultralytics import YOLO
+from uav_training.config import DATASET_DIR, ARTIFACTS_DIR, IMAGE_EXTENSIONS
 
 DEFAULT_INFER_SOURCE = str(DATASET_DIR / "val" / "images")
 

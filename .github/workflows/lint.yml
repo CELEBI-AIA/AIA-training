@@ -2,9 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
   quality:
@@ -33,4 +31,4 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest tests/ -v --tb=short || true
+          pytest tests/ -v --tb=short

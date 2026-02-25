@@ -1,4 +1,4 @@
-# 🛩️ UAV Training Pipeline — v0.8.33
+# 🛩️ UAV Training Pipeline — v0.8.34
 
 YOLO11m tabanlı İHA (UAV) tespit eğitim altyapısı.
 Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücre ile çalışır.
@@ -19,7 +19,10 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 │   └── visualize_dataset.py   # Bounding-box visualization
 │
 ├── scripts/
-│   ├── colab_bootstrap.py     # One-cell Colab training launcher
+│   ├── colab_bootstrap.py     # One-cell Colab training launcher (runs tests automatically)
+│   ├── run_all_tests.py       # Single entry point for pytest
+│   ├── colab_smoke_test.py    # Quick import/validation checks (Colab)
+│   ├── setup_hooks.py         # One-time setup: pre-commit install (tests on commit)
 │   ├── run_per_class_val.py   # Per-class AP50 validation (vehicle, human, uap, uai)
 │   ├── cleanup_checkpoints.py # Epoch checkpoint cleanup (best, last, son 3 epoch)
 │   └── cleanup.sh             # GPU memory & process cleanup
@@ -27,7 +30,7 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 ├── notebooks/
 │   └── train_colab.ipynb      # Open in Colab notebook
 │
-├── tests/                     # Unit tests (audit, build, config)
+├── tests/                     # Unit tests (audit, build, config, val_utils, cleanup)
 ├── documentation/             # System check prompts & dataset docs
 │
 ├── requirements.txt
@@ -83,6 +86,12 @@ python train.py --resume
 # Custom model
 python train.py --model yolo11m.pt --batch 16
 ```
+
+### Otomatik Testler (Manuel Çalıştırma Gerektirmez)
+
+- **Colab**: `colab_bootstrap` çalıştığında testler otomatik çalışır (dataset indirmeden önce).
+- **CI**: Her push/PR'da GitHub Actions testleri çalıştırır.
+- **Local (commit öncesi)**: Tek seferlik `python scripts/setup_hooks.py` — sonrasında her `git commit` öncesi testler otomatik çalışır.
 
 ---
 

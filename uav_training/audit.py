@@ -1,8 +1,14 @@
 import os
+import sys
 import yaml
 import json
 import argparse
 from pathlib import Path
+
+# Ensure project root on path when run as script
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 try:
     from tqdm import tqdm
@@ -10,7 +16,7 @@ except ImportError:
     # simple fallback if tqdm missing
     def tqdm(x, **kwargs): return x
 
-from config import PROJECT_ROOT, DATASETS_TRAIN_DIR, AUDIT_REPORT, ARTIFACTS_DIR, TARGET_CLASSES, DATASET_DIR, IMAGE_EXTENSIONS
+from uav_training.config import PROJECT_ROOT, DATASETS_TRAIN_DIR, AUDIT_REPORT, ARTIFACTS_DIR, TARGET_CLASSES, DATASET_DIR, IMAGE_EXTENSIONS
 
 
 def get_subdirs(path):

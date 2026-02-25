@@ -1,12 +1,17 @@
-
 import argparse
 import random
+import sys
 import cv2
 import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 
-from config import DATASET_DIR, ARTIFACTS_DIR, IMAGE_EXTENSIONS
+# Ensure project root on path when run as script
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from uav_training.config import DATASET_DIR, ARTIFACTS_DIR, IMAGE_EXTENSIONS
 
 OUTPUT_DIR = ARTIFACTS_DIR / "verification_output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

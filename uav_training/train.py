@@ -2,12 +2,18 @@ import argparse
 import os
 import sys
 from pathlib import Path
+
+# Ensure project root on path (for uav_training package imports when run as script)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 import torch
 
 # Reduce VRAM fragmentation — must be set before any CUDA allocation
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True,max_split_size_mb:512")
 
-from config import ARTIFACTS_DIR, AUDIT_REPORT, DATASET_DIR, TRAIN_CONFIG, setup_torch_backend, ensure_colab_config
+from uav_training.config import ARTIFACTS_DIR, AUDIT_REPORT, DATASET_DIR, TRAIN_CONFIG, setup_torch_backend, ensure_colab_config
 setup_torch_backend()
 try:
     from ultralytics import YOLO
@@ -16,7 +22,7 @@ except ImportError:
     print("  pip install ultralytics")
     sys.exit(1)
 
-from build_dataset import build_dataset
+from uav_training.build_dataset import build_dataset
 import time
 import csv
 import shutil
@@ -36,7 +42,7 @@ if torch.cuda.is_available():
 try:
     from uav_training import __version__
 except ImportError:
-    __version__ = "0.8.33"  # fallback when uav_training not installed as package
+    __version__ = "0.8.34"  # fallback when uav_training not installed as package
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -471,7 +477,7 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
 
         # M-01 Fix: Append Audit Checksum
         try:
-            from config import AUDIT_REPORT
+            from uav_training.config import AUDIT_REPORT
             if AUDIT_REPORT.exists():
                 with open(AUDIT_REPORT, "rb") as f:
                     attempt_args["audit_md5"] = hashlib.md5(f.read()).hexdigest()
@@ -644,7 +650,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                 _shutil.rmtree(DATASET_DIR, ignore_errors=True)
                 needs_build = True
             else:
-                from config import is_colab
+                from uav_training.config import is_colab
                 if is_colab():
                     print(f"⚡ Dataset ready ({yaml_path}) — skipping rebuild", flush=True)
         else:

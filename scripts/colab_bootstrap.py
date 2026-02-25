@@ -205,6 +205,12 @@ _run(f'{sys.executable} -c "import ultralytics; print(f\'     ultralytics: {{ult
 _run(f'{sys.executable} -c "import torch; print(f\'     torch: {{torch.__version__}}, CUDA: {{torch.version.cuda}}\')"', check=False)
 print("  ✓ Dependencies installed", flush=True)
 
+# Run full test suite before dataset download — catch build issues early
+print("  🧪 Running tests (automatic) …", flush=True)
+_run("cd {0} && {1} -m pytest tests/ -v --tb=short -q".format(
+    shlex.quote(REPO_DIR), shlex.quote(sys.executable)
+), check=True)
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 4. Auto Hardware Detection + Configure (BEFORE dataset download!)
 # ═══════════════════════════════════════════════════════════════════════════

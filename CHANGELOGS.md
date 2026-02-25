@@ -405,3 +405,14 @@
 - **feat(uav_training/build_dataset)**: Post-build train/val duplicate removal by content hash — removes from val any image identical to train (prevents data leakage).
 - **feat(uav_training/config)**: `remove_orphans` and `remove_train_val_duplicates` config flags (default True).
 - **release**: Bumped module/script version from `0.8.32` to `0.8.33`.
+
+## 0.8.34 - 2026-02-25
+- **test**: Added `tests/conftest.py` for cross-platform sys.path setup; fixed imports to `from uav_training.config import` for package compatibility.
+- **test**: New tests: `test_config`, `test_val_utils`, `test_cleanup_checkpoints`, `test_inference`; cross-platform fixes (tmp_path, Path.is_relative_to, Colab skip).
+- **feat(scripts)**: `run_all_tests.py` and `colab_smoke_test.py`; `scripts/__init__.py` for package.
+- **feat(scripts/colab_bootstrap)**: Full pytest runs automatically before dataset download (check=True).
+- **feat(.pre-commit-config.yaml)**: `pre-commit install` runs tests before each commit; `scripts/setup_hooks.py` for one-time setup.
+- **feat(.github/workflows/lint.yml)**: CI now runs on all branches (push/PR).
+- **chore(requirements.txt)**: Added pytest>=7.0.0; `requirements-dev.txt`: flake8, pre-commit.
+- **docs(README)**: "Otomatik Testler" section — Colab, CI, local pre-commit.
+- **release**: Bumped module/script version from `0.8.33` to `0.8.34`.

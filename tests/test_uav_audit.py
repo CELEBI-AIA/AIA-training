@@ -19,12 +19,19 @@ def test_read_txt_classes_success(tmp_path):
     assert classes == ["car", "person", "bicycle"]
     assert len(classes) == 3
 
-def test_read_txt_classes_missing_file():
-    classes = read_txt_classes(Path("does_not_exist_file.txt"))
+def test_read_txt_classes_missing_file(tmp_path):
+    """Missing file returns []. Uses tmp_path for cross-platform path."""
+    missing = tmp_path / "does_not_exist_file.txt"
+    assert not missing.exists()
+    classes = read_txt_classes(missing)
     assert classes == []
 
-def test_read_yaml_missing_file():
-    yaml_data = read_yaml(Path("does_not_exist_file.yaml"))
+
+def test_read_yaml_missing_file(tmp_path):
+    """Missing file returns None. Uses tmp_path for cross-platform path."""
+    missing = tmp_path / "does_not_exist_file.yaml"
+    assert not missing.exists()
+    yaml_data = read_yaml(missing)
     assert yaml_data is None
 
 

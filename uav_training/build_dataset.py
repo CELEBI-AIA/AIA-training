@@ -1,8 +1,14 @@
+import os
+import sys
+from pathlib import Path
+
+# Ensure project root on path when run as script
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 import hashlib
 import shutil
-import os
-from pathlib import Path
 from tqdm import tqdm
 import yaml
 import json
@@ -29,7 +35,7 @@ def set_seed(seed=42):
         pass
 
 # Use configuration from config.py if needed, or define constants here for standalone utility
-from config import PROJECT_ROOT, DATASET_DIR, DATASETS_TRAIN_DIR, ARTIFACTS_DIR, TRAIN_CONFIG, IMAGE_EXTENSIONS
+from uav_training.config import PROJECT_ROOT, DATASET_DIR, DATASETS_TRAIN_DIR, ARTIFACTS_DIR, TRAIN_CONFIG, IMAGE_EXTENSIONS
 
 # Using the optimized MAPPINGS from the successful unify_datasets.py
 # Updated MAPPINGS for "TRAIN" folder
