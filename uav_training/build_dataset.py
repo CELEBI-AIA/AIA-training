@@ -93,10 +93,10 @@ MAPPINGS = {
             'pedestrian': 1
         },
         "id_map": {0: 0, 1: 1},
-        "oversample": 3,
+        "oversample": 5,
         "sampling_rate": 1.0,  # Process ALL images effectively, but filter inside
         "smart_sample": True, # Enable class-based filtering
-        "smart_sample_keep_prob": {0: 0.20, 1: 1.00, 2: 1.00, 3: 1.00}
+        "smart_sample_keep_prob": {0: 0.10, 1: 1.00, 2: 1.00, 3: 1.00}
     },
 
     # 5. Uap-UaiAlanlariVeriSeti (Confirmed via data.yaml)
