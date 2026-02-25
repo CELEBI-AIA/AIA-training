@@ -447,3 +447,7 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 ## 0.8.39 - 2026-02-25
 - **fix(colab_bootstrap)**: pv progress output — use decode+write instead of sys.stdout.buffer (Colab OutStream has no .buffer).
 - **release**: Bumped module/script version from `0.8.38` to `0.8.39`.
+
+## 0.8.40 - 2026-02-25
+- **fix(colab_bootstrap)**: _write_stdout_bytes helper — hasattr check for .buffer, works in Colab and regular Python.
+- **release**: Bumped module/script version from `0.8.39` to `0.8.40`.

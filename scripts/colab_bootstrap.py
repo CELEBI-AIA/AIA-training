@@ -87,6 +87,15 @@ def _banner(msg: str):
     print(f"\n{'='*60}\n  {msg}\n{'='*60}", flush=True)
 
 
+def _write_stdout_bytes(data: bytes) -> None:
+    """Write bytes to stdout; Colab OutStream has no .buffer, use decode+write."""
+    if hasattr(sys.stdout, "buffer"):
+        sys.stdout.buffer.write(data)
+    else:
+        sys.stdout.write(data.decode("utf-8", errors="replace"))
+    sys.stdout.flush()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 0. Pre-Flight Cleanup
 # ═══════════════════════════════════════════════════════════════════════════
@@ -414,8 +423,7 @@ else:
                         if not chunk and proc.poll() is not None:
                             break
                         if chunk:
-                            sys.stdout.write(chunk.decode("utf-8", errors="replace"))
-                            sys.stdout.flush()
+                            _write_stdout_bytes(chunk)
                     proc.wait()
                     if proc.returncode != 0:
                         raise RuntimeError(f"pv exited with code {proc.returncode}")
