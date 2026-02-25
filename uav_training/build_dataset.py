@@ -1,4 +1,5 @@
 
+import hashlib
 import shutil
 import os
 from pathlib import Path
@@ -134,6 +135,71 @@ def _acquire_file_lock(lock_path: Path) -> int:
     return fd
 
 
+def _file_hash(path: Path, chunk_size: int = 65536) -> str:
+    """Compute MD5 hash of file content (chunked read for large files)."""
+    h = hashlib.md5()
+    with open(path, "rb") as f:
+        while chunk := f.read(chunk_size):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _remove_orphans(dataset_dir: Path) -> tuple[int, int]:
+    """Remove images without labels and labels without images. Returns (imgs_removed, lbls_removed)."""
+    ext_set = set(IMAGE_EXTENSIONS)
+    imgs_removed, lbls_removed = 0, 0
+    for split in ("train", "val", "test"):
+        imgs_dir = dataset_dir / split / "images"
+        lbls_dir = dataset_dir / split / "labels"
+        if not imgs_dir.exists() or not lbls_dir.exists():
+            continue
+        img_stems = {p.stem for p in imgs_dir.iterdir() if p.suffix.lower() in ext_set}
+        lbl_stems = {p.stem for p in lbls_dir.glob("*.txt")}
+        orphan_imgs = img_stems - lbl_stems
+        orphan_lbls = lbl_stems - img_stems
+        for stem in orphan_imgs:
+            for ext in ext_set:
+                p = imgs_dir / f"{stem}{ext}"
+                if p.exists():
+                    p.unlink()
+                    imgs_removed += 1
+                    break
+        for stem in orphan_lbls:
+            p = lbls_dir / f"{stem}.txt"
+            if p.exists():
+                p.unlink()
+                lbls_removed += 1
+    return imgs_removed, lbls_removed
+
+
+def _remove_train_val_duplicates(dataset_dir: Path) -> int:
+    """Remove from val any image that has same content hash as train. Returns count removed."""
+    train_imgs = dataset_dir / "train" / "images"
+    val_imgs = dataset_dir / "val" / "images"
+    train_lbls = dataset_dir / "train" / "labels"
+    val_lbls = dataset_dir / "val" / "labels"
+    if not train_imgs.exists() or not val_imgs.exists():
+        return 0
+    ext_set = set(IMAGE_EXTENSIONS)
+    train_hashes = set()
+    for p in tqdm(train_imgs.iterdir(), desc="Hashing train", leave=False):
+        if p.suffix.lower() not in ext_set:
+            continue
+        train_hashes.add(_file_hash(p))
+    removed = 0
+    for p in list(val_imgs.iterdir()):
+        if p.suffix.lower() not in ext_set:
+            continue
+        h = _file_hash(p)
+        if h in train_hashes:
+            p.unlink()
+            lbl = val_lbls / f"{p.stem}.txt"
+            if lbl.exists():
+                lbl.unlink()
+            removed += 1
+    return removed
+
+
 def _release_file_lock(fd: int, lock_path: Path) -> None:
     try:
         if platform.system() == "Windows":
@@ -185,15 +251,16 @@ def build_dataset():
         except OSError:
             dst_dev = None
 
+        split_display = split if split is not None else target_split
         if not split_smart_sample and sampling_rate < 1.0:
             original_count = len(image_files)
             k = int(original_count * sampling_rate)
             if k > 0:
                 set_seed(42) # R-01 Fix: Make sampling deterministic
                 image_files = random.sample(image_files, k)
-            print(f"  Downsampled {split}: {original_count} -> {len(image_files)}")
+            print(f"  Downsampled {split_display}: {original_count} -> {len(image_files)}")
         else:
-            print(f"  Found {len(image_files)} images in {split}")
+            print(f"  Found {len(image_files)} images in {split_display}")
 
         class_keep_prob = config.get("smart_sample_keep_prob", DEFAULT_CLASS_KEEP_PROB)
         if not isinstance(class_keep_prob, dict):
@@ -350,7 +417,8 @@ def build_dataset():
                     if has_valid_cls:
                         new_labels = temp_lines
                         copy_suffix = f"_copy{i}" if oversample_count > 1 else ""
-                        unique_name = f"{dataset_name}_{split}{copy_suffix}_{img_path.name}"
+                        split_for_name = split if split is not None else target_split
+                        unique_name = f"{dataset_name}_{split_for_name}{copy_suffix}_{img_path.name}"
 
                         target_img_path = DATASET_DIR / target_split / "images" / unique_name
                         target_lbl_path = DATASET_DIR / target_split / "labels" / (Path(unique_name).stem + ".txt")
@@ -505,6 +573,18 @@ def build_dataset():
         yaml.dump(final_data_yaml, f)
         
     print(f"Dataset built successfully at {DATASET_DIR}")
+
+    # Orphan cleanup: remove images without labels, labels without images
+    if TRAIN_CONFIG.get("remove_orphans", True):
+        imgs_removed, lbls_removed = _remove_orphans(DATASET_DIR)
+        if imgs_removed or lbls_removed:
+            print(f"  [CLEANUP] Orphans removed: {imgs_removed} images, {lbls_removed} labels", flush=True)
+
+    # Train/val duplicate removal: remove from val any image with same content as train (prevents leakage)
+    if TRAIN_CONFIG.get("remove_train_val_duplicates", True):
+        dup_removed = _remove_train_val_duplicates(DATASET_DIR)
+        if dup_removed > 0:
+            print(f"  [CLEANUP] Train/val duplicates removed from val: {dup_removed} images", flush=True)
 
     # Otomatik temporal leakage kontrolü
     try:

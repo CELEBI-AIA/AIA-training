@@ -1,4 +1,4 @@
-# 🛩️ UAV Training Pipeline — v0.8.29
+# 🛩️ UAV Training Pipeline — v0.8.33
 
 YOLO11m tabanlı İHA (UAV) tespit eğitim altyapısı.
 Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücre ile çalışır.
@@ -11,14 +11,17 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 .
 ├── uav_training/              # YOLO object detection module
 │   ├── config.py              # Auto hardware detection & hyperparameters
-│   ├── train.py               # Training entrypoint (v0.8.29)
-│   ├── build_dataset.py       # Dataset unification, smart sampling & dedup
+│   ├── train.py               # Training entrypoint
+│   ├── build_dataset.py       # Dataset unification, smart sampling, dedup, orphan/duplicate cleanup
 │   ├── audit.py               # Dataset audit & validation
 │   ├── inference.py           # Smoke test inference
+│   ├── val_utils.py           # Per-class validation, temporal leakage check
 │   └── visualize_dataset.py   # Bounding-box visualization
 │
 ├── scripts/
 │   ├── colab_bootstrap.py     # One-cell Colab training launcher
+│   ├── run_per_class_val.py   # Per-class AP50 validation (vehicle, human, uap, uai)
+│   ├── cleanup_checkpoints.py # Epoch checkpoint cleanup (best, last, son 3 epoch)
 │   └── cleanup.sh             # GPU memory & process cleanup
 │
 ├── notebooks/
@@ -89,8 +92,8 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 
 ### Pipeline
 
-1. `audit.py` — `datasets/` klasörünü tarar, audit raporu üretir
-2. `build_dataset.py` — Birden fazla dataset'i birleştirir (class remapping, smart sampling, duplicate label filtering)
+1. `audit.py` — `datasets/TRAIN/` klasörünü tarar, audit raporu üretir
+2. `build_dataset.py` — Birden fazla dataset'i birleştirir (class remapping, smart sampling, orphan/duplicate cleanup)
 3. `train.py` — YOLO11m eğitimi (auto-resume, torch.compile, mAP-based best.pt rename)
 4. `inference.py` — Validation görüntülerinde smoke test
 5. `visualize_dataset.py` — Bounding box'larla görsel doğrulama
@@ -110,13 +113,15 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 | Deterministic | ❌ Off (Hızlı CUDA kernels)                 |
 | Save Period   | Her 1 epoch checkpoint + Drive sync         |
 | Label Filter  | `min_bbox_norm=0.002` ile filtrelenir       |
+| Image Formats | jpg, jpeg, png, webp, bmp, tiff, tif, gif   |
+| Post-Build    | Orphan cleanup, train/val duplicate removal |
 
 ### Auto Hardware Detection (Colab)
 
 | GPU Tier   | Batch | ImgSz | VRAM Usage |
 |------------|-------|-------|------------|
-| H100 80GB  | 64    | 1024  | ~85-90%    |
-| A100 40GB  | 28    | 1024  | ~85-90%    |
+| H100 80GB  | 32    | 1024  | ~85-90%    |
+| A100 40GB  | 24    | 1024  | ~85-90%    |
 | L4 24GB    | 32    | 640   | ~70-80%    |
 | T4 16GB    | 16    | 640   | ~75%       |
 | 8GB GPU    | 8     | 640   | ~80%       |
@@ -125,7 +130,7 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 
 | Dataset                          | Oversample | Smart Sample |
 |----------------------------------|------------|--------------|
-| Uap-UaiAlanlariVeriSeti.v2i      | 3x         | —            |
+| Uap-UaiAlanlariVeriSeti.v2i.yolov8 | 3x        | —            |
 | Uap-UaiAlanlariVeriSeti          | 3x         | —            |
 | drone-vision-project             | 3x         | —            |
 | megaset (24k images)             | 2x         | ✅ 100% human, 30% vehicle |

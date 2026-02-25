@@ -32,3 +32,14 @@ Increment the **patch** segment (e.g. `0.8.6` → `0.8.7`). Add a `release` line
 ```markdown
 - **release**: Bumped module/script version from `X.X.X` to `X.X.Y`.
 ```
+
+## README.md Sync
+
+Every change **must** keep `README.md` in sync with the modified behavior or structure:
+
+- **Version**: Update the header version (e.g. `# 🛩️ UAV Training Pipeline — v0.8.29`) and any inline version references (e.g. `train.py (v0.8.29)`) to match `__version__`.
+- **Structure**: If files/folders are added, removed, or renamed, update the "Repository Structure" section.
+- **Config / params**: If hyperparameters, model settings, hardware tiers, or dataset info change, update the relevant tables and sections.
+- **Commands / usage**: If CLI args, scripts, or workflows change, update the Quick Start and usage examples.
+
+Do **not** leave README outdated; it is the primary entry point for users.

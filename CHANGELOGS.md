@@ -394,3 +394,14 @@
 - **fix(uav_training/train)**: Corrected raise indentation in phase2 fallback block.
 - **fix(uav_training/val_utils)**: `check_temporal_leakage` accepts str or Path; defensive `Path(dataset_dir)`.
 - **release**: Bumped module/script version from `0.8.30` to `0.8.31`.
+
+## 0.8.32 - 2026-02-25
+- **fix(uav_training/build_dataset)**: Megaset unique_name now uses `target_split` instead of `None` when split is synthetic (fixes `megaset_None_copy0_*.jpg` filenames).
+- **fix(uav_training/build_dataset)**: Split display in logs uses `target_split` when split is None (megaset scene-based splits).
+- **release**: Bumped module/script version from `0.8.31` to `0.8.32`.
+
+## 0.8.33 - 2026-02-25
+- **feat(uav_training/build_dataset)**: Post-build cleanup: remove orphan images (no label) and orphan labels (no image).
+- **feat(uav_training/build_dataset)**: Post-build train/val duplicate removal by content hash — removes from val any image identical to train (prevents data leakage).
+- **feat(uav_training/config)**: `remove_orphans` and `remove_train_val_duplicates` config flags (default True).
+- **release**: Bumped module/script version from `0.8.32` to `0.8.33`.

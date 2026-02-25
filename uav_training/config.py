@@ -383,6 +383,8 @@ TRAIN_CONFIG = {
     "dfl": 1.5,
     "min_bbox_norm": 0.002,
     "include_test_in_val": False,
+    "remove_orphans": True,           # Remove images without labels and labels without images
+    "remove_train_val_duplicates": True,  # Remove from val any image with same content as train (prevents leakage)
     "rect": False,
     "multi_scale": False,
     "deterministic": False,

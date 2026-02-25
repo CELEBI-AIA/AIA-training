@@ -1,4 +1,4 @@
-# UAV Training — YOLO Object Detection (v0.8.21)
+# UAV Training — YOLO Object Detection (v0.8.33)
 
 YOLO11m (Ultralytics) tabanlı İHA görüntülerinden nesne tespit modülü. Teknofest yarışması için optimize edilmiş.
 
@@ -15,10 +15,11 @@ YOLO11m (Ultralytics) tabanlı İHA görüntülerinden nesne tespit modülü. Te
 
 | Script | Purpose |
 |--------|---------|
-| `config.py` | Paths, class definitions, hyperparameters. Colab'da `ensure_colab_config()` ile lazy hardware detection. |
+| `config.py` | Paths, class definitions, hyperparameters, IMAGE_EXTENSIONS. Colab'da `ensure_colab_config()` ile lazy hardware detection. |
 | `audit.py` | `datasets/TRAIN` tarar, format doğrular, `audit_report.json` üretir. |
-| `build_dataset.py` | Birden fazla dataset'i birleştirir → tek YOLO formatı, sınıf eşlemesi. |
+| `build_dataset.py` | Birden fazla dataset'i birleştirir → tek YOLO formatı, sınıf eşlemesi, orphan/duplicate cleanup. |
 | `train.py` | YOLO11m eğitimi, auto-resume, iki fazlı profil (50+15), leakage denetimi. |
+| `val_utils.py` | Per-class AP50, temporal leakage check. |
 | `inference.py` | Örnek görüntülerde hızlı inference testi. |
 | `visualize_dataset.py` | Bounding box görselleştirme; `--split train|val|test` ile split seçimi. |
 
@@ -63,7 +64,7 @@ TRAIN_CONFIG = {
     "phase1_epochs": 50,
     "phase2_epochs": 15,
     "phase2_imgsz": 896,
-    "phase2_mosaic": 0.2,
+    "phase2_mosaic": 0.0,
     "phase2_lr0": 0.0001,   # Fine-tuning için Phase-1'den düşük
     "batch": 4,             # 6GB VRAM için; Colab'da auto-detect ile override
     "imgsz": 640,
@@ -84,6 +85,8 @@ TRAIN_CONFIG = {
     "box": 7.5, "cls": 0.7, "dfl": 1.5,
     "min_bbox_norm": 0.002,
     "include_test_in_val": False,
+    "remove_orphans": True,              # Labelsiz görüntüleri ve görüntüsüz label'ları sil
+    "remove_train_val_duplicates": True, # Val'deki train ile aynı içerikli görüntüleri sil (leakage önleme)
 }
 ```
 
@@ -106,6 +109,12 @@ artifacts/uav_model/dataset_uap_uai/   # veya Colab: /content/dataset_built
 ```
 
 Kaynak veriler: `datasets/TRAIN/` (audit ile aynı dizin).
+
+**Desteklenen görüntü formatları:** jpg, jpeg, png, webp, bmp, tiff, tif, gif (`IMAGE_EXTENSIONS`)
+
+**Build sonrası otomatik temizlik:**
+- Orphan cleanup: Labelsiz görüntüler ve görüntüsüz label dosyaları silinir
+- Train/val duplicate: Val'deki, train ile aynı içerik (hash) olan görüntüler silinir
 
 ## Smart Sampling
 
