@@ -32,9 +32,9 @@ def run_per_class_val(model_path: str, data_path: str, split: str = "val", verbo
     metrics = model.val(data=str(yaml_path), split=split, verbose=verbose)
 
     class_names = ["vehicle", "human", "uap", "uai"]
-    maps = getattr(metrics.box, "maps", None)
+    maps = getattr(metrics.box, "ap50", None)
     if maps is None:
-        maps = getattr(metrics.box, "ap50", [0.0] * 4)
+        maps = [0.0] * 4
     if not hasattr(maps, "__iter__"):
         maps = [float(maps)] * 4
 
@@ -58,7 +58,7 @@ def print_per_class_report(result: dict) -> None:
     low = [n for n, v in result.items() if v < TARGET_THRESHOLDS.get(n, (0, 0))[0]]
     if low:
         print(f"\nUYARI: {', '.join(low)} hedefin altında.", flush=True)
-        print("Phase 2 copy_paste: 0.5 aktif.", flush=True)
+        print("\nPhase 2'de dinamik augmentasyon (copy_paste) kullanılabilir.", flush=True)
     else:
         print("\nTüm sınıflar minimum eşiğin üzerinde.", flush=True)
 

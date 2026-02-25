@@ -234,20 +234,21 @@ def auto_detect_hardware() -> tuple:
     adamw_lr0 = 0.001
     warmup_epochs = 5.0
 
-    # Dynamo (torch.compile) requires Python < 3.12 on torch 2.x
-    compile_mode = "reduce-overhead" if (vram >= 35 and sys.version_info < (3, 12)) else False
+    # Dynamo (torch.compile) supports Python 3.12 on recent versions
+    compile_mode = "reduce-overhead" if vram >= 35 else False
 
     config_overrides = {
         "epochs": 65,            # 50 + 15 two-phase profile
         "phase1_epochs": 50,
         "phase2_epochs": 15,
-        "phase2_imgsz": 896,
-        "phase2_mosaic": 0.0,
+        "phase2_imgsz": imgsz,
+        "phase2_batch": batch,
+        "phase2_mosaic": 0.2,
         "phase2_close_mosaic": 0,
         "phase2_lr0": adamw_lr0 * 0.1,
-        "phase2_lrf": 0.1,
-        "phase2_copy_paste": 0.5,
-        "phase2_degrees": 10.0,
+        "phase2_lrf": 0.01,
+        "phase2_copy_paste": 0.3,
+        "phase2_degrees": 0.0,
         "phase2_scale": 0.6,
         "phase2_hsv_s": 0.9,
         "phase2_hsv_v": 0.6,
@@ -341,13 +342,14 @@ TRAIN_CONFIG = {
     "epochs": 65,
     "phase1_epochs": 50,
     "phase2_epochs": 15,
-    "phase2_imgsz": 896,
-    "phase2_mosaic": 0.0,
+    "phase2_imgsz": 640,
+    "phase2_batch": 4,
+    "phase2_mosaic": 0.2,
     "phase2_close_mosaic": 0,
     "phase2_lr0": 0.0001,
-    "phase2_lrf": 0.1,
-    "phase2_copy_paste": 0.5,
-    "phase2_degrees": 10.0,
+    "phase2_lrf": 0.01,
+    "phase2_copy_paste": 0.3,
+    "phase2_degrees": 0.0,
     "phase2_scale": 0.6,
     "phase2_hsv_s": 0.9,
     "phase2_hsv_v": 0.6,

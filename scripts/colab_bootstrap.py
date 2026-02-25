@@ -636,6 +636,15 @@ print("\n  📊 Disk usage:", flush=True)
 _run("df -h /content | tail -1 | awk '{print \"     /content  — used: \"$3\"  free: \"$4\"  (\"$5\" full)\"}'")
 _run(f"du -sh {LOCAL_CACHE} | awk '{{print \"     Dataset   — \"$1}}'")
 
+# ── Pre-train Audit ──
+print("\n  🔍 Running Pipeline Audit...", flush=True)
+_run(f'cd {shlex.quote(REPO_DIR)} && {sys.executable} uav_training/audit.py', check=False)
+_audit_report = os.path.join(REPO_DIR, "artifacts", "audit_report.json")
+if os.path.isfile(_audit_report):
+    print("  ✓ Audit report generated", flush=True)
+else:
+    print("  ⚠️ Audit report missing!", flush=True)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 6. Launch Training (with live log tee)

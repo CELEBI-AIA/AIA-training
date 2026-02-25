@@ -44,7 +44,7 @@ if torch.cuda.is_available():
 try:
     from uav_training import __version__
 except ImportError:
-    __version__ = "0.8.44"  # fallback when uav_training not installed as package
+    __version__ = "0.8.45"  # fallback when uav_training not installed as package
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -844,7 +844,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
             epochs=phase2_epochs,
             batch=phase2_batch,
             device=device,
-            imgsz=int(TRAIN_CONFIG.get("phase2_imgsz", 896)),
+            imgsz=int(TRAIN_CONFIG.get("phase2_imgsz", TRAIN_CONFIG.get("imgsz", 1024))),
             resume=False,
             phase_overrides=phase2_overrides,
         )

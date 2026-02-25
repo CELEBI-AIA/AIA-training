@@ -93,9 +93,10 @@ MAPPINGS = {
             'pedestrian': 1
         },
         "id_map": {0: 0, 1: 1},
-        "oversample": 2,
+        "oversample": 3,
         "sampling_rate": 1.0,  # Process ALL images effectively, but filter inside
-        "smart_sample": True  # Enable class-based filtering
+        "smart_sample": True, # Enable class-based filtering
+        "smart_sample_keep_prob": {0: 0.20, 1: 1.00, 2: 1.00, 3: 1.00}
     },
 
     # 5. Uap-UaiAlanlariVeriSeti (Confirmed via data.yaml)
@@ -298,6 +299,8 @@ def build_dataset():
             print(f"  Applying Smart Sampling for {dataset_name}...")
 
         for i in range(oversample_count):
+            if split_smart_sample:
+                set_seed(42 + i)
             kept_by_class = {cls_id: 0 for cls_id in sorted(class_keep_prob.keys())}
             skipped_smart = 0
             out_of_range_cls = 0

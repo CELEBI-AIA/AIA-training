@@ -472,3 +472,11 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **refactor(notebook)**: wget bootstrap only — no git in notebook; bootstrap clones repo inside.
 - **fix(colab_bootstrap)**: git fetch/reset/clone/log print_output=False — no red stderr in Colab.
 - **release**: Bumped module/script version from `0.8.43` to `0.8.44`.
+
+## 0.8.45 - 2026-02-25
+- **feat(colab_bootstrap)**: Pre-train pipeline audit — runs `uav_training/audit.py` before training, verifies `audit_report.json`.
+- **feat(build_dataset)**: Smart sampling — `oversample` 2→3, `smart_sample_keep_prob` for vehicle (0.20) vs human/uap/uai (1.00), deterministic seed per oversample pass.
+- **refactor(config)**: Phase-2 tuning — imgsz/batch aligned with phase1, mosaic 0→0.2, copy_paste 0.5→0.3, degrees 10→0; Dynamo compile supports Python 3.12.
+- **fix(train)**: Phase-2 imgsz fallback — uses `TRAIN_CONFIG.imgsz` when `phase2_imgsz` not set.
+- **fix(val_utils)**: Per-class metrics — use `metrics.box.ap50` (Ultralytics API); updated Turkish copy_paste message.
+- **release**: Bumped module/script version from `0.8.44` to `0.8.45`.
