@@ -443,3 +443,7 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **perf(colab_bootstrap)**: Drive mount — UAV_DRIVE_FORCE_REMOUNT=1 for stale connection fix.
 - **perf(colab_bootstrap)**: Extraction — 128MB pipe buffer, tar -b 10240, checkpoint 100k; UAV_EXTRACT_PIPE_BUF, UAV_PV_BUFFER env vars.
 - **release**: Bumped module/script version from `0.8.37` to `0.8.38`.
+
+## 0.8.39 - 2026-02-25
+- **fix(colab_bootstrap)**: pv progress output — use decode+write instead of sys.stdout.buffer (Colab OutStream has no .buffer).
+- **release**: Bumped module/script version from `0.8.38` to `0.8.39`.

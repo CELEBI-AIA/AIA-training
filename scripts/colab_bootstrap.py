@@ -414,7 +414,7 @@ else:
                         if not chunk and proc.poll() is not None:
                             break
                         if chunk:
-                            sys.stdout.buffer.write(chunk)
+                            sys.stdout.write(chunk.decode("utf-8", errors="replace"))
                             sys.stdout.flush()
                     proc.wait()
                     if proc.returncode != 0:

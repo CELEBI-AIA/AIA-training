@@ -1,4 +1,4 @@
-# 🛩️ UAV Training Pipeline — v0.8.38
+# 🛩️ UAV Training Pipeline — v0.8.39
 
 YOLO11m tabanlı İHA (UAV) tespit eğitim altyapısı.
 Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücre ile çalışır.
