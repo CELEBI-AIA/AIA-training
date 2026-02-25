@@ -480,3 +480,10 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **fix(train)**: Phase-2 imgsz fallback — uses `TRAIN_CONFIG.imgsz` when `phase2_imgsz` not set.
 - **fix(val_utils)**: Per-class metrics — use `metrics.box.ap50` (Ultralytics API); updated Turkish copy_paste message.
 - **release**: Bumped module/script version from `0.8.44` to `0.8.45`.
+
+## 0.8.46 - 2026-02-25
+- **feat(config)**: cls 0.7→1.0 — model focuses more on hard/small objects (human).
+- **feat(build_dataset)**: megaset `human_extra_oversample`: 2 — pure-human images get +2 passes (~4x), +~8000 human instances.
+- **refactor(config)**: phase2_mosaic 0.2→0.3 — preserve human context in Phase 2.
+- **perf(train)**: Removed Phase 2 batch halving — use full Phase 1 batch (A100 was ~78% idle).
+- **release**: Bumped module/script version from `0.8.45` to `0.8.46`.

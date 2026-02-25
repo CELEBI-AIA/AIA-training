@@ -94,6 +94,7 @@ MAPPINGS = {
         },
         "id_map": {0: 0, 1: 1},
         "oversample": 5,
+        "human_extra_oversample": 2,  # Pure-human images get +2 passes → ~4x total, +~8000 human instances
         "sampling_rate": 1.0,  # Process ALL images effectively, but filter inside
         "smart_sample": True, # Enable class-based filtering
         "smart_sample_keep_prob": {0: 0.10, 1: 1.00, 2: 1.00, 3: 1.00}
@@ -295,10 +296,13 @@ def build_dataset():
             normalized_keep_prob[cls_id] = keep_prob
         class_keep_prob = normalized_keep_prob or DEFAULT_CLASS_KEEP_PROB
 
+        human_extra_oversample = config.get("human_extra_oversample", 0)
+        total_passes = oversample_count + (human_extra_oversample if split_smart_sample else 0)
         if split_smart_sample:
             print(f"  Applying Smart Sampling for {dataset_name}...")
 
-        for i in range(oversample_count):
+        for i in range(total_passes):
+            is_human_extra_pass = i >= oversample_count
             if split_smart_sample:
                 set_seed(42 + i)
             kept_by_class = {cls_id: 0 for cls_id in sorted(class_keep_prob.keys())}
@@ -313,7 +317,7 @@ def build_dataset():
             invalid_coords_count = 0
             total_bbox_kept = 0
 
-            desc_suffix = f" (Copy {i+1}/{oversample_count})" if oversample_count > 1 else ""
+            desc_suffix = f" (Copy {i+1}/{total_passes})" if total_passes > 1 else ""
             file_iter = tqdm(image_files, desc=f"{dataset_name} - {target_split}{desc_suffix}")
 
             for img_path in file_iter:
@@ -430,6 +434,8 @@ def build_dataset():
                         if not present_target_ids:
                             skipped_smart += 1
                             continue
+                        if is_human_extra_pass and present_target_ids != {1}:
+                            continue  # human_extra passes: only pure-human images
                         keep_prob = max(
                             class_keep_prob.get(cls_id, 0.25)
                             for cls_id in present_target_ids
@@ -443,7 +449,7 @@ def build_dataset():
 
                     if has_valid_cls:
                         new_labels = temp_lines
-                        copy_suffix = f"_copy{i}" if oversample_count > 1 else ""
+                        copy_suffix = f"_copy{i}" if total_passes > 1 else ""
                         split_for_name = split if split is not None else target_split
                         unique_name = f"{dataset_name}_{split_for_name}{copy_suffix}_{img_path.name}"
 

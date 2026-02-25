@@ -44,7 +44,7 @@ if torch.cuda.is_available():
 try:
     from uav_training import __version__
 except ImportError:
-    __version__ = "0.8.45"  # fallback when uav_training not installed as package
+    __version__ = "0.8.46"  # fallback when uav_training not installed as package
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -814,9 +814,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
         except Exception as e:
             print(f"⚠️ Per-class validation atlandı: {e}", flush=True)
 
-        phase2_batch = phase1_result.get("batch", batch)  # E-02 / B-04 Fix: use actual phase 1 batch
-        if isinstance(phase2_batch, int):
-            phase2_batch = max(1, phase2_batch // 2)
+        phase2_batch = phase1_result.get("batch", batch)  # Use phase 1 batch (no halving — A100 was ~78% idle)
 
         phase2_overrides = {
             "nbs": phase2_batch,
