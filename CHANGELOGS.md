@@ -451,3 +451,9 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 ## 0.8.40 - 2026-02-25
 - **fix(colab_bootstrap)**: _write_stdout_bytes helper — hasattr check for .buffer, works in Colab and regular Python.
 - **release**: Bumped module/script version from `0.8.39` to `0.8.40`.
+
+## 0.8.41 - 2026-02-25
+- **fix(colab_bootstrap)**: pv progress — file-size polling thread (pv stderr invisible in Colab); shows % GB MB/s ETA.
+- **feat(notebook)**: Clone repo first, run bootstrap from repo — always latest, no wget cache.
+- **chore(colab_bootstrap)**: Removed unused _write_stdout_bytes.
+- **release**: Bumped module/script version from `0.8.40` to `0.8.41`.

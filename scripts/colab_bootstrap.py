@@ -87,15 +87,6 @@ def _banner(msg: str):
     print(f"\n{'='*60}\n  {msg}\n{'='*60}", flush=True)
 
 
-def _write_stdout_bytes(data: bytes) -> None:
-    """Write bytes to stdout; Colab OutStream has no .buffer, use decode+write."""
-    if hasattr(sys.stdout, "buffer"):
-        sys.stdout.buffer.write(data)
-    else:
-        sys.stdout.write(data.decode("utf-8", errors="replace"))
-    sys.stdout.flush()
-
-
 # ═══════════════════════════════════════════════════════════════════════════
 # 0. Pre-Flight Cleanup
 # ═══════════════════════════════════════════════════════════════════════════
@@ -404,29 +395,62 @@ else:
 
             if _use_pv:
                 # Sequential: pv with 128MB buffer — best for Drive FUSE
+                # pv stderr is invisible in Colab; use file-size polling for progress
                 print(
                     f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD (pv, {_pv_buf} buffer) …",
                     flush=True,
                 )
                 print(f"     {DRIVE_DATASET} -> {LOCAL_TAR}", flush=True)
                 _dl_start = time.time()
-                with open(LOCAL_TAR, "wb") as dst:
-                    _pv_cmd = ["pv", "-B", _pv_buf, "-f", "-p", "-e", "-r", "-b", DRIVE_DATASET]
-                    proc = subprocess.Popen(
-                        _pv_cmd,
-                        stdout=dst,
-                        stderr=subprocess.PIPE,
-                    )
-                    _err_fd = proc.stderr.fileno()
-                    while True:
-                        chunk = os.read(_err_fd, 4096)
-                        if not chunk and proc.poll() is not None:
+                _pv_done = threading.Event()
+
+                def _pv_progress():
+                    while not _pv_done.is_set():
+                        time.sleep(2.0)
+                        if not os.path.isfile(LOCAL_TAR):
+                            continue
+                        c = os.path.getsize(LOCAL_TAR)
+                        if c >= tar_size_bytes:
                             break
-                        if chunk:
-                            _write_stdout_bytes(chunk)
-                    proc.wait()
+                        elapsed = time.time() - _dl_start
+                        pct = c / tar_size_bytes * 100
+                        speed_mb = (c / (1024**2)) / max(elapsed, 0.1)
+                        remaining_sec = (tar_size_bytes - c) / max(c / max(elapsed, 0.1), 1)
+                        mins, secs = divmod(int(remaining_sec), 60)
+                        print(
+                            f"\r  📥  {pct:5.1f}%  |  "
+                            f"{c/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
+                            f"{speed_mb:.0f} MB/s  |  ETA {mins}m {secs}s   ",
+                            end="",
+                            flush=True,
+                        )
+
+                _prog_thread = threading.Thread(target=_pv_progress, daemon=True)
+                _prog_thread.start()
+                try:
+                    with open(LOCAL_TAR, "wb") as dst:
+                        proc = subprocess.Popen(
+                            ["pv", "-B", _pv_buf, "-f", DRIVE_DATASET],
+                            stdout=dst,
+                            stderr=subprocess.DEVNULL,
+                        )
+                        proc.wait()
                     if proc.returncode != 0:
                         raise RuntimeError(f"pv exited with code {proc.returncode}")
+                finally:
+                    _pv_done.set()
+                    _prog_thread.join(timeout=3)
+                # Final progress line
+                c = os.path.getsize(LOCAL_TAR)
+                elapsed = time.time() - _dl_start
+                pct = c / tar_size_bytes * 100
+                speed_mb = (c / (1024**2)) / max(elapsed, 0.1)
+                print(
+                    f"\r  📥  {pct:5.1f}%  |  "
+                    f"{c/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
+                    f"{speed_mb:.0f} MB/s  |  done      ",
+                    flush=True,
+                )
             else:
                 # Parallel fallback (UAV_DOWNLOAD_METHOD=parallel or pv missing)
                 N_WORKERS = max(1, min(8, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "2"))))
