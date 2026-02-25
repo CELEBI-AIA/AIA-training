@@ -437,3 +437,9 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **feat(uav_training/config)**: A100 80GB tier (separate from H100); High RAM: cache=ram, workers up to 12.
 - **docs(README)**: RAM detection and A100 80GB tier documentation.
 - **release**: Bumped module/script version from `0.8.36` to `0.8.37`.
+
+## 0.8.38 - 2026-02-25
+- **perf(colab_bootstrap)**: Drive download — pv sequential 128MB buffer (default), parallel fallback 2 workers/32MB chunks; Drive FUSE throttles parallel reads.
+- **perf(colab_bootstrap)**: Drive mount — UAV_DRIVE_FORCE_REMOUNT=1 for stale connection fix.
+- **perf(colab_bootstrap)**: Extraction — 128MB pipe buffer, tar -b 10240, checkpoint 100k; UAV_EXTRACT_PIPE_BUF, UAV_PV_BUFFER env vars.
+- **release**: Bumped module/script version from `0.8.37` to `0.8.38`.

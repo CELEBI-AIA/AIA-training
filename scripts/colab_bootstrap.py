@@ -130,7 +130,9 @@ print("  ✓ Cleanup done\n", flush=True)
 # ═══════════════════════════════════════════════════════════════════════════
 _banner("1/8 — Mounting Google Drive")
 from google.colab import drive  # noqa: E402
-drive.mount("/content/drive", force_remount=False)
+# force_remount=True can fix stale/slow connections (set UAV_DRIVE_FORCE_REMOUNT=1)
+_force_remount = os.environ.get("UAV_DRIVE_FORCE_REMOUNT", "").strip() == "1"
+drive.mount("/content/drive", force_remount=_force_remount)
 
 DRIVE_UPLOAD = _resolve_drive_path(DRIVE_UPLOAD)
 DRIVE_RUNS = _resolve_drive_path(DRIVE_RUNS)
@@ -385,91 +387,126 @@ else:
                 os.remove(LOCAL_TAR)
 
         if _need_download:
-            N_WORKERS = max(1, min(8, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "4"))))
-            print(f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD ({N_WORKERS} workers) …", flush=True)
-            print(f"     {DRIVE_DATASET} -> {LOCAL_TAR}", flush=True)  # has placeholders
-            CHUNK = 8 * 1024 * 1024  # 8 MB — smaller to reduce lock contention & memory
-            chunk_size = (tar_size_bytes + N_WORKERS - 1) // N_WORKERS
-            _dl_start = time.time()
-            _copied_lock = threading.Lock()
-            _copied = [0]
-            _done = threading.Event()
+            # Drive FUSE often throttles parallel reads — sequential + large buffer
+            # typically yields 2–4x better throughput (e.g. 200 MB/s vs 50 MB/s).
+            _dl_method = os.environ.get("UAV_DOWNLOAD_METHOD", "pv").strip().lower()
+            _pv_buf = os.environ.get("UAV_PV_BUFFER", "128m").strip().lower()
+            _use_pv = _dl_method == "pv" and shutil.which("pv")
 
-            def _copy_range(start: int, end: int) -> int:
-                n = 0
-                fd_dst = os.open(LOCAL_TAR, os.O_RDWR)
-                try:
-                    with open(DRIVE_DATASET, "rb") as src:
-                        src.seek(start)
-                        remaining = end - start
-                        current_offset = start
-                        while remaining > 0:
-                            to_read = min(CHUNK, remaining)
-                            buf = src.read(to_read)
-                            if not buf:
-                                break
-                            os.pwrite(fd_dst, buf, current_offset)
-                            n += len(buf)
-                            remaining -= len(buf)
-                            current_offset += len(buf)
-                            with _copied_lock:
-                                _copied[0] += len(buf)
-                finally:
-                    os.close(fd_dst)
-                return n
-
-            def _progress_loop():
-                while not _done.is_set():
-                    time.sleep(2.0)
-                    with _copied_lock:
-                        c = _copied[0]
-                    if c >= tar_size_bytes:
-                        break
-                    elapsed = time.time() - _dl_start
-                    pct = c / tar_size_bytes * 100
-                    speed_mb = (c / (1024**2)) / max(elapsed, 0.1)
-                    remaining_sec = (tar_size_bytes - c) / max(c / max(elapsed, 0.1), 1)
-                    mins, secs = divmod(int(remaining_sec), 60)
-                    sys.stdout.write(
-                        f"\r  📥  {pct:5.1f}%  |  "
-                        f"{c/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
-                        f"{speed_mb:.0f} MB/s  |  "
-                        f"ETA {mins}m {secs}s   "
+            if _use_pv:
+                # Sequential: pv with 128MB buffer — best for Drive FUSE
+                print(
+                    f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD (pv, {_pv_buf} buffer) …",
+                    flush=True,
+                )
+                print(f"     {DRIVE_DATASET} -> {LOCAL_TAR}", flush=True)
+                _dl_start = time.time()
+                with open(LOCAL_TAR, "wb") as dst:
+                    _pv_cmd = ["pv", "-B", _pv_buf, "-f", "-p", "-e", "-r", "-b", DRIVE_DATASET]
+                    proc = subprocess.Popen(
+                        _pv_cmd,
+                        stdout=dst,
+                        stderr=subprocess.PIPE,
                     )
-                    sys.stdout.flush()
+                    _err_fd = proc.stderr.fileno()
+                    while True:
+                        chunk = os.read(_err_fd, 4096)
+                        if not chunk and proc.poll() is not None:
+                            break
+                        if chunk:
+                            sys.stdout.buffer.write(chunk)
+                            sys.stdout.flush()
+                    proc.wait()
+                    if proc.returncode != 0:
+                        raise RuntimeError(f"pv exited with code {proc.returncode}")
+            else:
+                # Parallel fallback (UAV_DOWNLOAD_METHOD=parallel or pv missing)
+                N_WORKERS = max(1, min(8, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "2"))))
+                CHUNK = 32 * 1024 * 1024  # 32 MB — larger = fewer syscalls, less contention
+                print(
+                    f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD ({N_WORKERS} workers, 32MB chunks) …",
+                    flush=True,
+                )
+                print(f"     {DRIVE_DATASET} -> {LOCAL_TAR}", flush=True)
+                chunk_size = (tar_size_bytes + N_WORKERS - 1) // N_WORKERS
+                _dl_start = time.time()
+                _copied_lock = threading.Lock()
+                _copied = [0]
+                _done = threading.Event()
 
-            # Pre-allocate output file
-            with open(LOCAL_TAR, "wb") as f:
-                f.truncate(tar_size_bytes)
+                def _copy_range(start: int, end: int) -> int:
+                    n = 0
+                    fd_dst = os.open(LOCAL_TAR, os.O_RDWR)
+                    try:
+                        with open(DRIVE_DATASET, "rb") as src:
+                            src.seek(start)
+                            remaining = end - start
+                            current_offset = start
+                            while remaining > 0:
+                                to_read = min(CHUNK, remaining)
+                                buf = src.read(to_read)
+                                if not buf:
+                                    break
+                                os.pwrite(fd_dst, buf, current_offset)
+                                n += len(buf)
+                                remaining -= len(buf)
+                                current_offset += len(buf)
+                                with _copied_lock:
+                                    _copied[0] += len(buf)
+                    finally:
+                        os.close(fd_dst)
+                    return n
 
-            _prog_thread = threading.Thread(target=_progress_loop, daemon=True)
-            _prog_thread.start()
+                def _progress_loop():
+                    while not _done.is_set():
+                        time.sleep(2.0)
+                        with _copied_lock:
+                            c = _copied[0]
+                        if c >= tar_size_bytes:
+                            break
+                        elapsed = time.time() - _dl_start
+                        pct = c / tar_size_bytes * 100
+                        speed_mb = (c / (1024**2)) / max(elapsed, 0.1)
+                        remaining_sec = (tar_size_bytes - c) / max(c / max(elapsed, 0.1), 1)
+                        mins, secs = divmod(int(remaining_sec), 60)
+                        sys.stdout.write(
+                            f"\r  📥  {pct:5.1f}%  |  "
+                            f"{c/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
+                            f"{speed_mb:.0f} MB/s  |  "
+                            f"ETA {mins}m {secs}s   "
+                        )
+                        sys.stdout.flush()
 
-            try:
-                with ThreadPoolExecutor(max_workers=N_WORKERS) as ex:
-                    futures = [
-                        ex.submit(_copy_range, i * chunk_size, min((i + 1) * chunk_size, tar_size_bytes))
-                        for i in range(N_WORKERS)
-                        if i * chunk_size < tar_size_bytes
-                    ]
-                    for _ in as_completed(futures):
-                        pass
-            finally:
-                _done.set()
-                _prog_thread.join(timeout=3)
+                with open(LOCAL_TAR, "wb") as f:
+                    f.truncate(tar_size_bytes)
 
-            # Final progress line
-            with _copied_lock:
-                c = _copied[0]
-            elapsed = time.time() - _dl_start
-            pct = c / tar_size_bytes * 100
-            speed_mb = (c / (1024**2)) / max(elapsed, 0.1)
-            sys.stdout.write(
-                f"\r  📥  {pct:5.1f}%  |  "
-                f"{c/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
-                f"{speed_mb:.0f} MB/s  |  done      \n"
-            )
-            sys.stdout.flush()
+                _prog_thread = threading.Thread(target=_progress_loop, daemon=True)
+                _prog_thread.start()
+
+                try:
+                    with ThreadPoolExecutor(max_workers=N_WORKERS) as ex:
+                        futures = [
+                            ex.submit(_copy_range, i * chunk_size, min((i + 1) * chunk_size, tar_size_bytes))
+                            for i in range(N_WORKERS)
+                            if i * chunk_size < tar_size_bytes
+                        ]
+                        for _ in as_completed(futures):
+                            pass
+                finally:
+                    _done.set()
+                    _prog_thread.join(timeout=3)
+
+                with _copied_lock:
+                    c = _copied[0]
+                elapsed = time.time() - _dl_start
+                pct = c / tar_size_bytes * 100
+                speed_mb = (c / (1024**2)) / max(elapsed, 0.1)
+                sys.stdout.write(
+                    f"\r  📥  {pct:5.1f}%  |  "
+                    f"{c/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
+                    f"{speed_mb:.0f} MB/s  |  done      \n"
+                )
+                sys.stdout.flush()
 
         dl_elapsed = time.time() - t0
         print(
@@ -479,13 +516,13 @@ else:
         )
 
         # ── PHASE 2: Extract from local copy (full NVMe speed) ──
-        # stdbuf: 64MB pipe buffer for pigz→tar throughput
+        # stdbuf: 128MB pipe buffer for pigz→tar throughput (larger = less blocking)
         # eatmydata: skip fsync for faster writes (safe to re-extract on crash)
-        # pigz -p NCPU: parallel decompression
+        # pigz -p NCPU: parallel decompression; tar -b 10240: larger blocks = less overhead
         t1 = time.time()
-        TAR_FAST = "--no-same-owner --no-same-permissions -b 512"
-        PIPE_BUF = "64M"
-        CKPT = 50000  # less frequent progress = less overhead
+        TAR_FAST = "--no-same-owner --no-same-permissions -b 10240"
+        PIPE_BUF = os.environ.get("UAV_EXTRACT_PIPE_BUF", "128M")
+        CKPT = 100000  # less frequent progress = less overhead
         _eatmydata = "eatmydata " if shutil.which("eatmydata") else ""
 
         if existing > 100:
@@ -503,7 +540,7 @@ else:
             _ed = "eatmydata, " if _eatmydata else ""
             print(
                 f"  🚀 Full extraction → {LOCAL_CACHE} "
-                f"({_ed}pigz {NCPU} cores, 64MB pipe)",
+                f"({_ed}pigz {NCPU} cores, {PIPE_BUF} pipe)",
                 flush=True,
             )
             _ext_cmd = (

@@ -1,12 +1,12 @@
 ---
-description: Commit yap — changelog, version bump, README sync ve git commit'i AI kendisi uygular
+description: Commit mesajı üret — changelog, version bump, README sync; AI commit yapmaz, sadece mesaj verir
 alwaysApply: false
 ---
 # Commit Rule
 
 When this rule file is invoked for commit-related tasks (e.g. "commit yap", "commit mesajı oluştur", or when the user references `@commit.mdc`):
 
-**Sen tüm adımları kendin uygula.** Mesaj göstermek yerine işlemleri yap.
+**AI sadece commit mesajını üretir ve verir.** Git commit komutunu kullanıcı kendisi çalıştırır.
 
 ## Adımlar (Sırayla Uygula)
 
@@ -16,9 +16,11 @@ When this rule file is invoked for commit-related tasks (e.g. "commit yap", "com
 - **Version bump**: `uav_training/__init__.py` ve `uav_training/train.py` içindeki `__version__` değerini artır (örn. 0.8.37 → 0.8.38).
 - **README sync**: `README.md` ve `uav_training/README.md` başlıklarındaki versiyon numarasını güncelle.
 
-### 2. Commit Mesajı Oluştur
+### 2. Commit Mesajı Oluştur ve Kullanıcıya Ver
 
-`CHANGELOGS.md` son ~20 satırını oku. En son sürüm girişlerinden commit mesajı üret:
+`CHANGELOGS.md` son ~20 satırını oku. En son sürüm girişlerinden commit mesajı üret ve **kullanıcıya metin olarak ver**. Git komutu çalıştırma.
+
+Format:
 
 ```
 type(scope): Brief summary from changelog
@@ -29,11 +31,9 @@ type(scope): Brief summary from changelog
 
 `type`: `fix`, `feat`, `perf`, `refactor`, `chore`, `docs`, `test`, `log`, `release`.
 
-### 3. Git Commit Çalıştır
+### 3. Git Commit — Kullanıcı Yapar
 
-- `git add` ile değişen dosyaları stage et.
-- `git commit -m "mesaj"` ile commit yap.
-- Windows kullanıcısı: `&&` kullanma, komutları ayrı çalıştır veya `;` kullan.
+AI `git add` veya `git commit` çalıştırmaz. Kullanıcıya hazır mesajı ver; kullanıcı kendi terminalinde commit yapar.
 
 ## Changelog Formatı
 
