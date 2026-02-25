@@ -96,17 +96,17 @@ _banner("0/8 — Pre-flight cleanup")
 import gc  # noqa: E402
 
 # Kill leftover training processes
-print("  🧹 Killing stale processes …", flush=True)
-_run("pkill -9 -f 'uav_training/train.py' 2>/dev/null || true", check=False)
-_run("pkill -9 -f 'yolo' 2>/dev/null || true", check=False)
-_run("pkill -9 -f 'build_dataset.py' 2>/dev/null || true", check=False)
+print("  • Killing stale processes …", flush=True)
+_run("pkill -9 -f 'uav_training/train.py' 2>/dev/null || true", check=False, print_output=False)
+_run("pkill -9 -f 'yolo' 2>/dev/null || true", check=False, print_output=False)
+_run("pkill -9 -f 'build_dataset.py' 2>/dev/null || true", check=False, print_output=False)
 
 # Free GPU memory
 try:
     import torch
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-        print("  🧹 GPU VRAM cache cleared", flush=True)
+        print("  • GPU VRAM cache cleared", flush=True)
 except Exception:
     pass
 
@@ -116,13 +116,13 @@ gc.collect()
 # Clear __pycache__ in repo if it exists
 REPO_DIR = "/content/repo"
 if os.path.isdir(REPO_DIR):
-    _run(f'find {REPO_DIR} -type d -name __pycache__ -exec rm -rf {{}} + 2>/dev/null || true', check=False)
+    _run(f'find {REPO_DIR} -type d -name __pycache__ -exec rm -rf {{}} + 2>/dev/null || true', check=False, print_output=False)
     # NOTE: Do NOT delete *.cache files — these are YOLO's label caches
     # that store pre-scanned 30k+ labels. Deleting them costs 35+ seconds per run.
-    print("  🧹 Stale __pycache__ cleared", flush=True)
+    print("  • Stale __pycache__ cleared", flush=True)
 
 # Clear /tmp junk
-_run("rm -rf /tmp/pip-* /tmp/torch_* 2>/dev/null || true", check=False)
+_run("rm -rf /tmp/pip-* /tmp/torch_* 2>/dev/null || true", check=False, print_output=False)
 print("  ✓ Cleanup done\n", flush=True)
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -452,7 +452,7 @@ else:
                 )
             else:
                 # Parallel fallback (UAV_DOWNLOAD_METHOD=parallel or pv missing)
-                N_WORKERS = max(1, min(8, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "4"))))
+                N_WORKERS = max(1, min(8, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "8"))))
                 CHUNK = 32 * 1024 * 1024  # 32 MB — larger = fewer syscalls, less contention
                 print(
                     f"  📥 Downloading {tar_size_gb:.1f} GB → local SSD ({N_WORKERS} workers, 32MB chunks) …",
