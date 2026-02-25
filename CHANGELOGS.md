@@ -467,3 +467,8 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **fix(notebook)**: git pull 2>&1 — merge stderr to stdout so output is not red.
 - **perf(colab_bootstrap)**: UAV_DOWNLOAD_WORKERS default 4→8.
 - **release**: Bumped module/script version from `0.8.42` to `0.8.43`.
+
+## 0.8.44 - 2026-02-25
+- **refactor(notebook)**: wget bootstrap only — no git in notebook; bootstrap clones repo inside.
+- **fix(colab_bootstrap)**: git fetch/reset/clone/log print_output=False — no red stderr in Colab.
+- **release**: Bumped module/script version from `0.8.43` to `0.8.44`.

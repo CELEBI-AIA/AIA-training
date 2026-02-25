@@ -162,14 +162,14 @@ REPO_DIR = "/content/repo"
 
 if os.path.isdir(os.path.join(REPO_DIR, ".git")):
     print("  ↻ Repo exists — pulling latest changes …", flush=True)
-    _run(f"git -C {shlex.quote(REPO_DIR)} fetch --all")
-    _run(f"git -C {shlex.quote(REPO_DIR)} reset --hard origin/{shlex.quote(REPO_BRANCH)}")
+    _run(f"git -C {shlex.quote(REPO_DIR)} fetch --all", print_output=False)
+    _run(f"git -C {shlex.quote(REPO_DIR)} reset --hard origin/{shlex.quote(REPO_BRANCH)}", print_output=False)
 else:
     print(f"  ↓ Cloning {REPO_URL} …", flush=True)
-    _run(f"git clone --depth 1 -b {shlex.quote(REPO_BRANCH)} {shlex.quote(REPO_URL)} {shlex.quote(REPO_DIR)}")
+    _run(f"git clone --depth 1 -b {shlex.quote(REPO_BRANCH)} {shlex.quote(REPO_URL)} {shlex.quote(REPO_DIR)}", print_output=False)
 
 # Show repo info
-_run(f"git -C {REPO_DIR} log --oneline -1")
+_run(f"git -C {REPO_DIR} log --oneline -1", print_output=False)
 VERSION = _read_repo_version(REPO_DIR)
 print(f"\n🛰️  UAV Training Bootstrap v{VERSION}", flush=True)
 print(f"    Repo: {REPO_URL} ({REPO_BRANCH})", flush=True)
