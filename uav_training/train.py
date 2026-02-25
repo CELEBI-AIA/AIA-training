@@ -36,7 +36,7 @@ if torch.cuda.is_available():
 try:
     from uav_training import __version__
 except ImportError:
-    __version__ = "0.8.29"  # fallback when uav_training not installed as package
+    __version__ = "0.8.30"  # fallback when uav_training not installed as package
 
 print(f"\n🛰️  UAV Training Pipeline v{__version__}", flush=True)
 
@@ -218,7 +218,7 @@ def _sync_to_drive(save_dir, run_name):
         drive_cp_path = Path(os.environ.get("UAV_PROJECT_DIR", "/content/drive/MyDrive/AIA/checkpoints"))
         target_dir = drive_cp_path / run_name
         target_dir.mkdir(parents=True, exist_ok=True)
-        for f in ["weights/best.pt", "weights/last.pt"]:
+        for f in ["weights/best.pt", "weights/last.pt", "weights/best_map50.pt"]:
             src = Path(save_dir) / f
             if src.exists():
                 dst = target_dir / Path(f).name
@@ -229,6 +229,50 @@ def _sync_to_drive(save_dir, run_name):
         print(f"[DRIVE WARN] {e}", flush=True)
 
 _LAST_SYNC_EPOCH = -1
+
+def _cleanup_old_checkpoints(weights_dir: Path) -> int:
+    """Keep best.pt, last.pt and last 3 epoch*.pt; delete older epoch checkpoints."""
+    if not weights_dir.exists():
+        return 0
+    epoch_files = sorted(
+        weights_dir.glob("epoch*.pt"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    to_keep = set(epoch_files[:3])
+    deleted = 0
+    for f in epoch_files:
+        if f not in to_keep:
+            try:
+                f.unlink()
+                deleted += 1
+            except OSError:
+                pass
+    return deleted
+
+
+def _best_map50_guard(trainer):
+    """Save best_map50.pt when current epoch mAP50 exceeds best so far (yarışma IoU=0.5)."""
+    try:
+        metrics = getattr(trainer, "metrics", None)
+        if metrics is None:
+            return
+        box = getattr(metrics, "box", None)
+        map50 = getattr(box, "map50", None) or getattr(box, "ap50", None)
+        if map50 is None:
+            return
+        map50 = float(map50)
+        weights_dir = Path(trainer.save_dir) / "weights"
+        best_map50_pt = weights_dir / "best_map50.pt"
+        last_pt = weights_dir / "last.pt"
+        best_so_far = getattr(_best_map50_guard, "_best", 0.0)
+        if map50 > best_so_far and last_pt.exists():
+            shutil.copy2(last_pt, best_map50_pt)
+            _best_map50_guard._best = map50
+            print(f"  [BEST_MAP50] mAP50={map50:.4f} → best_map50.pt", flush=True)
+    except Exception:
+        pass
+
 
 def checkpoint_guard(trainer):
     """Drive sync every save_period epochs. Last epoch uses synchronous sync to avoid daemon cutoff."""
@@ -242,6 +286,12 @@ def checkpoint_guard(trainer):
             return
         _SYNC_IN_FLIGHT = True
         _LAST_SYNC_EPOCH = epoch
+
+    # Otomatik checkpoint temizleme (best, last, son 3 epoch dışındakileri sil)
+    weights_dir = Path(trainer.save_dir) / "weights"
+    n_cleaned = _cleanup_old_checkpoints(weights_dir)
+    if n_cleaned > 0:
+        print(f"  [CLEANUP] {n_cleaned} eski epoch checkpoint silindi", flush=True)
 
     is_last_epoch = epoch >= int(getattr(trainer, "epochs", epoch))
     if is_last_epoch:
@@ -322,7 +372,7 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         "patience", "cos_lr", "overlap_mask", "mosaic", "rect", "multi_scale",
         "close_mosaic", "deterministic", "save_period", "compile",
         "lr0", "lrf", "warmup_epochs", "weight_decay",
-        "scale", "copy_paste", "copy_paste_mode", "flipud", "fliplr", "hsv_h", "hsv_s", "hsv_v", "bgr",
+        "scale", "copy_paste", "copy_paste_mode", "degrees", "flipud", "fliplr", "hsv_h", "hsv_s", "hsv_v", "bgr",
         "box", "cls", "dfl",
     ]
     for p in optional_params:
@@ -347,6 +397,8 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
 
         model = YOLO(model_path)
         model.add_callback("on_fit_epoch_end", checkpoint_guard)
+        _best_map50_guard._best = 0.0  # Her phase başında sıfırla
+        model.add_callback("on_fit_epoch_end", _best_map50_guard)
         try:
             results = model.train(**attempt_args)
             break
@@ -720,17 +772,31 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                 if not os.path.exists(phase2_model_path) or not _is_checkpoint_valid(Path(phase2_model_path)):
                      raise FileNotFoundError(f"Failed to find any valid phase1 weights in {phase1_result['results_dir']}")
 
+        # Otomatik per-class validation (Phase 1 sonrası UAP/UAI durumu)
+        try:
+            from val_utils import run_per_class_val, print_per_class_report
+            print("\n📊 Phase 1 sonrası per-class validation...", flush=True)
+            per_class = run_per_class_val(phase2_model_path, str(DATASET_DIR), verbose=False)
+            print_per_class_report(per_class)
+        except Exception as e:
+            print(f"⚠️ Per-class validation atlandı: {e}", flush=True)
+
         phase2_batch = phase1_result.get("batch", batch)  # E-02 / B-04 Fix: use actual phase 1 batch
         if isinstance(phase2_batch, int):
             phase2_batch = max(1, phase2_batch // 2)
 
         phase2_overrides = {
             "nbs": phase2_batch,
-            "mosaic": TRAIN_CONFIG.get("phase2_mosaic", 0.2),
-            "close_mosaic": TRAIN_CONFIG.get("phase2_close_mosaic", 10),
+            "mosaic": TRAIN_CONFIG.get("phase2_mosaic", 0.0),
+            "close_mosaic": TRAIN_CONFIG.get("phase2_close_mosaic", 0),
             "lr0": TRAIN_CONFIG.get("phase2_lr0", TRAIN_CONFIG.get("lr0", 0.001)),
-            "lrf": TRAIN_CONFIG.get("phase2_lrf", TRAIN_CONFIG.get("lrf", 0.01)),  # S-01 Fix: explicit LRF inheritance
+            "lrf": TRAIN_CONFIG.get("phase2_lrf", 0.1),
             "warmup_epochs": 0.0,
+            "copy_paste": TRAIN_CONFIG.get("phase2_copy_paste", 0.5),
+            "degrees": TRAIN_CONFIG.get("phase2_degrees", 10.0),
+            "scale": TRAIN_CONFIG.get("phase2_scale", 0.6),
+            "hsv_s": TRAIN_CONFIG.get("phase2_hsv_s", 0.9),
+            "hsv_v": TRAIN_CONFIG.get("phase2_hsv_v", 0.6),
         }
 
         # S-05: Reset seed before Phase 2 explicitly

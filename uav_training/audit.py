@@ -163,15 +163,29 @@ def audit_directory(dir_path):
             canonical_split = "val" if sub in {"valid", "val"} else sub
             img_dir = dir_path / sub / 'images'
             lbl_dir = dir_path / sub / 'labels'
-            
+            split_path = dir_path / sub
+
+            # Standart train/images/ veya megaset gibi train/ kökünde görüntüler
             if img_dir.exists():
                 imgs = _list_images(img_dir)
+            elif split_path.exists() and split_path.is_dir():
+                imgs = _list_images(split_path)
+            else:
+                imgs = []
+
+            if imgs:
                 img_count += len(imgs)
                 result["split_counts"][canonical_split]["images"] += len(imgs)
                 split_stems[canonical_split].update({p.stem for p in imgs})
-            
+
             if lbl_dir.exists():
                 lbls = list(lbl_dir.glob("*.txt"))
+                lbl_count += len(lbls)
+                result["split_counts"][canonical_split]["labels"] += len(lbls)
+            elif split_path.exists():
+                alt_lbl_dir = split_path / "labels"
+                lbls = list(alt_lbl_dir.glob("*.txt")) if alt_lbl_dir.exists() else list(split_path.glob("*.txt"))
+                lbls = [l for l in lbls if l.name != "classes.txt"]
                 lbl_count += len(lbls)
                 result["split_counts"][canonical_split]["labels"] += len(lbls)
                 

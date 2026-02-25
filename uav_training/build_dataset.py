@@ -506,6 +506,19 @@ def build_dataset():
         
     print(f"Dataset built successfully at {DATASET_DIR}")
 
+    # Otomatik temporal leakage kontrolü
+    try:
+        from val_utils import check_temporal_leakage
+        leak = check_temporal_leakage(DATASET_DIR)
+        if leak["exact_match"] > 0:
+            print(f"⚠️ [LEAKAGE] Tam eşleşen train/val: {leak['exact_match']} görüntü", flush=True)
+        if leak["video_prefix_overlap"] > 0:
+            print(f"ℹ️ [LEAKAGE] Aynı video prefix overlap: {leak['video_prefix_overlap']} sahne", flush=True)
+        if leak["exact_match"] == 0 and leak["video_prefix_overlap"] == 0:
+            print("✓ [LEAKAGE] Train/val exact overlap yok", flush=True)
+    except Exception as e:
+        print(f"⚠️ Temporal leakage kontrolü atlandı: {e}", flush=True)
+
     _release_file_lock(lock_fd, lock_path)
     try:
         atexit.unregister(_release_file_lock)

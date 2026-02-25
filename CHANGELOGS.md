@@ -372,3 +372,15 @@
 - **docs(reports)**: Replaced `ml_pipeline_denetim_raporu.md` with `UAV_Pipeline_Statik_Denetim_Raporu.md`.
 - **docs(README)**: Version references updated to v0.8.28.
 - **release**: Bumped module/script version from `0.8.28` to `0.8.29`.
+
+## 0.0.50 - 2026-02-25
+- **feat(uav_training)**: UAV Training Optimization (uav_training_optimizasyon.md) — Phase 2 config (phase2_mosaic=0, close_mosaic=0, lrf=0.1, copy_paste=0.5, degrees=10, scale=0.6, hsv_s/hsv_v), min_bbox_norm=0.002.
+- **feat(uav_training/val_utils)**: New module — run_per_class_val, print_per_class_report, check_temporal_leakage.
+- **feat(uav_training/train)**: Automatic per-class validation after Phase 1; best_map50.pt callback; checkpoint cleanup (keep best, last, last 3 epoch); Drive sync includes best_map50.pt.
+- **feat(scripts/run_per_class_val)**: Per-class AP50 script (vehicle, human, uap, uai) with target thresholds.
+- **feat(scripts/cleanup_checkpoints)**: Standalone checkpoint cleanup script.
+- **fix(uav_training/audit)**: Megaset audit — fallback for split_path when train/images/ missing (images/labels in split root).
+- **fix(uav_training/build_dataset)**: Automatic temporal leakage check after build.
+- **fix(requirements.txt)**: ultralytics==8.4.16 (version pinned).
+- **fix(scripts)**: Colab paths — run_per_class_val and cleanup_checkpoints prefer /content/runs on Colab.
+- **release**: Bumped module/script version from `0.8.29` to `0.8.30`.
