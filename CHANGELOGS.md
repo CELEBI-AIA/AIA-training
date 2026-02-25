@@ -1,5 +1,8 @@
 # CHANGELOGS
 
+Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may use `0.0.XX`; new entries should use `0.8.XX`.
+
+---
 
 ## 0.0.04 - 2026-02-21
 - **Colab Auto Hardware Detection**: `uav_training/config.py` now auto-detects GPU/RAM/CPU on Colab and maximizes batch/workers/imgsz/model size.
@@ -416,3 +419,15 @@
 - **chore(requirements.txt)**: Added pytest>=7.0.0; `requirements-dev.txt`: flake8, pre-commit.
 - **docs(README)**: "Otomatik Testler" section — Colab, CI, local pre-commit.
 - **release**: Bumped module/script version from `0.8.33` to `0.8.34`.
+
+## 0.8.35 - 2026-02-25
+- **chore(scripts)**: Removed `cleanup.sh` — Linux-only bash script, Windows-incompatible; checkpoint cleanup via `cleanup_checkpoints.py` only.
+- **chore(tests)**: Removed `test_audit.py` — redundant with `test_uav_audit.py` (more comprehensive coverage).
+- **docs(README)**: Removed cleanup.sh references; updated uav_training/README version.
+- **release**: Bumped module/script version from `0.8.34` to `0.8.35`.
+
+## 0.8.36 - 2026-02-25
+- **feat(.flake8)**: Added exclude for .git, __pycache__, venv, .venv, artifacts, datasets; max-line-length 120.
+- **perf(CI)**: Compile job no longer installs requirements.txt — syntax-only check, faster CI.
+- **docs(CHANGELOGS)**: Version format note — UAV uses 0.8.XX; new entries follow this format.
+- **release**: Bumped module/script version from `0.8.35` to `0.8.36`.

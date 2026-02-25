@@ -1,0 +1,50 @@
+---
+alwaysApply: false
+---
+# Commit Rule
+
+When this rule file is invoked for commit-related tasks (e.g. "commit yap", "commit mesajı oluştur", or when the user references `@commit.mdc`):
+
+1. **Read** the latest entries from `CHANGELOGS.md` (last ~20 lines) as the source of truth.
+2. **Generate** a commit message that summarizes the changelog entries for the current changes.
+3. **Output** the commit message as plain text inside a copyable code block — do **not** include `git commit -m` or any shell command.
+4. **Do not** create new files; only display the message on screen for the user to copy.
+
+## Output Format
+
+```
+type(scope): Brief summary from changelog
+
+- Detail 1 from changelog entry
+- Detail 2 from changelog entry
+```
+
+Where `type` is one of: `fix`, `feat`, `perf`, `refactor`, `chore`, `docs`, `test`, `log`, `release`.
+
+### Example
+
+```
+feat(config): Add cleanup checkpoints script and validation utils
+
+- Add cleanup_checkpoints.py for checkpoint management
+- Add per-class validation script
+- Update config with new validation options
+```
+
+## Changelog Reference
+
+`CHANGELOGS.md` entries use this format:
+
+```markdown
+## X.X.XX - YYYY-MM-DD
+- **type(scope)**: Description of the change.
+```
+
+When `CHANGELOGS.md` gets large, read only the end (last ~20 lines) to find the latest version and entries.
+
+## Pre-Commit Checklist (for changes, not for message output)
+
+Before any commit, ensure:
+
+- **Version bump**: `__version__` in `uav_training/__init__.py` and `uav_training/train.py` are in sync; increment patch (e.g. `0.8.6` → `0.8.7`).
+- **README sync**: Header version and inline references in `README.md` match `__version__`; structure, config, and usage sections are up to date.

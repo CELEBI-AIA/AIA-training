@@ -1,4 +1,4 @@
-# 🛩️ UAV Training Pipeline — v0.8.34
+# 🛩️ UAV Training Pipeline — v0.8.36
 
 YOLO11m tabanlı İHA (UAV) tespit eğitim altyapısı.
 Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücre ile çalışır.
@@ -24,8 +24,7 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 │   ├── colab_smoke_test.py    # Quick import/validation checks (Colab)
 │   ├── setup_hooks.py         # One-time setup: pre-commit install (tests on commit)
 │   ├── run_per_class_val.py   # Per-class AP50 validation (vehicle, human, uap, uai)
-│   ├── cleanup_checkpoints.py # Epoch checkpoint cleanup (best, last, son 3 epoch)
-│   └── cleanup.sh             # GPU memory & process cleanup
+│   └── cleanup_checkpoints.py # Epoch checkpoint cleanup (best, last, son 3 epoch)
 │
 ├── notebooks/
 │   └── train_colab.ipynb      # Open in Colab notebook
@@ -187,14 +186,6 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 - **Disk Management** — Otomatik cleanup, tar.gz hemen silinir
 - **Label Cache** — YOLO .cache dosyaları korunur (tekrar scan yok)
 - **Set-based Dedup** — O(1) duplicate label filtreleme
-
----
-
-## 🧹 Cleanup
-
-```bash
-bash scripts/cleanup.sh
-```
 
 ---
 
