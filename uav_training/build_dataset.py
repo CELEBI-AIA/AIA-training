@@ -117,6 +117,24 @@ MAPPINGS = {
         },
         "oversample": 3,  # High priority UAP/UAI data
         "sampling_rate": 1.0
+    },
+
+    # 6. visdrone_yolo (VisDrone aerial detection dataset)
+    # nc: 10, names: ['pedestrian', 'people', 'bicycle', 'car', 'van', 'truck', 'tricycle', 'awning-tricycle', 'bus', 'motor']
+    # UAP/UAI yok; sadece vehicle ve human sınıflarına map edilir.
+    # SMART SAMPLING: İnsanlara öncelik — 100% human, 30% vehicle.
+    "visdrone_yolo": {
+        "source_names": ['pedestrian', 'people', 'bicycle', 'car', 'van', 'truck', 'tricycle', 'awning-tricycle', 'bus', 'motor'],
+        "map": {
+            'pedestrian': 1, 'people': 1,
+            'bicycle': 0, 'car': 0, 'van': 0, 'truck': 0,
+            'tricycle': 0, 'awning-tricycle': 0, 'bus': 0, 'motor': 0
+        },
+        "oversample": 3,
+        "human_extra_oversample": 2,  # Pure-human images get +2 passes → insan örneği artışı
+        "sampling_rate": 1.0,
+        "smart_sample": True,
+        "smart_sample_keep_prob": {0: 0.30, 1: 1.00, 2: 1.00, 3: 1.00}
     }
 }
 

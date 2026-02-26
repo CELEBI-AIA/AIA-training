@@ -1,4 +1,4 @@
-# 🛩️ UAV Training Pipeline — v0.8.46
+# 🛩️ UAV Training Pipeline — v0.8.47
 
 YOLO11m tabanlı İHA (UAV) tespit eğitim altyapısı.
 Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücre ile çalışır.
@@ -56,7 +56,7 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 ### Google Colab (Önerilen)
 
 1. [`notebooks/train_colab.ipynb`](notebooks/train_colab.ipynb) dosyasını Colab'da açın
-2. Dataset'in `Google Drive > MyDrive > AIA > datasets.tar.gz` konumunda olduğundan emin olun
+2. Dataset'in `Google Drive > MyDrive > AIA > datasets > mega.tar.gz` konumunda olduğundan emin olun
 3. Hücreyi çalıştırın — her şey otomatik:
 
 ```
@@ -145,6 +145,7 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 | Uap-UaiAlanlariVeriSeti          | 3x         | —            |
 | drone-vision-project             | 3x         | —            |
 | megaset (24k images)             | 2x         | ✅ 100% human, 30% vehicle |
+| visdrone_yolo (~8k images)       | 3x         | ✅ 100% human, 30% vehicle |
 
 ---
 
@@ -157,7 +158,7 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
                                       │
 ┌──────────────────────────┐  ┌────────────────────────┐
 │ Google Drive             │─▶│  /content/datasets_local│
-│ AIA/datasets.tar.gz      │  │  (NVMe SSD cache)      │
+│ AIA/datasets/mega.tar.gz │  │  (NVMe SSD cache)      │
 │ Python copy (104 MB/s)   │  └────────────────────────┘
 │ + pigz extraction        │            │
 └──────────────────────────┘  ┌─────────▼──────────┐

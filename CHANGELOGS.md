@@ -6,7 +6,7 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 
 ## 0.0.04 - 2026-02-21
 - **Colab Auto Hardware Detection**: `uav_training/config.py` now auto-detects GPU/RAM/CPU on Colab and maximizes batch/workers/imgsz/model size.
-- **Dataset `.tar.gz` Support**: `scripts/colab_bootstrap.py` now extracts `datasets.tar.gz` from Drive using `pigz` (parallel decompression) with local SSD caching.
+- **Dataset `.tar.gz` Support**: `scripts/colab_bootstrap.py` now extracts `mega.tar.gz` from Drive using `pigz` (parallel decompression) with local SSD caching.
 - **Post-Training Export**: `uav_training/train.py` renames `best.pt` with mAP50 and mAP50-95 scores appended and uploads to `Drive/AIA/`.
 - **GitHub URL Updated**: All references now point to `CELEBI-AIA/AIA-training`.
 - **Notebook Synced**: `notebooks/train_colab.ipynb` updated with 7-step auto-tuned pipeline.
@@ -487,3 +487,8 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **refactor(config)**: phase2_mosaic 0.2→0.3 — preserve human context in Phase 2.
 - **perf(train)**: Removed Phase 2 batch halving — use full Phase 1 batch (A100 was ~78% idle).
 - **release**: Bumped module/script version from `0.8.45` to `0.8.46`.
+
+## 0.8.47 - 2026-02-26
+- **feat(build_dataset)**: visdrone_yolo entegrasyonu — 10 sınıf → 4 hedef (vehicle, human); smart sampling ile insan önceliği (100% human, 30% vehicle).
+- **docs(build_dataset)**: documentation/datasets.md VisDrone bölümü ekleme; visdrone_yolo_data.yaml.example örneği.
+- **release**: Bumped module/script version from `0.8.46` to `0.8.47`.

@@ -8,7 +8,7 @@ VERSION = "dev"
 # ── Configuration ───────────────────────────────────────────────────────────
 REPO_URL = "https://github.com/CELEBI-AIA/AIA-training.git"
 REPO_BRANCH = "main"
-DRIVE_DATASET = "/content/drive/MyDrive/AIA/datasets.tar.gz"
+DRIVE_DATASET = "/content/drive/MyDrive/AIA/datasets/mega.tar.gz"
 LOCAL_CACHE = "/content/datasets_local"
 DRIVE_RUNS = "/content/drive/MyDrive/AIA/runs"
 DRIVE_UPLOAD = "/content/drive/MyDrive/AIA"  # best.pt upload destination
@@ -141,7 +141,7 @@ DRIVE_DATASET = _resolve_drive_path(DRIVE_DATASET)
 if not os.path.isfile(DRIVE_DATASET):
     raise FileNotFoundError(
         f"Dataset archive not found at {DRIVE_DATASET}. "
-        "Upload your datasets.tar.gz to Google Drive first."
+        "Upload your mega.tar.gz to Google Drive first."
     )
 
 os.makedirs(DRIVE_RUNS, exist_ok=True)
@@ -331,7 +331,7 @@ os.makedirs(LOCAL_CACHE, exist_ok=True)
 
 CACHE_MARKER = os.path.join(LOCAL_CACHE, ".done")
 NCPU = os.cpu_count() or 2
-LOCAL_TAR = "/content/datasets.tar.gz"
+LOCAL_TAR = "/content/mega.tar.gz"
 t0 = time.time()
 existing = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
 dataset_yaml = os.path.join(LOCAL_CACHE, "dataset.yaml")

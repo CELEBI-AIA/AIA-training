@@ -47,6 +47,36 @@ Aerial drone footage — vehicle and pedestrian classes only.
 | 4     | car          | Araç                                                |
 | 5     | people       | İnsan                                               |
 
+### 5. visdrone_yolo
+
+| Index | Original Name    | Maps To  |
+|-------|------------------|----------|
+| 0     | pedestrian       | human    |
+| 1     | people           | human    |
+| 2     | bicycle          | vehicle  |
+| 3     | car              | vehicle  |
+| 4     | van              | vehicle  |
+| 5     | truck            | vehicle  |
+| 6     | tricycle         | vehicle  |
+| 7     | awning-tricycle  | vehicle  |
+| 8     | bus              | vehicle  |
+| 9     | motor            | vehicle  |
+
+VisDrone aerial detection dataset (~8k+ images). UAP/UAI sınıfları yok; sadece vehicle ve human hedeflerine map edilir. **İnsanlara öncelik:** Smart sampling ile %100 human, %30 vehicle tutulur; pure-human görüntülere ekstra oversample uygulanır. Oversample: 3x.
+
+**Klasör yapısı:** `datasets/TRAIN/visdrone_yolo/` altında `train/images`, `train/labels`, `valid/images`, `valid/labels`, `test/images`, `test/labels` beklenir.
+
+**data.yaml örneği** (kök dizinde `data.yaml`). Örnek dosya: [`visdrone_yolo_data.yaml.example`](visdrone_yolo_data.yaml.example) — `datasets/TRAIN/visdrone_yolo/data.yaml` olarak kopyalayın.
+
+```yaml
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 10
+names: ['pedestrian', 'people', 'bicycle', 'car', 'van', 'truck', 'tricycle', 'awning-tricycle', 'bus', 'motor']
+```
+
 ## UAI- / UAP- Semantics
 
 - **UAI** — Unmanned Aerial Vehicle Integration area, suitable for landing.
