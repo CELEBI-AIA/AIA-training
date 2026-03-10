@@ -452,6 +452,11 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **fix(colab_bootstrap)**: _write_stdout_bytes helper — hasattr check for .buffer, works in Colab and regular Python.
 - **release**: Bumped module/script version from `0.8.39` to `0.8.40`.
 
+## 0.8.48 - 2026-03-08
+- **feat(scripts/export_context_pack)**: Added a Colab-friendly export script that generates a `context_pack/` folder for dataset and model review.
+- **feat(context_pack)**: Exports dataset summary markdown, training run summary, model manifest, copied run artifacts, class samples, heuristic hard-case samples, and optional validation prediction samples.
+- **release**: Bumped module/script version from `0.8.47` to `0.8.48`.
+
 ## 0.8.41 - 2026-02-25
 - **fix(colab_bootstrap)**: pv progress — file-size polling thread (pv stderr invisible in Colab); shows % GB MB/s ETA.
 - **feat(notebook)**: Clone repo first, run bootstrap from repo — always latest, no wget cache.

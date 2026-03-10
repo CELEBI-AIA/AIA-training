@@ -65,7 +65,7 @@ MAPPINGS = {
             'car': 0,
             'people': 1
         },
-        "oversample": 3,
+        "oversample": 5,
         "sampling_rate": 1.0
     },
 
@@ -97,7 +97,7 @@ MAPPINGS = {
         "human_extra_oversample": 2,  # Pure-human images get +2 passes → ~4x total, +~8000 human instances
         "sampling_rate": 1.0,  # Process ALL images effectively, but filter inside
         "smart_sample": True, # Enable class-based filtering
-        "smart_sample_keep_prob": {0: 0.10, 1: 1.00, 2: 1.00, 3: 1.00}
+        "smart_sample_keep_prob": {0: 0.07, 1: 1.00, 2: 1.00, 3: 1.00}
     },
 
     # 5. Uap-UaiAlanlariVeriSeti (Confirmed via data.yaml)
@@ -115,7 +115,7 @@ MAPPINGS = {
             'car': 0,
             'people': 1
         },
-        "oversample": 3,  # High priority UAP/UAI data
+        "oversample": 5,  # High priority UAP/UAI data
         "sampling_rate": 1.0
     },
 
@@ -134,7 +134,7 @@ MAPPINGS = {
         "human_extra_oversample": 2,  # Pure-human images get +2 passes → insan örneği artışı
         "sampling_rate": 1.0,
         "smart_sample": True,
-        "smart_sample_keep_prob": {0: 0.30, 1: 1.00, 2: 1.00, 3: 1.00}
+        "smart_sample_keep_prob": {0: 0.25, 1: 1.00, 2: 1.00, 3: 1.00}
     }
 }
 
