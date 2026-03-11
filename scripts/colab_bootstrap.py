@@ -1,4 +1,4 @@
-﻿##############################################################################
+##############################################################################
 # YOLO UAV Training Bootstrap (Google Colab)
 # Paste this entire cell into Colab and run.
 ##############################################################################
@@ -8,6 +8,7 @@ VERSION = "dev"
 # Runtime configuration (only values needed to start a run)
 REPO_URL = "https://github.com/CELEBI-AIA/AIA-training.git"
 REPO_BRANCH = "main"
+# TRAIN_DATA.tar.gz: contents are UAI_UAP/, drone-vision-project/, megaset/ directly (no parent TRAIN_DATA folder)
 DRIVE_DATASET = "/content/drive/MyDrive/AIA/datasets/TRAIN_DATA.tar.gz"
 LOCAL_CACHE = "/content/datasets_local"
 DRIVE_RUNS = "/content/drive/MyDrive/AIA/runs"
@@ -53,6 +54,9 @@ def _run(cmd: str, *, check: bool = True, print_output: bool = True, **kw):
 
     Colab's IPython stdout is NOT a real file descriptor, so subprocess.run()
     without capture sends output to /dev/null. We capture + print instead.
+
+    Note: shell=True is required for Linux commands (pkill, find, awk, pipes).
+    User-supplied paths should use shlex.quote() to mitigate injection risk.
     """
     sys.stdout.flush()
     sys.stderr.flush()
@@ -416,7 +420,7 @@ train_root = _ensure_canonical_train_root(LOCAL_CACHE, train_root)
 
 # If prior run extracted successfully but marker was missing/corrupted, restore marker.
 if train_root and existing > 5000 and not os.path.isfile(CACHE_MARKER):
-    with open(CACHE_MARKER, "w") as f:
+    with open(CACHE_MARKER, "w", encoding="utf-8") as f:
         f.write("1")
     print(
         f"  📦 [CACHE] Valid extracted dataset detected ({existing} files) but marker was missing; restored cache marker.",
@@ -708,7 +712,7 @@ else:
         if final_count > 5000 and train_root:
             print(f"   Verification passed: {final_count} files on local SSD", flush=True)
             print(f"  🧪 [VERIFY] Dataset root detected: {train_root}", flush=True)
-            with open(CACHE_MARKER, 'w') as f:
+            with open(CACHE_MARKER, 'w', encoding='utf-8') as f:
                 f.write("1")
         else:
             top_dirs = sorted(
@@ -744,7 +748,7 @@ _run(f"du -sh {LOCAL_CACHE} | awk '{{print \"     Dataset   - \"$1}}'")
 # Run audit before training so split/content issues fail early in logs.
 print("\n   🔍 Running Pipeline Audit...", flush=True)
 _run(f'cd {shlex.quote(REPO_DIR)} && {sys.executable} uav_training/audit.py', check=False)
-_audit_report = os.path.join(REPO_DIR, "artifacts", "audit_report.json")
+_audit_report = os.path.join(REPO_DIR, "artifacts", "uav_model", "audit_report.json")
 if os.path.isfile(_audit_report):
     print("  ✅ OK Audit report generated", flush=True)
 else:

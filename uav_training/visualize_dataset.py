@@ -1,4 +1,4 @@
-﻿import argparse
+import argparse
 import random
 import sys
 import cv2
@@ -68,7 +68,7 @@ def verify_dataset(num_samples=20, split="train"):
         label_path = labels_dir / f"{img_path.stem}.txt"
 
         if label_path.exists():
-            with open(label_path, 'r') as f:
+            with open(label_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
 
             for line in lines:

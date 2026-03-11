@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 import os
 import sys
 # Base paths
@@ -320,12 +320,14 @@ def auto_detect_hardware() -> tuple:
         "close_mosaic": 5,
         "overlap_mask": True,
 
-        # Augmentation profile (UAV and small-object optimized).
-        "mosaic": 1.0,
+        # Augmentation profile (UAV and small-object optimized, top-down bias).
+        # For top-down aerial videos, slightly lower mosaic and flipud
+        # reduce unrealistic composites and extreme vertical flips.
+        "mosaic": 0.7,
         "scale": 0.4,
-        "copy_paste": 0.3,
+        "copy_paste": 0.2,
         "copy_paste_mode": "flip",
-        "flipud": 0.5,
+        "flipud": 0.15,
         "fliplr": 0.5,
         "hsv_h": 0.015,
         "hsv_s": 0.7,
@@ -344,7 +346,7 @@ def auto_detect_hardware() -> tuple:
         "box": 7.5,
         "cls": 1.0,
         "dfl": 1.5,
-        "min_bbox_norm": 0.002,
+        "min_bbox_norm": 0.003,
 
         # Execution mechanics.
         "rect": False,
@@ -421,11 +423,11 @@ TRAIN_CONFIG = {
     "cos_lr": True,
     "close_mosaic": 5,
     "overlap_mask": True,
-    "mosaic": 1.0,
+    "mosaic": 0.7,
     "scale": 0.4,
-    "copy_paste": 0.3,
+    "copy_paste": 0.2,
     "copy_paste_mode": "flip",
-    "flipud": 0.5,
+    "flipud": 0.15,
     "fliplr": 0.5,
     "hsv_h": 0.015,
     "hsv_s": 0.7,
@@ -442,7 +444,7 @@ TRAIN_CONFIG = {
     "box": 7.5,
     "cls": 1.0,
     "dfl": 1.5,
-    "min_bbox_norm": 0.002,
+    "min_bbox_norm": 0.003,
     "include_test_in_val": False,
     "remove_orphans": True,           # Remove images without labels and labels without images
     "remove_train_val_duplicates": True,  # Remove from val any image with same content as train (prevents leakage)

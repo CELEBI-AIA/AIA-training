@@ -1,4 +1,4 @@
-﻿import argparse
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -14,7 +14,8 @@ import torch  # noqa: E402
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True,max_split_size_mb:512")
 
 from uav_training.config import (  # noqa: E402
-    AUDIT_REPORT, DATASET_DIR, TRAIN_CONFIG, setup_torch_backend, ensure_colab_config
+    AUDIT_REPORT, DATASET_DIR, IMAGE_EXTENSIONS, TRAIN_CONFIG,
+    setup_torch_backend, ensure_colab_config,
 )
 setup_torch_backend()
 try:
@@ -93,7 +94,7 @@ def get_best_metrics(results_dir: Path) -> dict:
     best_map50_95 = 0.0
 
     try:
-        with open(results_csv, 'r') as f:
+        with open(results_csv, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 # Column names have leading spaces in Ultralytics output
@@ -270,8 +271,8 @@ def _best_map50_guard(trainer):
             shutil.copy2(last_pt, best_map50_pt)
             _best_map50_guard._best = map50
             print(f"  📈 [BEST_MAP50] mAP50={map50:.4f} -> best_map50.pt", flush=True)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  ⚠️ [BEST_MAP50] Guard failed: {e}", flush=True)
 
 def checkpoint_guard(trainer):
     """Drive sync every save_period epochs. Last epoch uses synchronous sync to avoid daemon cutoff."""
@@ -487,7 +488,7 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
 
         out_args_file = Path(str(TRAIN_CONFIG["project"])) / run_name / "full_attempt_args.yaml"
         out_args_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_args_file, "w") as f:
+        with open(out_args_file, "w", encoding="utf-8") as f:
             yaml.dump(attempt_args, f)
     except Exception as ex:
         print(f"⚠️ WARN Failed to save full_attempt_args.yaml: {ex}", flush=True)
@@ -602,8 +603,8 @@ def setup_seed(seed: int = 42, *, deterministic: bool = False) -> None:
 
     try:
         torch.set_float32_matmul_precision("high")
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  ⚠️ [SEED] set_float32_matmul_precision: {e}", flush=True)
 
     print(
         f"[SEED] seed={seed} deterministic={deterministic} "
@@ -630,9 +631,14 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
             print("⚠️ WARN  Resume requested but dataset.yaml is missing - rebuilding dataset...", flush=True)
         needs_build = True
     elif not resume and yaml_path.exists():
-        # Check if existing dataset uses symlinks (old format -> Drive FUSE -> slow)
+        # Check if existing dataset has real images (not symlinks, not empty)
         train_imgs = DATASET_DIR / "train" / "images"
-        if train_imgs.exists():
+        ext_set = set(IMAGE_EXTENSIONS)
+        has_images = (
+            train_imgs.exists()
+            and sum(1 for p in train_imgs.iterdir() if p.is_file() and p.suffix.lower() in ext_set) > 0
+        )
+        if has_images:
             sample = next(train_imgs.iterdir(), None)
             if sample and sample.is_symlink():
                 print("⚠️ WARN  Dataset uses symlinks (old format) -> rebuilding with copies...", flush=True)
@@ -644,6 +650,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                 if is_colab():
                     print(f" Dataset ready ({yaml_path}) - skipping rebuild", flush=True)
         else:
+            # Directory missing, empty, or has no supported image files
             needs_build = True
 
     if needs_build:

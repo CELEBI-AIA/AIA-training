@@ -1,4 +1,4 @@
-﻿# UAV Training — YOLO Object Detection (v0.8.51)
+# UAV Training — YOLO Object Detection (v0.8.51)
 
 YOLO11m (Ultralytics) tabanlı İHA görüntülerinden nesne tespit modülü. Teknofest yarışması için optimize edilmiş.
 
@@ -16,7 +16,7 @@ YOLO11m (Ultralytics) tabanlı İHA görüntülerinden nesne tespit modülü. Te
 | Script | Purpose |
 |--------|---------|
 | `config.py` | Paths, class definitions, hyperparameters, IMAGE_EXTENSIONS. Colab'da `ensure_colab_config()` ile lazy hardware detection. |
-| `audit.py` | `datasets/TRAIN` tarar, format doğrular, `audit_report.json` üretir. |
+| `audit.py` | `datasets/` (UAI_UAP, drone-vision-project, megaset) tarar, audit raporu üretir. |
 | `build_dataset.py` | Birden fazla dataset'i birleştirir → tek YOLO formatı, sınıf eşlemesi, orphan/duplicate cleanup. |
 | `train.py` | YOLO11m eğitimi, auto-resume, iki fazlı profil (50+15), leakage denetimi. |
 | `val_utils.py` | Per-class AP50, temporal leakage check. |
@@ -108,7 +108,7 @@ artifacts/uav_model/dataset_uap_uai/   # veya Colab: /content/dataset_built
     └── labels/
 ```
 
-Kaynak veriler: `datasets/TRAIN/` (audit ile aynı dizin).
+Kaynak veriler: `datasets/` altında UAI_UAP, drone-vision-project, megaset (TRAIN_DATA.tar.gz extract edilince doğrudan bu üç klasör çıkar).
 
 **Desteklenen görüntü formatları:** jpg, jpeg, png, webp, bmp, tiff, tif, gif (`IMAGE_EXTENSIONS`)
 

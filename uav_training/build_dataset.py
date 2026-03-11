@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 from pathlib import Path
 
@@ -43,7 +43,8 @@ from uav_training.config import (  # noqa: E402
     TRAIN_CONFIG,
     IMAGE_EXTENSIONS,
 )
-# Mapping configuration for datasets under datasets/TRAIN_DATA.
+# Mapping configuration for datasets under DATASETS_TRAIN_DIR.
+# TRAIN_DATA.tar.gz extracts directly to UAI_UAP/, drone-vision-project/, megaset/ (no parent folder).
 MAPPINGS = {
     # Main UAI/UAP dataset in TRAIN_DATA.tar.gz.
     # names: ["UAI", "UAP"]
@@ -231,7 +232,7 @@ def build_dataset():
     if not DATASETS_TRAIN_DIR.exists():
         raise FileNotFoundError(
             f"Source dataset root not found: {DATASETS_TRAIN_DIR}. "
-            "Expected datasets/TRAIN_DATA/<source_dataset> structure."
+            "Expected datasets/{UAI_UAP,drone-vision-project,megaset} or datasets/TRAIN_DATA/<source_dataset>."
         )
 
     if DATASET_DIR.exists():
@@ -341,7 +342,7 @@ def build_dataset():
                 present_target_ids = set()
 
                 try:
-                    with open(label_path, "r") as f:
+                    with open(label_path, "r", encoding="utf-8") as f:
                         lines = f.readlines()
 
                     has_valid_cls = False
@@ -457,7 +458,7 @@ def build_dataset():
                             else:
                                 shutil.copy2(img_path, target_img_path)
 
-                        with open(target_lbl_path, "w") as f:
+                        with open(target_lbl_path, "w", encoding="utf-8") as f:
                             f.writelines(new_labels)
 
                 except Exception as e:
@@ -613,7 +614,7 @@ def build_dataset():
     else:
         final_data_yaml["test"] = "val/images"  # Fallback for consumers that expect a test key.
 
-    with open(DATASET_DIR / "dataset.yaml", 'w') as f:
+    with open(DATASET_DIR / "dataset.yaml", 'w', encoding='utf-8') as f:
         yaml.dump(final_data_yaml, f)
 
     print(f"✅ Dataset built successfully at {DATASET_DIR}")

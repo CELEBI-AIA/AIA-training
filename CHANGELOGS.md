@@ -513,3 +513,10 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **fix(build_dataset)**: Added fail-fast checks when source dataset root is missing or when built train/val splits are empty.
 - **test(config,build_dataset)**: Added regression tests for nested/direct TRAIN_DATA discovery and empty-output guard.
 - **release**: Bumped module/script version from `0.8.50` to `0.8.51`.
+
+## 0.8.52 - 2026-03-11
+- **feat(config)**: Tuned augmentation profile (mosaic, copy_paste, flipud, min_bbox_norm) for top-down UAV humans to reduce false positives on vertical non-human objects.
+- **fix(train)**: Dataset rebuild guard now checks for real train images instead of only directory existence and logs best_map50/seed precision errors instead of silently swallowing them.
+- **fix(colab_bootstrap)**: Corrected audit_report path under `artifacts/uav_model` and documented TRAIN_DATA.tar.gz direct-root layout in comments.
+- **docs(datasets,README)**: Simplified dataset reference to UAI_UAP, drone-vision-project, megaset and documented TRAIN_DATA archive layout and Colab/local paths.
+- **release**: Bumped module/script version from `0.8.51` to `0.8.52`.

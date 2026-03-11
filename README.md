@@ -1,4 +1,4 @@
-﻿# 🛩️ UAV Training Pipeline — v0.8.51
+# 🛩️ UAV Training Pipeline — v0.8.51
 
 YOLO11m tabanlı İHA (UAV) tespit eğitim altyapısı.
 Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücre ile çalışır.
@@ -56,7 +56,7 @@ Teknofest yarışması için optimize edilmiş, Google Colab üzerinde tek hücr
 ### Google Colab (Önerilen)
 
 1. [`notebooks/train_colab.ipynb`](notebooks/train_colab.ipynb) dosyasını Colab'da açın
-2. Dataset'in `Google Drive > MyDrive > AIA > datasets > mega.tar.gz` konumunda olduğundan emin olun
+2. Dataset'in `Google Drive > MyDrive > AIA > datasets > TRAIN_DATA.tar.gz` konumunda olduğundan emin olun
 3. Hücreyi çalıştırın — her şey otomatik:
 
 ```
@@ -100,7 +100,7 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 
 ### Pipeline
 
-1. `audit.py` — `datasets/TRAIN/` klasörünü tarar, audit raporu üretir
+1. `audit.py` — `datasets/` altındaki UAI_UAP, drone-vision-project, megaset klasörlerini tarar
 2. `build_dataset.py` — Birden fazla dataset'i birleştirir (class remapping, smart sampling, orphan/duplicate cleanup)
 3. `train.py` — YOLO11m eğitimi (auto-resume, torch.compile, mAP-based best.pt rename)
 4. `inference.py` — Validation görüntülerinde smoke test
@@ -116,9 +116,9 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 | Optimizations | `optimizer=AdamW`, `lr0=0.001`, `close_mosaic=5` |
 | Augmentations | `scale=0.4`, `copy_paste=0.3`, `flipud=0.5` |
 | AMP (BF16)    | ✅ Enabled (`amp=True`, Ampere+ GPU'da Ultralytics otomatik BF16 seçer) |
-| torch.compile | ✅ VRAM â‰¥35GB **ve** Python <3.12 için `reduce-overhead`, diğer durumlarda kapalı |
+| torch.compile | ✅ VRAM ≥35GB **ve** Python 3.10+ için `reduce-overhead` (3.12 desteklenir), diğer durumlarda kapalı |
 | Cache         | Dinamik (High RAM >120GB: `ram`, Normal ~80GB: `disk`, düşük: off) |
-| Deterministic | âŒ Off (Hızlı CUDA kernels)                 |
+| Deterministic | ✗ Off (Hızlı CUDA kernels)                 |
 | Save Period   | Her 1 epoch checkpoint + Drive sync         |
 | Label Filter  | `min_bbox_norm=0.002` ile filtrelenir       |
 | Image Formats | jpg, jpeg, png, webp, bmp, tiff, tif, gif   |
@@ -139,13 +139,11 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 
 ### Dataset (30,625 train / 12,217 val)
 
-| Dataset                          | Oversample | Smart Sample |
-|----------------------------------|------------|--------------|
-| Uap-UaiAlanlariVeriSeti.v2i.yolov8 | 3x        | —            |
-| Uap-UaiAlanlariVeriSeti          | 3x         | —            |
-| drone-vision-project             | 3x         | —            |
-| megaset (24k images)             | 2x         | ✅ 100% human, 30% vehicle |
-| visdrone_yolo (~8k images)       | 3x         | ✅ 100% human, 30% vehicle |
+| Dataset               | Oversample | Smart Sample |
+|-----------------------|------------|--------------|
+| UAI_UAP               | 5x         | —            |
+| drone-vision-project  | 3x         | —            |
+| megaset (24k images)   | 5x         | ✅ 100% human, 30% vehicle |
 
 ---
 
@@ -158,7 +156,7 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
                                       │
 ┌──────────────────────────┐  ┌────────────────────────┐
 │ Google Drive             │─▶│  /content/datasets_local│
-│ AIA/datasets/mega.tar.gz │  │  (NVMe SSD cache)      │
+│ AIA/datasets/TRAIN_DATA.tar.gz │  │  (NVMe SSD cache)      │
 │ Python copy (104 MB/s)   │  └────────────────────────┘
 │ + pigz extraction        │            │
 └──────────────────────────┘  ┌─────────▼──────────┐

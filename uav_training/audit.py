@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import yaml
 import json
 from pathlib import Path
@@ -31,14 +31,14 @@ def get_subdirs(path):
 
 def read_yaml(path):
     try:
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             return yaml.safe_load(f)
     except Exception:
         return None
 
 def read_txt_classes(path):
     try:
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             return [line.strip() for line in f.readlines() if line.strip()]
     except Exception as exc:
         print(f"Error reading classes file: {exc}")
@@ -95,7 +95,7 @@ def scan_and_audit():
         print(f"  -> {r['status']} ({r['format']}): {r['reason']}")
 
     # Save results
-    with open(AUDIT_REPORT, 'w') as f:
+    with open(AUDIT_REPORT, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2)
 
     valid_datasets = [r for r in results if r["status"] == "INCLUDE"]

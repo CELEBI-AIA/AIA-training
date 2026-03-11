@@ -1,20 +1,31 @@
 # Dataset Reference
 
-Training datasets are located under `datasets/TRAIN/` (relative to project root). The code uses `DATASETS_TRAIN_DIR = PROJECT_ROOT / "datasets" / "TRAIN"`.
+## Archive & Path Layout
 
-- **Local:** `datasets/TRAIN/` (e.g. `AIA-training/datasets/TRAIN/`)
-- **Colab:** The bootstrap symlinks `repo/datasets` → `/content/datasets_local`, so `DATASETS_TRAIN_DIR` resolves to `/content/datasets_local/TRAIN/` after extraction.
+**TRAIN_DATA.tar.gz** (`MyDrive/AIA/datasets/TRAIN_DATA.tar.gz`): İçerik doğrudan üç dataset klasörüdür; üst TRAIN_DATA klasörü yoktur.
+
+```
+TRAIN_DATA.tar.gz
+├── UAI_UAP/
+├── drone-vision-project/
+└── megaset/
+```
+
+- **Colab:** Tar extract edilir → `/content/datasets_local/{UAI_UAP, drone-vision-project, megaset}`. `repo/datasets` symlink ile `/content/datasets_local`'e bağlanır. `DATASETS_TRAIN_DIR` bu kök dizini kullanır.
+- **Local:** `datasets/` altında bu üç klasör olmalı (örn. `AIA-training/datasets/UAI_UAP/`). Alternatif olarak `datasets/TRAIN_DATA/` altında da olabilir (`UAV_DATASET_SUBDIR` ile yapılandırılır).
 
 ## Source Datasets
 
-### 1. megaset
+Desteklenen klasörler: **UAI_UAP**, **drone-vision-project**, **megaset**.
 
-| Index | Original Name |
-|-------|--------------|
-| 0     | vehicle      |
-| 1     | pedestrian   |
+### 1. UAI_UAP
 
-Large-scale dataset (~24k images). Smart sampling is applied during build: 100% of human annotations are kept while 30% of vehicle-only images are kept to reduce class imbalance.
+| Index | Original Name | Maps To |
+|-------|--------------|---------|
+| 0     | UAI          | uai (3) |
+| 1     | UAP          | uap (2) |
+
+UAI/UAP iniş alanı dataset. `TRAIN_DATA.tar.gz` içinde gelir.
 
 ### 2. drone-vision-project
 
@@ -25,57 +36,14 @@ Large-scale dataset (~24k images). Smart sampling is applied during build: 100% 
 
 Aerial drone footage — vehicle and pedestrian classes only.
 
-### 3. Uap-UaiAlanlariVeriSeti.v2i.yolov8
+### 3. megaset
 
-| Index | Original Name | Description                                         |
-|-------|--------------|-----------------------------------------------------|
-| 0     | UAI          | İniş yapmaya **uygun** UAI alanı (suitable)         |
-| 1     | UAI-         | İniş yapmaya **uygun olmayan** UAI alanı (unsuitable)|
-| 2     | UAP          | İniş yapmaya **uygun** UAP alanı (suitable)         |
-| 3     | UAP-         | İniş yapmaya **uygun olmayan** UAP alanı (unsuitable)|
-| 4     | car          | Araç                                                |
-| 5     | people       | İnsan                                               |
+| Index | Original Name |
+|-------|--------------|
+| 0     | vehicle      |
+| 1     | pedestrian   |
 
-### 4. Uap-UaiAlanlariVeriSeti
-
-| Index | Original Name | Description                                         |
-|-------|--------------|-----------------------------------------------------|
-| 0     | UAI          | İniş yapmaya **uygun** UAI alanı (suitable)         |
-| 1     | UAI-         | İniş yapmaya **uygun olmayan** UAI alanı (unsuitable)|
-| 2     | UAP          | İniş yapmaya **uygun** UAP alanı (suitable)         |
-| 3     | UAP-         | İniş yapmaya **uygun olmayan** UAP alanı (unsuitable)|
-| 4     | car          | Araç                                                |
-| 5     | people       | İnsan                                               |
-
-### 5. visdrone_yolo
-
-| Index | Original Name    | Maps To  |
-|-------|------------------|----------|
-| 0     | pedestrian       | human    |
-| 1     | people           | human    |
-| 2     | bicycle          | vehicle  |
-| 3     | car              | vehicle  |
-| 4     | van              | vehicle  |
-| 5     | truck            | vehicle  |
-| 6     | tricycle         | vehicle  |
-| 7     | awning-tricycle  | vehicle  |
-| 8     | bus              | vehicle  |
-| 9     | motor            | vehicle  |
-
-VisDrone aerial detection dataset (~8k+ images). UAP/UAI sınıfları yok; sadece vehicle ve human hedeflerine map edilir. **İnsanlara öncelik:** Smart sampling ile %100 human, %30 vehicle tutulur; pure-human görüntülere ekstra oversample uygulanır. Oversample: 3x.
-
-**Klasör yapısı:** `datasets/TRAIN/visdrone_yolo/` altında `train/images`, `train/labels`, `valid/images`, `valid/labels`, `test/images`, `test/labels` beklenir.
-
-**data.yaml örneği** (kök dizinde `data.yaml`). Örnek dosya: [`visdrone_yolo_data.yaml.example`](visdrone_yolo_data.yaml.example) — `datasets/TRAIN/visdrone_yolo/data.yaml` olarak kopyalayın.
-
-```yaml
-train: train/images
-val: valid/images
-test: test/images
-
-nc: 10
-names: ['pedestrian', 'people', 'bicycle', 'car', 'van', 'truck', 'tricycle', 'awning-tricycle', 'bus', 'motor']
-```
+Large-scale dataset (~24k images). Smart sampling: 100% human, 30% vehicle-only images kept.
 
 ## UAI- / UAP- Semantics
 
