@@ -65,7 +65,7 @@ MAPPINGS = {
             "car": 0,
             "pedestrian": 1,
         },
-        "oversample": 3,
+        "oversample": 2,
         "sampling_rate": 1.0,
     },
     "megaset": {
@@ -75,11 +75,12 @@ MAPPINGS = {
             "pedestrian": 1,
         },
         "id_map": {0: 0, 1: 1},
-        "oversample": 5,
-        "human_extra_oversample": 2,  # Pure-human images get +2 passes.
+        "oversample": 3,
+        "human_extra_oversample": 3,  # Pure-human images get +3 passes (~5x) for stronger human focus.
         "sampling_rate": 1.0,  # Process all images, class filtering is applied inside.
         "smart_sample": True,
-        "smart_sample_keep_prob": {0: 0.07, 1: 1.00, 2: 1.00, 3: 1.00},
+        # Slightly downweight vehicle-only frames, keep all human frames.
+        "smart_sample_keep_prob": {0: 0.05, 1: 1.00, 2: 1.00, 3: 1.00},
     },
 }
 

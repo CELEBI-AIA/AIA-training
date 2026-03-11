@@ -15,7 +15,7 @@ DRIVE_RUNS = "/content/drive/MyDrive/AIA/runs"
 DRIVE_UPLOAD = "/content/drive/MyDrive/AIA"  # best.pt upload destination
 TRAIN_SCRIPT = "uav_training/train.py"
 TWO_PHASE_TRAINING = True  # Default training profile: phase1 + phase2.
-FORCE_FRESH_START = False  # If True, ignore all existing checkpoints.
+FORCE_FRESH_START = True  # If True, ignore all existing checkpoints.
 
 import subprocess  # noqa: E402
 import sys  # noqa: E402
@@ -833,9 +833,9 @@ def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):  
 
         ckpt_candidates = glob.glob(os.path.join(runs_dir, "**", "weights", "last.pt"), recursive=True)
         if not ckpt_candidates:
-            if not warned_no_ckpt:
+            if not warned_no_ckpt and os.environ.get("UAV_SYNC_VERBOSE", "").strip() == "1":
                 print("  🔍 INFO  Periodic sync waiting for first checkpoint...", flush=True)
-                warned_no_ckpt = True
+            warned_no_ckpt = True
             continue
 
         warned_no_ckpt = False
