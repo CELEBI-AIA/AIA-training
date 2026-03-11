@@ -97,6 +97,37 @@ def resolve_target_split(split_name: str, include_test_in_val: bool) -> str:
         f"Unknown split name '{split_name}'. Cannot safely map to target split."
     )
 
+
+def _count_split_images(dataset_dir: Path, split: str) -> int:
+    """Count image files under dataset_dir/<split>/images."""
+    images_dir = dataset_dir / split / "images"
+    if not images_dir.exists():
+        return 0
+    ext_set = set(IMAGE_EXTENSIONS)
+    return sum(1 for p in images_dir.iterdir() if p.is_file() and p.suffix.lower() in ext_set)
+
+
+def _assert_non_empty_output(dataset_dir: Path, source_root: Path) -> None:
+    """Fail fast if build output is empty or missing train/val images."""
+    train_count = _count_split_images(dataset_dir, "train")
+    val_count = _count_split_images(dataset_dir, "val")
+    test_count = _count_split_images(dataset_dir, "test")
+
+    if train_count > 0 and val_count > 0:
+        return
+
+    available_sources = []
+    if source_root.exists() and source_root.is_dir():
+        available_sources = sorted(d.name for d in source_root.iterdir() if d.is_dir())
+
+    raise RuntimeError(
+        "Dataset build produced empty output. "
+        f"train={train_count}, val={val_count}, test={test_count}, "
+        f"source_root={source_root}, available_sources={available_sources}. "
+        "Check archive extraction path and TRAIN_DATA root structure."
+    )
+
+
 def _list_images(base_path: Path) -> list[Path]:
     ext_set = set(IMAGE_EXTENSIONS)
     return [p for p in base_path.glob("*") if p.is_file() and p.suffix.lower() in ext_set]
@@ -196,6 +227,12 @@ def build_dataset():
     lock_path = ARTIFACTS_DIR / ".build_dataset.lock"
     lock_fd = _acquire_file_lock(lock_path)
     atexit.register(_release_file_lock, lock_fd, lock_path)
+
+    if not DATASETS_TRAIN_DIR.exists():
+        raise FileNotFoundError(
+            f"Source dataset root not found: {DATASETS_TRAIN_DIR}. "
+            "Expected datasets/TRAIN_DATA/<source_dataset> structure."
+        )
 
     if DATASET_DIR.exists():
         print(f"Removing existing {DATASET_DIR}...")
@@ -469,6 +506,7 @@ def build_dataset():
     for dataset_name, config in MAPPINGS.items():
         dataset_path = DATASETS_TRAIN_DIR / dataset_name
         if not dataset_path.exists():
+            print(f"  ⚠️ WARN Source dataset missing: {dataset_path}", flush=True)
             continue
 
         base_oversample_count = config.get("oversample", 1)
@@ -551,6 +589,9 @@ def build_dataset():
                 target_split, image_files, split, config, dataset_name,
                 dataset_path, base_oversample_count, smart_sample
             )
+
+    # Fail fast before writing dataset.yaml if splits are empty.
+    _assert_non_empty_output(DATASET_DIR, DATASETS_TRAIN_DIR)
 
     # Generate data.yaml
     final_data_yaml = {

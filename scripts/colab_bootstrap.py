@@ -318,12 +318,110 @@ t0 = time.time()
 existing = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
 
 def _detect_train_root(cache_dir: str) -> str | None:
-    """Resolve extracted dataset root using the configured dataset subdir."""
+    """Resolve extracted dataset root using canonical + nested fallback search."""
+
+    def _looks_like_train_root(path: str) -> bool:
+        if not os.path.isdir(path):
+            return False
+        expected_dirs = {"UAI_UAP", "drone-vision-project", "megaset"}
+        try:
+            child_dirs = {
+                d for d in os.listdir(path)
+                if os.path.isdir(os.path.join(path, d))
+            }
+        except OSError:
+            return False
+        return bool(child_dirs & expected_dirs)
+
     expected_name = (os.environ.get("UAV_DATASET_SUBDIR", "TRAIN_DATA") or "TRAIN_DATA").strip()
+
+    # 0) Direct-root layout:
+    # /content/datasets_local/{UAI_UAP,drone-vision-project,megaset}
+    if _looks_like_train_root(cache_dir):
+        return cache_dir
+
+    # 1) Canonical location.
     candidate = os.path.join(cache_dir, expected_name)
-    return candidate if os.path.isdir(candidate) else None
+    if _looks_like_train_root(candidate):
+        return candidate
+
+    # 2) Common archive root patterns.
+    common_candidates = (
+        os.path.join(cache_dir, "dataset_extracted", expected_name),
+        os.path.join(cache_dir, "content", "dataset_extracted", expected_name),
+        os.path.join(cache_dir, "content", "datasets", expected_name),
+    )
+    for c in common_candidates:
+        if _looks_like_train_root(c):
+            return c
+
+    # 3) Bounded recursive fallback (handles unexpected tar top-level prefixes).
+    max_depth = int(os.environ.get("UAV_DATASET_SCAN_MAX_DEPTH", "6"))
+    cache_abs = os.path.abspath(cache_dir)
+    for root, dirs, _ in os.walk(cache_abs):
+        rel = os.path.relpath(root, cache_abs)
+        depth = 0 if rel == "." else rel.count(os.sep) + 1
+        if depth > max_depth:
+            dirs[:] = []
+            continue
+        if expected_name in dirs:
+            c = os.path.join(root, expected_name)
+            if _looks_like_train_root(c):
+                return c
+    return None
+
+
+def _ensure_canonical_train_root(cache_dir: str, train_root: str | None) -> str | None:
+    """Ensure cache_dir/TRAIN_DATA exists (symlink) even when archive extracted nested."""
+    if not train_root:
+        return None
+    expected_name = (os.environ.get("UAV_DATASET_SUBDIR", "TRAIN_DATA") or "TRAIN_DATA").strip()
+    canonical = os.path.join(cache_dir, expected_name)
+    train_root_abs = os.path.abspath(train_root)
+    canonical_abs = os.path.abspath(canonical)
+    cache_abs = os.path.abspath(cache_dir)
+
+    if train_root_abs == canonical_abs:
+        return canonical
+
+    # Direct-root mode: avoid creating TRAIN_DATA -> cache_dir symlink loop.
+    if train_root_abs == cache_abs:
+        print(
+            f"  📦 [CACHE] Dataset root detected at cache root: {train_root_abs}",
+            flush=True,
+        )
+        return train_root_abs
+
+    try:
+        if os.path.lexists(canonical):
+            if os.path.islink(canonical) or os.path.isfile(canonical):
+                os.remove(canonical)
+            else:
+                shutil.rmtree(canonical)
+        os.symlink(train_root_abs, canonical)
+        print(
+            f"  📦 [CACHE] Canonical dataset root linked: {canonical} -> {train_root_abs}",
+            flush=True,
+        )
+        return canonical
+    except OSError as e:
+        print(
+            f"  ⚠️ WARN Could not link canonical dataset root ({canonical} -> {train_root_abs}): {e}",
+            flush=True,
+        )
+        return train_root_abs
 
 train_root = _detect_train_root(LOCAL_CACHE)
+train_root = _ensure_canonical_train_root(LOCAL_CACHE, train_root)
+
+# If prior run extracted successfully but marker was missing/corrupted, restore marker.
+if train_root and existing > 5000 and not os.path.isfile(CACHE_MARKER):
+    with open(CACHE_MARKER, "w") as f:
+        f.write("1")
+    print(
+        f"  📦 [CACHE] Valid extracted dataset detected ({existing} files) but marker was missing; restored cache marker.",
+        flush=True,
+    )
 
 # Fast path: if dataset is already materialized on local SSD, skip tool install
 # and all Drive->SSD copy/extract work.
@@ -337,6 +435,7 @@ else:
 
     if os.path.isfile(CACHE_MARKER) and existing > 5000:
         train_root = _detect_train_root(LOCAL_CACHE)
+        train_root = _ensure_canonical_train_root(LOCAL_CACHE, train_root)
         if train_root:
             print(f"  📦 [CACHE] Cache complete ({existing} files) - SKIP", flush=True)
             print(f"  📦 [CACHE] Dataset root detected: {train_root}", flush=True)
@@ -346,7 +445,8 @@ else:
                 os.remove(CACHE_MARKER)
             existing = 0
 
-    if not (os.path.isfile(CACHE_MARKER) and existing > 5000 and _detect_train_root(LOCAL_CACHE)):
+    cached_root = _ensure_canonical_train_root(LOCAL_CACHE, _detect_train_root(LOCAL_CACHE))
+    if not (os.path.isfile(CACHE_MARKER) and existing > 5000 and cached_root):
         # Cleanup before download to avoid local SSD exhaustion.
         # Colab SSD is ~200GB. We need ~78GB for tar.gz + ~78GB for extracted files.
         # Clean up leftovers from previous runs to prevent disk overflow.
@@ -604,15 +704,20 @@ else:
             os.remove(LOCAL_TAR)
             print(f"    Deleted local tar.gz - freed {tar_size_gb:.1f} GB", flush=True)
 
-        train_root = _detect_train_root(LOCAL_CACHE)
+        train_root = _ensure_canonical_train_root(LOCAL_CACHE, _detect_train_root(LOCAL_CACHE))
         if final_count > 5000 and train_root:
             print(f"   Verification passed: {final_count} files on local SSD", flush=True)
             print(f"  🧪 [VERIFY] Dataset root detected: {train_root}", flush=True)
             with open(CACHE_MARKER, 'w') as f:
                 f.write("1")
         else:
+            top_dirs = sorted(
+                d for d in os.listdir(LOCAL_CACHE)
+                if os.path.isdir(os.path.join(LOCAL_CACHE, d))
+            )[:8]
             print(
-                f"  ⚠️ WARN Verification failed (files={final_count}, root={train_root}) - "
+                f"  ⚠️ WARN Verification failed (files={final_count}, root={train_root}, "
+                f"top_dirs={top_dirs}) - "
                 "re-run to retry from Drive",
                 flush=True,
             )

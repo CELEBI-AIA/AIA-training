@@ -7,15 +7,64 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATASETS_ROOT = PROJECT_ROOT / "datasets"
 
+_KNOWN_TRAIN_DATA_DIRS = {"UAI_UAP", "drone-vision-project", "megaset"}
+
+
+def _looks_like_train_data_dir(path: Path) -> bool:
+    """Return True when path looks like TRAIN_DATA root (contains known source dirs)."""
+    if not path.exists() or not path.is_dir():
+        return False
+    try:
+        child_dirs = {p.name for p in path.iterdir() if p.is_dir()}
+    except OSError:
+        return False
+    return bool(child_dirs & _KNOWN_TRAIN_DATA_DIRS)
+
+
+def _find_nested_subdir(base: Path, subdir_name: str, max_depth: int = 6) -> Path | None:
+    """Find nested subdir_name under base with bounded depth, preferring valid TRAIN_DATA roots."""
+    if not base.exists() or not base.is_dir():
+        return None
+
+    base_resolved = base.resolve()
+    for root, dirs, _ in os.walk(base_resolved):
+        rel = os.path.relpath(root, base_resolved)
+        depth = 0 if rel == "." else rel.count(os.sep) + 1
+        if depth > max_depth:
+            dirs[:] = []
+            continue
+        if subdir_name in dirs:
+            candidate = Path(root) / subdir_name
+            if _looks_like_train_data_dir(candidate):
+                return candidate
+    return None
+
+
 def _resolve_datasets_train_dir() -> Path:
     """Resolve source dataset root. Default: datasets/TRAIN_DATA."""
     preferred_name = (os.environ.get("UAV_DATASET_SUBDIR", "TRAIN_DATA") or "TRAIN_DATA").strip()
     preferred_path = DATASETS_ROOT / preferred_name
-    if preferred_path.exists():
+    if preferred_path.is_dir():
         return preferred_path
+
+    # Direct-root layout fallback:
+    # datasets/{UAI_UAP,drone-vision-project,megaset}
+    if _looks_like_train_data_dir(DATASETS_ROOT):
+        return DATASETS_ROOT
+
     train_data_path = DATASETS_ROOT / "TRAIN_DATA"
-    if preferred_name != "TRAIN_DATA" and train_data_path.exists():
+    if preferred_name != "TRAIN_DATA" and train_data_path.is_dir():
         return train_data_path
+
+    nested_preferred = _find_nested_subdir(DATASETS_ROOT, preferred_name)
+    if nested_preferred is not None:
+        return nested_preferred
+
+    if preferred_name != "TRAIN_DATA":
+        nested_train_data = _find_nested_subdir(DATASETS_ROOT, "TRAIN_DATA")
+        if nested_train_data is not None:
+            return nested_train_data
+
     # Default path for fresh setups before extraction.
     return preferred_path
 

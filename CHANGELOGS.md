@@ -507,3 +507,9 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **log(colab_bootstrap)**: Embedded emojis directly in status output so Colab displays debug markers without wrapper-based print patching.
 - **refactor(logging)**: Removed `uav_training/emoji_logs.py` and migrated scripts/modules to explicit emoji-prefixed `print` lines.
 - **release**: Bumped module/script version from `0.8.49` to `0.8.50`.
+
+## 0.8.51 - 2026-03-11
+- **fix(colab_bootstrap)**: Improved dataset root detection for direct-root and nested archive layouts; added canonical root linking and cache-marker recovery.
+- **fix(build_dataset)**: Added fail-fast checks when source dataset root is missing or when built train/val splits are empty.
+- **test(config,build_dataset)**: Added regression tests for nested/direct TRAIN_DATA discovery and empty-output guard.
+- **release**: Bumped module/script version from `0.8.50` to `0.8.51`.

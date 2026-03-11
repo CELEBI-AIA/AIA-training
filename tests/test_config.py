@@ -8,6 +8,8 @@ from uav_training.config import (
     is_colab,
     PROJECT_ROOT,
     ARTIFACTS_DIR,
+    _find_nested_subdir,
+    _looks_like_train_data_dir,
 )
 
 
@@ -70,3 +72,22 @@ def test_artifacts_dir_under_project():
     art = ARTIFACTS_DIR.resolve()
     root = PROJECT_ROOT.resolve()
     assert art == root or root in art.parents
+
+
+def test_looks_like_train_data_dir_detects_known_children(tmp_path):
+    root = tmp_path / "TRAIN_DATA"
+    (root / "UAI_UAP").mkdir(parents=True)
+    assert _looks_like_train_data_dir(root) is True
+
+
+def test_find_nested_subdir_finds_train_data_by_depth(tmp_path):
+    nested = tmp_path / "dataset_extracted" / "TRAIN_DATA"
+    (nested / "megaset").mkdir(parents=True)
+    found = _find_nested_subdir(tmp_path, "TRAIN_DATA", max_depth=4)
+    assert found == nested
+
+
+def test_direct_root_layout_is_detected(tmp_path):
+    (tmp_path / "UAI_UAP").mkdir(parents=True)
+    (tmp_path / "megaset").mkdir(parents=True)
+    assert _looks_like_train_data_dir(tmp_path) is True
