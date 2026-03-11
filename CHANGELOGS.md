@@ -497,3 +497,8 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **feat(build_dataset)**: visdrone_yolo entegrasyonu — 10 sınıf → 4 hedef (vehicle, human); smart sampling ile insan önceliği (100% human, 30% vehicle).
 - **docs(build_dataset)**: documentation/datasets.md VisDrone bölümü ekleme; visdrone_yolo_data.yaml.example örneği.
 - **release**: Bumped module/script version from `0.8.46` to `0.8.47`.
+
+## 0.8.49 - 2026-03-11
+- **feat(logs)**: Add `emoji_logs.py` module to safely handle terminal emojis across platforms (Windows/Linux/Colab).
+- **refactor(scripts)**: Replace hardcoded unprintable/garbled unicode characters with standard ASCII or utilizing the new emoji logging system.
+- **release**: Bumped module/script version from `0.8.48` to `0.8.49`.
