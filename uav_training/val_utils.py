@@ -1,9 +1,12 @@
 """
-Validation utilities — per-class AP50, temporal leakage check.
+Validation utilities - per-class AP50, temporal leakage check.
 """
 from pathlib import Path
 
 from uav_training.config import IMAGE_EXTENSIONS
+from uav_training.emoji_logs import install_emoji_print
+
+install_emoji_print(globals())
 
 TARGET_THRESHOLDS = {
     "vehicle": (0.90, 0.95),
@@ -57,15 +60,15 @@ def print_per_class_report(result: dict) -> None:
 
     low = [n for n, v in result.items() if v < TARGET_THRESHOLDS.get(n, (0, 0))[0]]
     if low:
-        print(f"\nUYARI: {', '.join(low)} hedefin altında.", flush=True)
-        print("\nPhase 2'de dinamik augmentasyon (copy_paste) kullanılabilir.", flush=True)
+        print(f"\nUYARI: {', '.join(low)} hedefin altinda.", flush=True)
+        print("\nPhase 2'de dinamik augmentasyon (copy_paste) kullanilabilir.", flush=True)
     else:
-        print("\nTüm sınıflar minimum eşiğin üzerinde.", flush=True)
+        print("\nTum siniflar minimum esigin uzerinde.", flush=True)
 
 
 def check_temporal_leakage(dataset_dir) -> dict:
     """
-    Build sonrası train/val overlap kontrolü.
+    Build sonrasi train/val overlap kontrolu.
     Returns: {"exact_match": n, "video_prefix_overlap": n, "train_stems": n, "val_stems": n}
     """
     dataset_dir = Path(dataset_dir)

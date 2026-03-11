@@ -25,11 +25,11 @@ Format:
 ```
 type(scope): Brief summary from changelog
 
-- Detail 1 from changelog entry
-- Detail 2 from changelog entry
+- Detail 1
+- Detail 2
 ```
 
-`type`: `fix`, `feat`, `perf`, `refactor`, `chore`, `docs`, `test`, `log`, `release`.
+`type`: `fix`, `feat`, `perf`, `refactor`, `chore`, `docs`, `test`, `log`, `release`.(Only For Header)
 
 ### 3. Git Commit — User Does It
 

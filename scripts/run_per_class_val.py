@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Per-class validation for UAV model — vehicle, human, uap, uai AP50.
+Per-class validation for UAV model - vehicle, human, uap, uai AP50.
 
 Run after Phase 1 to check per-class metrics. Otomatik olarak two-phase
-training sırasında da çalıştırılır.
+training sirasinda da calistirilir.
 
 Usage:
   python scripts/run_per_class_val.py [model_path] [dataset_path]
@@ -14,6 +14,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+from uav_training.emoji_logs import install_emoji_print  # noqa: E402
+
+install_emoji_print(globals())
 
 from uav_training.config import DATASET_DIR  # noqa: E402
 from uav_training.val_utils import run_per_class_val, print_per_class_report  # noqa: E402
@@ -28,7 +32,7 @@ def main():
     args = parser.parse_args()
 
     if not args.model_path:
-        # Colab: eğitim /content/runs'ta; local: TRAIN_CONFIG["project"] (artifacts/uav_model/training_results)
+        # Colab: egitim /content/runs'ta; local: TRAIN_CONFIG["project"] (artifacts/uav_model/training_results)
         from uav_training.config import is_colab, TRAIN_CONFIG
         runs = Path("/content/runs") if is_colab() else Path(TRAIN_CONFIG.get("project", "."))
         if not runs.exists() and runs != Path("/content/runs"):

@@ -11,6 +11,9 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from ultralytics import YOLO  # noqa: E402
 from uav_training.config import DATASET_DIR, ARTIFACTS_DIR, IMAGE_EXTENSIONS  # noqa: E402
+from uav_training.emoji_logs import install_emoji_print  # noqa: E402
+
+install_emoji_print(globals())
 
 DEFAULT_INFER_SOURCE = str(DATASET_DIR / "val" / "images")
 

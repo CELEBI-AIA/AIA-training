@@ -22,6 +22,9 @@ from uav_training.config import (  # noqa: E402
     DATASET_DIR,
     IMAGE_EXTENSIONS,
 )
+from uav_training.emoji_logs import install_emoji_print  # noqa: E402
+
+install_emoji_print(globals())
 
 
 def get_subdirs(path):
@@ -177,7 +180,7 @@ def audit_directory(dir_path):
             lbl_dir = dir_path / sub / 'labels'
             split_path = dir_path / sub
 
-            # Standart train/images/ veya megaset gibi train/ kökünde görüntüler
+            # Standart train/images/ veya megaset gibi train/ kokunde goruntuler
             if img_dir.exists():
                 imgs = _list_images(img_dir)
             elif split_path.exists() and split_path.is_dir():

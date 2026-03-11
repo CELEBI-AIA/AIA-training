@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Colab smoke test — quick import and logic checks after clone + pip install.
+Colab smoke test - quick import and logic checks after clone + pip install.
 No GPU, Drive, or dataset required. Run before training to catch build issues.
 
 Usage (Colab):
@@ -12,6 +12,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+from uav_training.emoji_logs import install_emoji_print  # noqa: E402
+
+install_emoji_print(globals())
 
 
 def smoke_test():

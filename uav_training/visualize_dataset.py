@@ -11,6 +11,9 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from uav_training.config import DATASET_DIR, ARTIFACTS_DIR, IMAGE_EXTENSIONS  # noqa: E402
+from uav_training.emoji_logs import install_emoji_print  # noqa: E402
+
+install_emoji_print(globals())
 
 OUTPUT_DIR = ARTIFACTS_DIR / "verification_output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

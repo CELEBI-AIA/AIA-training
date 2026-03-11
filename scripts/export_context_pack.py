@@ -37,6 +37,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from uav_training.emoji_logs import install_emoji_print  # noqa: E402
+
+install_emoji_print(globals())
+
 try:
     import cv2  # type: ignore
 except Exception:  # pragma: no cover - optional dependency at runtime

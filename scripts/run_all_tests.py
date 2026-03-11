@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Run all tests — single entry point for pytest.
+Run all tests - single entry point for pytest.
 Works from local dev and Colab (/content/repo).
 
 Usage:

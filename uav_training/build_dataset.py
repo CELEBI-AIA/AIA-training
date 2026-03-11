@@ -45,97 +45,48 @@ from uav_training.config import (  # noqa: E402
     TRAIN_CONFIG,
     IMAGE_EXTENSIONS,
 )
+from uav_training.emoji_logs import install_emoji_print  # noqa: E402
+
+install_emoji_print(globals())
 
 
-# Using the optimized MAPPINGS from the successful unify_datasets.py
-# Updated MAPPINGS for "TRAIN" folder
+# Mapping configuration for datasets under datasets/TRAIN_DATA.
 MAPPINGS = {
-    # 1. Uap-UaiAlanlariVeriSeti.v2i.yolov8 (Existed before, confirmed in TRAIN)
-    # nc: 6, names: ['UAI', 'UAI-', 'UAP', 'UAP-', 'car', 'people']
-    # UAI  = iniş yapmaya uygun UAI alanı (suitable landing area)
-    # UAI- = iniş yapmaya uygun OLMAYAN UAI alanı (unsuitable landing area)
-    # UAP  = iniş yapmaya uygun UAP alanı (suitable landing area)
-    # UAP- = iniş yapmaya uygun OLMAYAN UAP alanı (unsuitable landing area)
-    # Both suitable/unsuitable variants are merged into the same target class.
-    "Uap-UaiAlanlariVeriSeti.v2i.yolov8": {
-        "source_names": ['UAI', 'UAI-', 'UAP', 'UAP-', 'car', 'people'],
+    # Main UAI/UAP dataset in TRAIN_DATA.tar.gz.
+    # names: ["UAI", "UAP"]
+    "UAI_UAP": {
+        "source_names": ["UAI", "UAP"],
         "map": {
-            'UAI': 3, 'UAI-': 3,
-            'UAP': 2, 'UAP-': 2,
-            'car': 0,
-            'people': 1
+            "UAI": 3,
+            "UAP": 2,
         },
         "oversample": 5,
-        "sampling_rate": 1.0
+        "sampling_rate": 1.0,
     },
 
-    # REMOVED Teknofest.v2 as per user request (Archived)
-
-    # 3. drone-vision-project (New found in TRAIN)
-    # names: ['car', 'pedestrian']
+    # vehicle/human datasets
     "drone-vision-project": {
-        "source_names": ['car', 'pedestrian'],
+        "source_names": ["car", "pedestrian"],
         "map": {
-            'car': 0,
-            'pedestrian': 1
+            "car": 0,
+            "pedestrian": 1,
         },
         "oversample": 3,
-        "sampling_rate": 1.0
+        "sampling_rate": 1.0,
     },
-
-    # 4. megaset (Existed before, confirmed in TRAIN)
-    # HUGE dataset (24k images).
-    # SMART SAMPLING: Keep 100% of humans, 30% of vehicles.
     "megaset": {
-        "source_names": ['vehicle', 'pedestrian'],
+        "source_names": ["vehicle", "pedestrian"],
         "map": {
-            'vehicle': 0,
-            'pedestrian': 1
+            "vehicle": 0,
+            "pedestrian": 1,
         },
         "id_map": {0: 0, 1: 1},
         "oversample": 5,
-        "human_extra_oversample": 2,  # Pure-human images get +2 passes → ~4x total, +~8000 human instances
-        "sampling_rate": 1.0,  # Process ALL images effectively, but filter inside
-        "smart_sample": True, # Enable class-based filtering
-        "smart_sample_keep_prob": {0: 0.07, 1: 1.00, 2: 1.00, 3: 1.00}
-    },
-
-    # 5. Uap-UaiAlanlariVeriSeti (Confirmed via data.yaml)
-    # nc: 6, names: ['UAI', 'UAI-', 'UAP', 'UAP-', 'car', 'people']
-    # UAI  = iniş yapmaya uygun UAI alanı (suitable landing area)
-    # UAI- = iniş yapmaya uygun OLMAYAN UAI alanı (unsuitable landing area)
-    # UAP  = iniş yapmaya uygun UAP alanı (suitable landing area)
-    # UAP- = iniş yapmaya uygun OLMAYAN UAP alanı (unsuitable landing area)
-    # Both suitable/unsuitable variants are merged into the same target class.
-    "Uap-UaiAlanlariVeriSeti": {
-        "source_names": ['UAI', 'UAI-', 'UAP', 'UAP-', 'car', 'people'],
-        "map": {
-            'UAI': 3, 'UAI-': 3,
-            'UAP': 2, 'UAP-': 2,
-            'car': 0,
-            'people': 1
-        },
-        "oversample": 5,  # High priority UAP/UAI data
-        "sampling_rate": 1.0
-    },
-
-    # 6. visdrone_yolo (VisDrone aerial detection dataset)
-    # nc: 10, names: ['pedestrian', 'people', 'bicycle', 'car', 'van', 'truck', 'tricycle', 'awning-tricycle', 'bus', 'motor']
-    # UAP/UAI yok; sadece vehicle ve human sınıflarına map edilir.
-    # SMART SAMPLING: İnsanlara öncelik — 100% human, 30% vehicle.
-    "visdrone_yolo": {
-        "source_names": ['pedestrian', 'people', 'bicycle', 'car', 'van', 'truck', 'tricycle', 'awning-tricycle', 'bus', 'motor'],
-        "map": {
-            'pedestrian': 1, 'people': 1,
-            'bicycle': 0, 'car': 0, 'van': 0, 'truck': 0,
-            'tricycle': 0, 'awning-tricycle': 0, 'bus': 0, 'motor': 0
-        },
-        "oversample": 3,
-        "human_extra_oversample": 2,  # Pure-human images get +2 passes → insan örneği artışı
-        "sampling_rate": 1.0,
+        "human_extra_oversample": 2,  # Pure-human images get +2 passes.
+        "sampling_rate": 1.0,  # Process all images, class filtering is applied inside.
         "smart_sample": True,
-        "smart_sample_keep_prob": {0: 0.25, 1: 1.00, 2: 1.00, 3: 1.00}
-    }
+        "smart_sample_keep_prob": {0: 0.07, 1: 1.00, 2: 1.00, 3: 1.00},
+    },
 }
 
 DEFAULT_CLASS_KEEP_PROB = {0: 0.30, 1: 1.00, 2: 1.00, 3: 1.00}
@@ -295,7 +246,7 @@ def build_dataset():
             original_count = len(image_files)
             k = int(original_count * sampling_rate)
             if k > 0:
-                set_seed(42)  # R-01 Fix: Make sampling deterministic
+                set_seed(42)  # Keep sampling deterministic to make data drift/debug reproducible.
                 image_files = random.sample(image_files, k)
             print(f"  Downsampled {split_display}: {original_count} -> {len(image_files)}")
         else:
@@ -341,7 +292,7 @@ def build_dataset():
             for img_path in file_iter:
                 src_split_path = (
                     dataset_path / split if split else img_path.parent.parent
-                )  # fallback for megaset direct paths
+                )  # Megaset may store labels directly under split root.
                 label_path = None
                 possible_label_dirs = [src_split_path / "labels", src_split_path]
 
@@ -435,7 +386,7 @@ def build_dataset():
                                 too_small_bbox_count += 1
                                 continue
 
-                            # KR-2 Fix: Add to present_target_ids ONLY after all bbox validity checks pass!
+                            # Mark class presence only after bbox passes all validity checks.
                             target_id = int(target_id)
                             present_target_ids.add(target_id)
 
@@ -497,11 +448,11 @@ def build_dataset():
                     f"KeptByClass={kept_by_class}, Skipped={skipped_smart}"
                 )
             if out_of_range_cls > 0:
-                print(f"  ⚠️ {dataset_name}/{split}: out-of-range class_id count = {out_of_range_cls}")
+                print(f"  WARN {dataset_name}/{split}: out-of-range class_id count = {out_of_range_cls}")
             if unmapped_cls > 0:
-                print(f"  ⚠️ {dataset_name}/{split}: unmapped class count = {unmapped_cls}")
+                print(f"  WARN {dataset_name}/{split}: unmapped class count = {unmapped_cls}")
             if missing_label_count > 0:
-                print(f"  ⚠️ {dataset_name}/{split}: missing label files = {missing_label_count}")
+                print(f"  WARN {dataset_name}/{split}: missing label files = {missing_label_count}")
             rejected = out_of_range_bbox_count + nan_bbox_count + too_small_bbox_count
             excluded = short_line_count + invalid_coords_count
             print(
@@ -528,7 +479,7 @@ def build_dataset():
                 dataset_path, base_oversample_count, smart_sample
             )
 
-    # Actually run the processing here (so it's defined and visible to megaset)
+    # Iterate through configured source datasets and merge them into target splits.
     # Re-apply the earlier block loops since we extracted logic out
     for dataset_name, config in MAPPINGS.items():
         dataset_path = DATASETS_TRAIN_DIR / dataset_name
@@ -634,7 +585,7 @@ def build_dataset():
     if test_images_dir.exists() and any(test_images_dir.iterdir()):
         final_data_yaml["test"] = "test/images"
     else:
-        final_data_yaml["test"] = "val/images"  # Safe fallback for val/test
+        final_data_yaml["test"] = "val/images"  # Fallback for consumers that expect a test key.
 
     with open(DATASET_DIR / "dataset.yaml", 'w') as f:
         yaml.dump(final_data_yaml, f)
@@ -653,18 +604,18 @@ def build_dataset():
         if dup_removed > 0:
             print(f"  [CLEANUP] Train/val duplicates removed from val: {dup_removed} images", flush=True)
 
-    # Otomatik temporal leakage kontrolü
+    # Post-build leakage check helps detect accidental train/val overlap early.
     try:
         from uav_training.val_utils import check_temporal_leakage
         leak = check_temporal_leakage(DATASET_DIR)
         if leak["exact_match"] > 0:
-            print(f"⚠️ [LEAKAGE] Tam eşleşen train/val: {leak['exact_match']} görüntü", flush=True)
+            print(f"WARN [LEAKAGE] Tam eslesen train/val: {leak['exact_match']} goruntu", flush=True)
         if leak["video_prefix_overlap"] > 0:
-            print(f"ℹ️ [LEAKAGE] Aynı video prefix overlap: {leak['video_prefix_overlap']} sahne", flush=True)
+            print(f"INFO [LEAKAGE] Ayni video prefix overlap: {leak['video_prefix_overlap']} sahne", flush=True)
         if leak["exact_match"] == 0 and leak["video_prefix_overlap"] == 0:
-            print("✓ [LEAKAGE] Train/val exact overlap yok", flush=True)
+            print("OK [LEAKAGE] Train/val exact overlap yok", flush=True)
     except Exception as e:
-        print(f"⚠️ Temporal leakage kontrolü atlandı: {e}", flush=True)
+        print(f"WARN Temporal leakage kontrolu atlandi: {e}", flush=True)
 
     _release_file_lock(lock_fd, lock_path)
     try:
