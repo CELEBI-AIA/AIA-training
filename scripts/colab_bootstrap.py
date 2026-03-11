@@ -852,12 +852,15 @@ def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):  
         )
         _run(rsync_cmd, check=False, print_output=False)
         last_synced_ckpt_mtime = latest_mtime
-        now = datetime.now().strftime("%H:%M:%S")
-        print(
-            f"\n  ☁️ CLOUD  [{now}] Periodic checkpoint sync completed "
-            f"({os.path.basename(latest_ckpt)} mtime={int(latest_mtime)})",
-            flush=True,
-        )
+        # Sync is intentionally silent by default to avoid breaking YOLO epoch table output.
+        # Enable verbose logging only when UAV_SYNC_VERBOSE=1 is set.
+        if os.environ.get("UAV_SYNC_VERBOSE", "").strip() == "1":
+            now = datetime.now().strftime("%H:%M:%S")
+            print(
+                f"\n  ☁️ CLOUD  [{now}] Periodic checkpoint sync completed "
+                f"({os.path.basename(latest_ckpt)} mtime={int(latest_mtime)})",
+                flush=True,
+            )
 
 _sync_stop = threading.Event()
 _sync_thread = None
