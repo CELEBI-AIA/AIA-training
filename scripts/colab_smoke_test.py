@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Colab smoke test - quick import and logic checks after clone + pip install.
 No GPU, Drive, or dataset required. Run before training to catch build issues.
@@ -12,12 +12,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-
-from uav_training.emoji_logs import install_emoji_print  # noqa: E402
-
-install_emoji_print(globals())
-
-
 def smoke_test():
     """Run minimal import and logic checks."""
     errors = []
@@ -60,19 +54,18 @@ def smoke_test():
 
     return errors
 
-
 def main():
     print("Colab smoke test - checking imports and logic...", flush=True)
     errors = smoke_test()
     if errors:
         for e in errors:
-            print(f"  FAIL: {e}", flush=True)
-        print("Smoke test FAILED.", flush=True)
+            print(f"  ❌ FAIL: {e}", flush=True)
+        print("Smoke test ❌ FAILED.", flush=True)
         sys.exit(1)
-    print("  OK: All imports and logic checks passed.", flush=True)
-    print("Smoke test PASSED.", flush=True)
+    print("  ✅ OK: All imports and logic checks passed.", flush=True)
+    print("Smoke test ✅ PASSED.", flush=True)
     sys.exit(0)
-
 
 if __name__ == "__main__":
     main()
+

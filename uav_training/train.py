@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import os
 import sys
 from pathlib import Path
@@ -29,29 +29,22 @@ import time  # noqa: E402
 import csv  # noqa: E402
 import shutil  # noqa: E402
 import threading  # noqa: E402
-
-from uav_training.emoji_logs import install_emoji_print  # noqa: E402
-
-install_emoji_print(globals())
-
 # Enable V8 cuDNN API for better A100 performance
 os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
 
 if torch.cuda.is_available():
     cc = torch.cuda.get_device_capability(0)
     if cc[0] >= 8:
-        print(f"INFO Ampere+ GPU (sm_{cc[0]}{cc[1]}) - native AMP will auto-select BF16", flush=True)
+        print(f"🔍 INFO Ampere+ GPU (sm_{cc[0]}{cc[1]}) - native AMP will auto-select BF16", flush=True)
     else:
-        print(f"INFO GPU sm_{cc[0]}{cc[1]} - AMP will use FP16", flush=True)
-
+        print(f"🔍 INFO GPU sm_{cc[0]}{cc[1]} - AMP will use FP16", flush=True)
 
 try:
     from uav_training import __version__
 except ImportError:
-    __version__ = "0.8.49"  # fallback when uav_training not installed as package
+    __version__ = "0.8.50"  # fallback when uav_training not installed as package
 
 print(f"\n  UAV Training Pipeline v{__version__}", flush=True)
-
 
 def kill_gpu_hogs():
     """Clear GPU memory aggressively - sync, collect, then release cached blocks."""
@@ -70,7 +63,6 @@ def kill_gpu_hogs():
         torch.cuda.synchronize()
         torch.cuda.empty_cache()
 
-
 def _is_checkpoint_valid(ckpt_path: Path) -> bool:
     """Check if a PyTorch checkpoint is readable and not corrupt.
 
@@ -84,9 +76,8 @@ def _is_checkpoint_valid(ckpt_path: Path) -> bool:
             return False
         return True
     except Exception as e:
-        print(f"WARN Checkpoint {ckpt_path.name} is corrupt: {e}", flush=True)
+        print(f"⚠️ WARN Checkpoint {ckpt_path.name} is corrupt: {e}", flush=True)
         return False
-
 
 def get_best_metrics(results_dir: Path) -> dict:
     """
@@ -95,7 +86,7 @@ def get_best_metrics(results_dir: Path) -> dict:
     """
     results_csv = results_dir / "results.csv"
     if not results_csv.exists():
-        print(f"WARN results.csv not found at {results_csv}", flush=True)
+        print(f"⚠️ WARN results.csv not found at {results_csv}", flush=True)
         return {"mAP50": 0.0, "mAP50-95": 0.0}
 
     best_map50 = 0.0
@@ -119,10 +110,9 @@ def get_best_metrics(results_dir: Path) -> dict:
                     elif "map50" in k:
                         best_map50 = max(best_map50, v)
     except Exception as e:
-        print(f"WARN Error parsing results.csv: {e}", flush=True)
+        print(f"⚠️ WARN Error parsing results.csv: {e}", flush=True)
 
     return {"mAP50": best_map50, "mAP50-95": best_map50_95}
-
 
 def rename_and_export_best(results_dir: Path, drive_dest: str | None = None) -> Path | None:
     """
@@ -134,7 +124,7 @@ def rename_and_export_best(results_dir: Path, drive_dest: str | None = None) -> 
 
     best_pt = results_dir / "weights" / "best.pt"
     if not best_pt.exists():
-        print(f"WARN best.pt not found at {best_pt}", flush=True)
+        print(f"⚠️ WARN best.pt not found at {best_pt}", flush=True)
         return None
 
     metrics = get_best_metrics(results_dir)
@@ -182,13 +172,13 @@ def rename_and_export_best(results_dir: Path, drive_dest: str | None = None) -> 
 
         # Copy renamed best.pt
         shutil.copy2(renamed_path, os.path.join(models_dir, new_name))
-        print(f"  OK {new_name}", flush=True)
+        print(f"  ✅ OK {new_name}", flush=True)
 
         # Copy last.pt too
         last_pt = results_dir / "weights" / "last.pt"
         if last_pt.exists():
             shutil.copy2(last_pt, os.path.join(models_dir, "last.pt"))
-            print("  OK last.pt", flush=True)
+            print("  ✅ OK last.pt", flush=True)
 
         # Copy all analysis files
         copied = 0
@@ -197,30 +187,27 @@ def rename_and_export_best(results_dir: Path, drive_dest: str | None = None) -> 
             if src.exists():
                 shutil.copy2(src, os.path.join(models_dir, fname))
                 copied += 1
-                print(f"  OK {fname}", flush=True)
+                print(f"  ✅ OK {fname}", flush=True)
 
         print(f"\n   Exported {copied + 2} files to {models_dir}", flush=True)
 
         # Also copy best.pt to flat DRIVE_UPLOAD for quick access
         os.makedirs(drive_dest, exist_ok=True)
         shutil.copy2(renamed_path, os.path.join(drive_dest, new_name))
-        print(f"  CLOUD  Quick access copy: {os.path.join(drive_dest, new_name)}", flush=True)
+        print(f"  ☁️ CLOUD  Quick access copy: {os.path.join(drive_dest, new_name)}", flush=True)
 
     return renamed_path
-
 
 def print_training_config(train_args: dict):
     """Print the full training configuration so it's visible in logs."""
     print(f"\n{'-'*60}", flush=True)
-    print("   TRAINING CONFIGURATION")
+    print("   ⚙️ TRAINING CONFIGURATION")
     print(f"{'-'*60}")
     for k, v in train_args.items():
         print(f"  {k:<20}: {v}")
 
-
 _SYNC_LOCK = threading.Lock()
 _SYNC_IN_FLIGHT = False
-
 
 def _sync_to_drive(save_dir, run_name):
     """Non-blocking Drive sync - checkpoint kaybini onler.
@@ -240,11 +227,9 @@ def _sync_to_drive(save_dir, run_name):
                 shutil.copy2(src, tmp)
                 tmp.replace(dst)
     except Exception as e:
-        print(f"[DRIVE WARN] {e}", flush=True)
-
+        print(f"☁️ DRIVE ⚠️ WARN {e}", flush=True)
 
 _LAST_SYNC_EPOCH = -1
-
 
 def _cleanup_old_checkpoints(weights_dir: Path) -> int:
     """Keep best.pt, last.pt and last 3 epoch*.pt; delete older epoch checkpoints."""
@@ -266,7 +251,6 @@ def _cleanup_old_checkpoints(weights_dir: Path) -> int:
                 pass
     return deleted
 
-
 def _best_map50_guard(trainer):
     """Save best_map50.pt when current epoch mAP50 exceeds best so far (yarisma IoU=0.5)."""
     try:
@@ -285,10 +269,9 @@ def _best_map50_guard(trainer):
         if map50 > best_so_far and last_pt.exists():
             shutil.copy2(last_pt, best_map50_pt)
             _best_map50_guard._best = map50
-            print(f"  [BEST_MAP50] mAP50={map50:.4f} -> best_map50.pt", flush=True)
+            print(f"  📈 [BEST_MAP50] mAP50={map50:.4f} -> best_map50.pt", flush=True)
     except Exception:
         pass
-
 
 def checkpoint_guard(trainer):
     """Drive sync every save_period epochs. Last epoch uses synchronous sync to avoid daemon cutoff."""
@@ -307,7 +290,7 @@ def checkpoint_guard(trainer):
     weights_dir = Path(trainer.save_dir) / "weights"
     n_cleaned = _cleanup_old_checkpoints(weights_dir)
     if n_cleaned > 0:
-        print(f"  [CLEANUP] {n_cleaned} eski epoch checkpoint silindi", flush=True)
+        print(f"  🧹 [CLEANUP] {n_cleaned} eski epoch checkpoint silindi", flush=True)
 
     is_last_epoch = epoch >= int(getattr(trainer, "epochs", epoch))
     if is_last_epoch:
@@ -328,17 +311,14 @@ def checkpoint_guard(trainer):
 
         threading.Thread(target=_sync_job, daemon=True).start()
 
-
 def _sync_results_to_drive(results_dir: Path, run_name: str):
     """Final sync from local SSD runs to Drive."""
     _sync_to_drive(results_dir, run_name)
     print("\nCLOUD  Final sync to Drive completed", flush=True)
 
-
 def _is_cuda_oom_error(exc: Exception) -> bool:
     msg = str(exc).lower()
     return "out of memory" in msg and ("cuda" in msg or "cublas" in msg or "cudnn" in msg)
-
 
 def _log_precision_policy() -> None:
     """Emit a single precision policy line for run-to-run verification."""
@@ -358,7 +338,6 @@ def _log_precision_policy() -> None:
         f"compile={compile_mode}",
         flush=True,
     )
-
 
 def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=None, resume=False, phase_overrides=None):
     """Run one YOLO training phase and return summary metrics."""
@@ -399,7 +378,7 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
 
     if torch.cuda.is_available() and hasattr(torch.cuda, "is_bf16_supported"):
         bf16_ok = torch.cuda.is_bf16_supported()
-        print(f"[AMP] BF16 hardware support: {bf16_ok}", flush=True)
+        print(f"⚙️ [AMP] BF16 hardware support: {bf16_ok}", flush=True)
 
     if phase_overrides:
         train_args.update(phase_overrides)
@@ -427,7 +406,7 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
             if isinstance(exc, ValueError) and "parameter group" in str(exc).lower():
                 if attempt_args.get("resume") and attempt == 1:
                     print(
-                        f"WARN Optimizer state incompatible "
+                        f"⚠️ WARN Optimizer state incompatible "
                         f"(likely Ultralytics version upgrade): {exc}",
                         flush=True
                     )
@@ -447,7 +426,7 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
             if not _is_cuda_oom_error(exc) or attempt == max_attempts:
                 raise
 
-            print(f"WARN CUDA OOM detected on attempt {attempt}: {exc}", flush=True)
+            print(f"⚠️ WARN CUDA OOM detected on attempt {attempt}: {exc}", flush=True)
             next_args = attempt_args.copy()
             recovery_action = None
 
@@ -511,11 +490,11 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         with open(out_args_file, "w") as f:
             yaml.dump(attempt_args, f)
     except Exception as ex:
-        print(f"WARN Failed to save full_attempt_args.yaml: {ex}", flush=True)
+        print(f"⚠️ WARN Failed to save full_attempt_args.yaml: {ex}", flush=True)
 
     print("\n Training completed.", flush=True)
     print(f"\n{'='*60}", flush=True)
-    print(f"   FINAL RESULTS ({run_name})")
+    print(f"   📊 FINAL RESULTS ({run_name})")
     print(f"{'='*60}")
     print(f"  mAP50     : {results.box.map50:.4f}")
     print(f"  mAP50-95  : {results.box.map:.4f}")
@@ -533,7 +512,6 @@ def _train_single_phase(model_path, *, run_name, epochs, batch, device, imgsz=No
         "best_pt": str(renamed) if renamed else None,
         "batch": attempt_args.get("batch", batch),  # Report effective batch after OOM fallback.
     }
-
 
 def _resume_preflight_check() -> None:
     """Validate dataset path chain before resume. Fail-fast on errors."""
@@ -559,15 +537,14 @@ def _resume_preflight_check() -> None:
         raise FileNotFoundError(
             f"Resume preflight failed: val/images not found at {val_imgs}"
         )
-    print("[RESUME] Preflight check passed: dataset.yaml and split dirs OK", flush=True)
-
+    print("🔄 [RESUME] Preflight check passed: dataset.yaml and split dirs ✅ OK", flush=True)
 
 def _check_leakage_from_audit(*, allow_leakage: bool = False) -> None:
     """Read audit report and fail if split overlap detected, unless allow_leakage."""
     if allow_leakage:
         return
     if not AUDIT_REPORT.exists():
-        print("WARN Audit report missing. Running audit.py to generate it...", flush=True)
+        print("⚠️ WARN Audit report missing. Running audit.py to generate it...", flush=True)
         import subprocess
         try:
             audit_script = Path(__file__).parent / "audit.py"
@@ -575,14 +552,14 @@ def _check_leakage_from_audit(*, allow_leakage: bool = False) -> None:
         except subprocess.CalledProcessError:
             raise RuntimeError("Audit failed! Fix data leakage or use --allow-leakage to override.")
         if not AUDIT_REPORT.exists():
-            print("WARN Audit report still not generated after running audit.py.", flush=True)
+            print("⚠️ WARN Audit report still not generated after running audit.py.", flush=True)
             return
     try:
         import json
         with open(AUDIT_REPORT, encoding="utf-8") as f:
             results = json.load(f)
     except Exception as e:
-        print(f"WARN  Warning: Failed to read audit report for leakage check: {e}", flush=True)
+        print(f"⚠️ WARN  Warning: Failed to read audit report for leakage check: {e}", flush=True)
         return
     for r in results:
         if r.get("status") != "INCLUDE":
@@ -596,7 +573,6 @@ def _check_leakage_from_audit(*, allow_leakage: bool = False) -> None:
                 f"val_test={overlap.get('val_test_overlap', 0)}). "
                 "Run audit.py and fix overlaps, or use --allow-leakage to override."
             )
-
 
 def setup_seed(seed: int = 42, *, deterministic: bool = False) -> None:
     """Seed all RNGs and configure CUDA determinism / benchmark mode.
@@ -637,7 +613,6 @@ def setup_seed(seed: int = 42, *, deterministic: bool = False) -> None:
         flush=True,
     )
 
-
 def train(epochs=None, batch=None, device=None, model_path=None, resume=False, two_phase=False, allow_leakage=False):
     ensure_colab_config()  # Lazy hardware detection - avoids import side effect in config
     det = bool(TRAIN_CONFIG.get("deterministic", False))
@@ -652,7 +627,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
 
     if not yaml_path.exists():
         if resume:
-            print("WARN  Resume requested but dataset.yaml is missing - rebuilding dataset...", flush=True)
+            print("⚠️ WARN  Resume requested but dataset.yaml is missing - rebuilding dataset...", flush=True)
         needs_build = True
     elif not resume and yaml_path.exists():
         # Check if existing dataset uses symlinks (old format -> Drive FUSE -> slow)
@@ -660,7 +635,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
         if train_imgs.exists():
             sample = next(train_imgs.iterdir(), None)
             if sample and sample.is_symlink():
-                print("WARN  Dataset uses symlinks (old format) -> rebuilding with copies...", flush=True)
+                print("⚠️ WARN  Dataset uses symlinks (old format) -> rebuilding with copies...", flush=True)
                 import shutil as _shutil
                 _shutil.rmtree(DATASET_DIR, ignore_errors=True)
                 needs_build = True
@@ -695,7 +670,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
         # 1) CLI --model takes priority (bootstrap passes Drive checkpoint here)
         if model_path and Path(str(model_path)).exists() and _is_checkpoint_valid(Path(str(model_path))):
             latest_ckpt = Path(str(model_path))
-            print(f"[RESUME] source=cli checkpoint={latest_ckpt}", flush=True)
+            print(f"🔄 [RESUME] source=cli checkpoint={latest_ckpt}", flush=True)
 
         # 2) Search local project directory
         if latest_ckpt is None:
@@ -707,7 +682,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                     candidate = max(checkpoints, key=lambda p: p.stat().st_mtime)
                     if _is_checkpoint_valid(candidate):
                         latest_ckpt = candidate
-                        print(f"[RESUME] source=local checkpoint={latest_ckpt}", flush=True)
+                        print(f"🔄 [RESUME] source=local checkpoint={latest_ckpt}", flush=True)
 
         # 3) Fallback: search Drive runs directory
         if latest_ckpt is None:
@@ -721,16 +696,16 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                         candidate = max(checkpoints, key=lambda p: p.stat().st_mtime)
                         if _is_checkpoint_valid(candidate):
                             latest_ckpt = candidate
-                            print(f"[RESUME] source=drive checkpoint={latest_ckpt}", flush=True)
+                            print(f"🔄 [RESUME] source=drive checkpoint={latest_ckpt}", flush=True)
 
         if latest_ckpt is None:
-            print("ERROR No valid 'last.pt' found in CLI path, local runs, or Drive. Aborting resume.", flush=True)
+            print("🚫 ERROR No valid 'last.pt' found in CLI path, local runs, or Drive. Aborting resume.", flush=True)
             sys.exit(1)
 
         model_path = latest_ckpt
     else:
-        print("[RESUME] mode=fresh", flush=True)
-        print(f" Starting training: {model_path} on UAV dataset", flush=True)
+        print("🔄 [RESUME] mode=fresh", flush=True)
+        print(f" 🤖 Starting training: {model_path} on UAV dataset", flush=True)
 
     print(f"  Epochs: {epochs}  |  Batch: {batch}  |  Device: {device}", flush=True)
 
@@ -797,7 +772,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
             if (not os.path.exists(phase2_model_path) or
                     not _is_checkpoint_valid(Path(phase2_model_path))):
                 print(
-                    "WARN  phase1 best.pt not found or invalid! "
+                    "⚠️ WARN  phase1 best.pt not found or invalid! "
                     "Falling back to last.pt",
                     flush=True
                 )
@@ -816,7 +791,7 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
             per_class = run_per_class_val(phase2_model_path, str(DATASET_DIR), verbose=False)
             print_per_class_report(per_class)
         except Exception as e:
-            print(f"WARN Per-class validation atlandi: {e}", flush=True)
+            print(f"⚠️ WARN Per-class validation atlandi: {e}", flush=True)
 
         phase2_batch = phase1_result.get("batch", batch)  # Use phase 1 batch (no halving - A100 was ~78% idle)
 
@@ -859,7 +834,6 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
         traceback.print_exc()
         sys.exit(1)
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train YOLO11 on UAV dataset")
     parser.add_argument("--epochs", type=int, help="Number of epochs")
@@ -889,3 +863,5 @@ if __name__ == "__main__":
         two_phase=args.two_phase,
         allow_leakage=args.allow_leakage,
     )
+
+

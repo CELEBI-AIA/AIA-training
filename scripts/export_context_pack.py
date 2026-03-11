@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Export a review-ready context pack for dataset/model analysis.
 
@@ -36,11 +36,6 @@ from typing import Dict, Iterable, List, Optional, Tuple
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-
-from uav_training.emoji_logs import install_emoji_print  # noqa: E402
-
-install_emoji_print(globals())
-
 try:
     import cv2  # type: ignore
 except Exception:  # pragma: no cover - optional dependency at runtime
@@ -50,7 +45,6 @@ try:
     from ultralytics import YOLO  # type: ignore
 except Exception:  # pragma: no cover - optional dependency at runtime
     YOLO = None
-
 
 CLASS_NAMES = {
     0: "vehicle",
@@ -66,7 +60,6 @@ SPLIT_ALIASES = {
     "test": "test",
 }
 
-
 @dataclass
 class ImageRecord:
     split: str
@@ -79,7 +72,6 @@ class ImageRecord:
     blur_score: Optional[float] = None
     has_small_human: bool = False
     is_crowded: bool = False
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export model + dataset context pack")
@@ -101,7 +93,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--notes", default="")
     return parser.parse_args()
 
-
 def resolve_split_dirs(dataset_root: Path) -> Dict[str, Dict[str, Optional[Path]]]:
     split_dirs: Dict[str, Dict[str, Optional[Path]]] = {}
     for split_name in ("train", "val", "valid", "test"):
@@ -114,11 +105,9 @@ def resolve_split_dirs(dataset_root: Path) -> Dict[str, Dict[str, Optional[Path]
         split_dirs[canonical] = {"images": images_dir, "labels": labels_dir}
     return split_dirs
 
-
 def list_images(images_dir: Path) -> List[Path]:
     exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".gif"}
     return sorted(p for p in images_dir.glob("*") if p.is_file() and p.suffix.lower() in exts)
-
 
 def parse_label_file(label_path: Path) -> Tuple[List[int], List[List[float]]]:
     class_ids: List[int] = []
@@ -142,7 +131,6 @@ def parse_label_file(label_path: Path) -> Tuple[List[int], List[List[float]]]:
         boxes.append(xywh)
     return class_ids, boxes
 
-
 def compute_image_metrics(image_path: Path) -> Tuple[Optional[float], Optional[float]]:
     if cv2 is None:
         return None, None
@@ -153,7 +141,6 @@ def compute_image_metrics(image_path: Path) -> Tuple[Optional[float], Optional[f
     brightness = float(gray.mean())
     blur = float(cv2.Laplacian(gray, cv2.CV_64F).var())
     return brightness, blur
-
 
 def build_records(dataset_root: Path) -> Tuple[List[ImageRecord], dict]:
     split_dirs = resolve_split_dirs(dataset_root)
@@ -212,7 +199,6 @@ def build_records(dataset_root: Path) -> Tuple[List[ImageRecord], dict]:
 
     return records, {"split_stats": split_stats, "class_counts": class_counts}
 
-
 def copy_records(records: Iterable[ImageRecord], out_dir: Path, limit: int) -> List[str]:
     out_dir.mkdir(parents=True, exist_ok=True)
     copied: List[str] = []
@@ -223,7 +209,6 @@ def copy_records(records: Iterable[ImageRecord], out_dir: Path, limit: int) -> L
         shutil.copy2(record.image_path, dest)
         copied.append(dest.name)
     return copied
-
 
 def export_samples(records: List[ImageRecord], output_dir: Path, seed: int, samples_per_class: int, hard_case_count: int) -> dict:
     rng = random.Random(seed)
@@ -270,7 +255,6 @@ def export_samples(records: List[ImageRecord], output_dir: Path, seed: int, samp
         "hard_cases": hard_case_index,
     }
 
-
 def git_commit_hash() -> str:
     try:
         result = subprocess.run(
@@ -284,14 +268,12 @@ def git_commit_hash() -> str:
     except Exception:
         return "unknown"
 
-
 def copy_if_exists(src: Optional[Path], dst: Path) -> bool:
     if src is None or not src.exists():
         return False
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
     return True
-
 
 def export_run_artifacts(run_dir: Optional[Path], model_path: Optional[Path], output_dir: Path) -> dict:
     model_dir = output_dir / "model"
@@ -328,7 +310,6 @@ def export_run_artifacts(run_dir: Optional[Path], model_path: Optional[Path], ou
                     copied["model"].append(name)
 
     return copied
-
 
 def write_dataset_summary(output_dir: Path, stats: dict, sample_index: dict, dataset_root: Path) -> None:
     total_images = sum(item["images"] for item in stats["split_stats"].values())
@@ -392,7 +373,6 @@ def write_dataset_summary(output_dir: Path, stats: dict, sample_index: dict, dat
 
     (output_dir / "dataset_summary.md").write_text("\n".join(lines), encoding="utf-8")
 
-
 def write_train_run_summary(output_dir: Path, args: argparse.Namespace) -> None:
     lines = [
         "# Training Run Summary",
@@ -419,7 +399,6 @@ def write_train_run_summary(output_dir: Path, args: argparse.Namespace) -> None:
     ]
     (output_dir / "train_run_summary.md").write_text("\n".join(lines), encoding="utf-8")
 
-
 def write_model_manifest(output_dir: Path, args: argparse.Namespace, copied_artifacts: dict) -> None:
     lines = [
         "# Model Manifest",
@@ -441,7 +420,6 @@ def write_model_manifest(output_dir: Path, args: argparse.Namespace, copied_arti
     for name in copied_artifacts["run_files"] or ["none"]:
         lines.append(f"- `{name}`")
     (output_dir / "model" / "manifest.md").write_text("\n".join(lines), encoding="utf-8")
-
 
 def export_prediction_samples(dataset_root: Path, model_path: Optional[Path], output_dir: Path, prediction_samples: int, seed: int) -> bool:
     if YOLO is None or model_path is None or not model_path.exists():
@@ -473,7 +451,6 @@ def export_prediction_samples(dataset_root: Path, model_path: Optional[Path], ou
         verbose=False,
     )
     return True
-
 
 def main() -> None:
     args = parse_args()
@@ -523,6 +500,6 @@ def main() -> None:
     print(json.dumps(summary, indent=2))
     print(f"\nContext pack ready: {output_dir}")
 
-
 if __name__ == "__main__":
     main()
+

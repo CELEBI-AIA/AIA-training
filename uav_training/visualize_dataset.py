@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import random
 import sys
 import cv2
@@ -11,10 +11,6 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from uav_training.config import DATASET_DIR, ARTIFACTS_DIR, IMAGE_EXTENSIONS  # noqa: E402
-from uav_training.emoji_logs import install_emoji_print  # noqa: E402
-
-install_emoji_print(globals())
-
 OUTPUT_DIR = ARTIFACTS_DIR / "verification_output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -32,7 +28,6 @@ CLASS_NAMES = {
     2: 'uap',
     3: 'uai'
 }
-
 
 def verify_dataset(num_samples=20, split="train"):
     """Visualize labeled images from the specified split (train, val, or test)."""
@@ -103,7 +98,6 @@ def verify_dataset(num_samples=20, split="train"):
 
     print(f"Verification samples saved to {OUTPUT_DIR}")
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Visualize dataset labels")
     parser.add_argument(
@@ -120,3 +114,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     verify_dataset(num_samples=args.num, split=args.split)
+

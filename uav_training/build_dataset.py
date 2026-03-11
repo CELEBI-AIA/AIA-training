@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 from pathlib import Path
 
@@ -23,7 +23,6 @@ if platform.system() == "Windows":
 else:
     import fcntl
 
-
 def set_seed(seed=42):
     import random
     import numpy
@@ -36,7 +35,6 @@ def set_seed(seed=42):
     except NameError:
         pass
 
-
 # Use configuration from config.py if needed, or define constants here for standalone utility
 from uav_training.config import (  # noqa: E402
     DATASET_DIR,
@@ -45,11 +43,6 @@ from uav_training.config import (  # noqa: E402
     TRAIN_CONFIG,
     IMAGE_EXTENSIONS,
 )
-from uav_training.emoji_logs import install_emoji_print  # noqa: E402
-
-install_emoji_print(globals())
-
-
 # Mapping configuration for datasets under datasets/TRAIN_DATA.
 MAPPINGS = {
     # Main UAI/UAP dataset in TRAIN_DATA.tar.gz.
@@ -91,7 +84,6 @@ MAPPINGS = {
 
 DEFAULT_CLASS_KEEP_PROB = {0: 0.30, 1: 1.00, 2: 1.00, 3: 1.00}
 
-
 def resolve_target_split(split_name: str, include_test_in_val: bool) -> str:
     """Map source split names into final split names with explicit test handling."""
     split = (split_name or "").strip().lower()
@@ -105,11 +97,9 @@ def resolve_target_split(split_name: str, include_test_in_val: bool) -> str:
         f"Unknown split name '{split_name}'. Cannot safely map to target split."
     )
 
-
 def _list_images(base_path: Path) -> list[Path]:
     ext_set = set(IMAGE_EXTENSIONS)
     return [p for p in base_path.glob("*") if p.is_file() and p.suffix.lower() in ext_set]
-
 
 def _acquire_file_lock(lock_path: Path) -> int:
     os.makedirs(lock_path.parent, exist_ok=True)
@@ -121,7 +111,6 @@ def _acquire_file_lock(lock_path: Path) -> int:
         fcntl.flock(fd, fcntl.LOCK_EX)
     return fd
 
-
 def _file_hash(path: Path, chunk_size: int = 65536) -> str:
     """Compute MD5 hash of file content (chunked read for large files)."""
     h = hashlib.md5()
@@ -129,7 +118,6 @@ def _file_hash(path: Path, chunk_size: int = 65536) -> str:
         while chunk := f.read(chunk_size):
             h.update(chunk)
     return h.hexdigest()
-
 
 def _remove_orphans(dataset_dir: Path) -> tuple[int, int]:
     """Remove images without labels and labels without images. Returns (imgs_removed, lbls_removed)."""
@@ -158,7 +146,6 @@ def _remove_orphans(dataset_dir: Path) -> tuple[int, int]:
                 lbls_removed += 1
     return imgs_removed, lbls_removed
 
-
 def _remove_train_val_duplicates(dataset_dir: Path) -> int:
     """Remove from val any image that has same content hash as train. Returns count removed."""
     train_imgs = dataset_dir / "train" / "images"
@@ -185,7 +172,6 @@ def _remove_train_val_duplicates(dataset_dir: Path) -> int:
             removed += 1
     return removed
 
-
 def _release_file_lock(fd: int, lock_path: Path) -> None:
     try:
         if platform.system() == "Windows":
@@ -205,7 +191,6 @@ def _release_file_lock(fd: int, lock_path: Path) -> None:
         os.remove(lock_path)
     except OSError:
         pass
-
 
 def build_dataset():
     lock_path = ARTIFACTS_DIR / ".build_dataset.lock"
@@ -448,22 +433,22 @@ def build_dataset():
                     f"KeptByClass={kept_by_class}, Skipped={skipped_smart}"
                 )
             if out_of_range_cls > 0:
-                print(f"  WARN {dataset_name}/{split}: out-of-range class_id count = {out_of_range_cls}")
+                print(f"  ⚠️ WARN {dataset_name}/{split}: out-of-range class_id count = {out_of_range_cls}")
             if unmapped_cls > 0:
-                print(f"  WARN {dataset_name}/{split}: unmapped class count = {unmapped_cls}")
+                print(f"  ⚠️ WARN {dataset_name}/{split}: unmapped class count = {unmapped_cls}")
             if missing_label_count > 0:
-                print(f"  WARN {dataset_name}/{split}: missing label files = {missing_label_count}")
+                print(f"  ⚠️ WARN {dataset_name}/{split}: missing label files = {missing_label_count}")
             rejected = out_of_range_bbox_count + nan_bbox_count + too_small_bbox_count
             excluded = short_line_count + invalid_coords_count
             print(
-                f"  [BBOX AUDIT] {dataset_name}/{target_split}{desc_suffix}: "
+                f"  🧪 [BBOX AUDIT] {dataset_name}/{target_split}{desc_suffix}: "
                 f"kept={total_bbox_kept} out_of_range={out_of_range_bbox_count} "
                 f"nan={nan_bbox_count} too_small={too_small_bbox_count} "
                 f"rejected_total={rejected}"
             )
             if excluded > 0:
                 print(
-                    f"  [EXCLUDED LABELS] {dataset_name}/{target_split}"
+                    f"  📄 [EXCLUDED LABELS] {dataset_name}/{target_split}"
                     f"{desc_suffix}: short_format={short_line_count} "
                     f"invalid_coords={invalid_coords_count} "
                     f"(unsupported segmentation/keypoint or malformed lines)"
@@ -590,32 +575,32 @@ def build_dataset():
     with open(DATASET_DIR / "dataset.yaml", 'w') as f:
         yaml.dump(final_data_yaml, f)
 
-    print(f"Dataset built successfully at {DATASET_DIR}")
+    print(f"✅ Dataset built successfully at {DATASET_DIR}")
 
     # Orphan cleanup: remove images without labels, labels without images
     if TRAIN_CONFIG.get("remove_orphans", True):
         imgs_removed, lbls_removed = _remove_orphans(DATASET_DIR)
         if imgs_removed or lbls_removed:
-            print(f"  [CLEANUP] Orphans removed: {imgs_removed} images, {lbls_removed} labels", flush=True)
+            print(f"  🧹 [CLEANUP] Orphans removed: {imgs_removed} images, {lbls_removed} labels", flush=True)
 
     # Train/val duplicate removal: remove from val any image with same content as train (prevents leakage)
     if TRAIN_CONFIG.get("remove_train_val_duplicates", True):
         dup_removed = _remove_train_val_duplicates(DATASET_DIR)
         if dup_removed > 0:
-            print(f"  [CLEANUP] Train/val duplicates removed from val: {dup_removed} images", flush=True)
+            print(f"  🧹 [CLEANUP] Train/val duplicates removed from val: {dup_removed} images", flush=True)
 
     # Post-build leakage check helps detect accidental train/val overlap early.
     try:
         from uav_training.val_utils import check_temporal_leakage
         leak = check_temporal_leakage(DATASET_DIR)
         if leak["exact_match"] > 0:
-            print(f"WARN [LEAKAGE] Tam eslesen train/val: {leak['exact_match']} goruntu", flush=True)
+            print(f"⚠️ WARN 🔍 [LEAKAGE] Tam eslesen train/val: {leak['exact_match']} goruntu", flush=True)
         if leak["video_prefix_overlap"] > 0:
-            print(f"INFO [LEAKAGE] Ayni video prefix overlap: {leak['video_prefix_overlap']} sahne", flush=True)
+            print(f"🔍 INFO 🔍 [LEAKAGE] Ayni video prefix overlap: {leak['video_prefix_overlap']} sahne", flush=True)
         if leak["exact_match"] == 0 and leak["video_prefix_overlap"] == 0:
-            print("OK [LEAKAGE] Train/val exact overlap yok", flush=True)
+            print("✅ OK 🔍 [LEAKAGE] Train/val exact overlap yok", flush=True)
     except Exception as e:
-        print(f"WARN Temporal leakage kontrolu atlandi: {e}", flush=True)
+        print(f"⚠️ WARN Temporal leakage kontrolu atlandi: {e}", flush=True)
 
     _release_file_lock(lock_fd, lock_path)
     try:
@@ -623,6 +608,6 @@ def build_dataset():
     except AttributeError:
         pass
 
-
 if __name__ == "__main__":
     build_dataset()
+

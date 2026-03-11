@@ -1,20 +1,15 @@
-"""
+﻿"""
 Validation utilities - per-class AP50, temporal leakage check.
 """
 from pathlib import Path
 
 from uav_training.config import IMAGE_EXTENSIONS
-from uav_training.emoji_logs import install_emoji_print
-
-install_emoji_print(globals())
-
 TARGET_THRESHOLDS = {
     "vehicle": (0.90, 0.95),
     "human": (0.88, 0.93),
     "uap": (0.85, 0.92),
     "uai": (0.85, 0.92),
 }
-
 
 def run_per_class_val(model_path: str, data_path: str, split: str = "val", verbose: bool = True) -> dict:
     """
@@ -44,15 +39,14 @@ def run_per_class_val(model_path: str, data_path: str, split: str = "val", verbo
     result = dict(zip(class_names, [float(m) for m in maps[:4]]))
     return result
 
-
 def print_per_class_report(result: dict) -> None:
     """Print per-class mAP50 with thresholds."""
     print("\n" + "=" * 50, flush=True)
-    print("  PER-CLASS mAP50", flush=True)
+    print("  📊 PER-CLASS mAP50", flush=True)
     print("=" * 50, flush=True)
     for name, ap50 in result.items():
         min_ok, target = TARGET_THRESHOLDS.get(name, (0.0, 0.0))
-        status = "OK" if ap50 >= min_ok else "LOW"
+        status = "✅ OK" if ap50 >= min_ok else "LOW"
         if ap50 < min_ok:
             status += f" (min={min_ok})"
         print(f"  {name:<10}: {ap50:.4f}  [{status}]  (target: {target})", flush=True)
@@ -64,7 +58,6 @@ def print_per_class_report(result: dict) -> None:
         print("\nPhase 2'de dinamik augmentasyon (copy_paste) kullanilabilir.", flush=True)
     else:
         print("\nTum siniflar minimum esigin uzerinde.", flush=True)
-
 
 def check_temporal_leakage(dataset_dir) -> dict:
     """
@@ -95,3 +88,4 @@ def check_temporal_leakage(dataset_dir) -> dict:
         "train_stems": len(train_stems),
         "val_stems": len(val_stems),
     }
+

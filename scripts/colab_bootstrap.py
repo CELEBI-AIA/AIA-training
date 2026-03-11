@@ -1,4 +1,4 @@
-##############################################################################
+﻿##############################################################################
 # YOLO UAV Training Bootstrap (Google Colab)
 # Paste this entire cell into Colab and run.
 ##############################################################################
@@ -27,13 +27,6 @@ import shlex  # noqa: E402
 from concurrent.futures import ThreadPoolExecutor, as_completed  # noqa: E402
 from datetime import datetime  # noqa: E402
 
-try:  # Debug readability: add emoji markers to status output.
-    from uav_training.emoji_logs import install_emoji_print  # noqa: E402
-    install_emoji_print(globals())
-except Exception:
-    pass
-
-
 def _read_repo_version(repo_dir: str) -> str:
     """Read module version from uav_training/__init__.py if available."""
     version_file = os.path.join(repo_dir, "uav_training", "__init__.py")
@@ -52,10 +45,8 @@ def _read_repo_version(repo_dir: str) -> str:
 
     return "dev"
 
-
 # Keep stdout/stderr unbuffered so long steps expose progress in real time.
 os.environ["PYTHONUNBUFFERED"] = "1"
-
 
 def _run(cmd: str, *, check: bool = True, print_output: bool = True, **kw):
     """Run a shell command - capture output and print to Colab cell explicitly.
@@ -75,7 +66,6 @@ def _run(cmd: str, *, check: bool = True, print_output: bool = True, **kw):
         sys.stdout.flush()
     return r
 
-
 def _resolve_drive_path(path: str) -> str:
     """Resolve dangling MyDrive shortcuts to actual target path when available."""
     if os.path.exists(path):
@@ -87,15 +77,12 @@ def _resolve_drive_path(path: str) -> str:
             return target
     return path
 
-
 def _banner(msg: str):
     print(f"\n{'='*60}\n  {msg}\n{'='*60}", flush=True)
-
 
 # Step 0: Pre-flight cleanup.
 # If runs fail at startup, inspect this block first for stale process or cache issues.
 _banner("0/8 - Pre-flight cleanup")
-
 
 import gc  # noqa: E402
 
@@ -127,7 +114,7 @@ if os.path.isdir(REPO_DIR):
 
 # Clear /tmp junk
 _run("rm -rf /tmp/pip-* /tmp/torch_* 2>/dev/null || true", check=False, print_output=False)
-print("  OK Cleanup done\n", flush=True)
+print("  ✅ OK Cleanup done\n", flush=True)
 
 # Step 1: Mount Google Drive and validate input/output paths.
 _banner("1/8 - Mounting Google Drive")
@@ -148,13 +135,13 @@ if not os.path.isfile(DRIVE_DATASET):
 
 os.makedirs(DRIVE_RUNS, exist_ok=True)
 os.makedirs(DRIVE_UPLOAD, exist_ok=True)
-print("  OK Drive mounted", flush=True)
-print(f"  OK Dataset archive: {DRIVE_DATASET}")
+print("  ✅ OK Drive mounted", flush=True)
+print(f"  ✅ OK Dataset archive: {DRIVE_DATASET}")
 # Print archive size
 tar_size = os.path.getsize(DRIVE_DATASET) / (1024**3)
-print(f"  OK Archive size: {tar_size:.2f} GB")
-print(f"  OK Runs dir: {DRIVE_RUNS}")
-print(f"  OK Upload dir: {DRIVE_UPLOAD}")
+print(f"  ✅ OK Archive size: {tar_size:.2f} GB")
+print(f"  ✅ OK Runs dir: {DRIVE_RUNS}")
+print(f"  ✅ OK Upload dir: {DRIVE_UPLOAD}")
 
 # Step 2: Sync repository code to a known revision.
 _banner("2/8 - Setting up repository")
@@ -173,8 +160,8 @@ _run(f"git -C {REPO_DIR} log --oneline -1", print_output=False)
 VERSION = _read_repo_version(REPO_DIR)
 print(f"\n  UAV Training Bootstrap v{VERSION}", flush=True)
 print(f"    Repo: {REPO_URL} ({REPO_BRANCH})", flush=True)
-print(f"  OK Bootstrap version synced from repo: v{VERSION}", flush=True)
-print("  OK Repo ready", flush=True)
+print(f"  ✅ OK Bootstrap version synced from repo: v{VERSION}", flush=True)
+print("  ✅ OK Repo ready", flush=True)
 
 # Step 3: Install dependencies and run tests before expensive dataset operations.
 _banner("3/8 - Installing dependencies")
@@ -199,13 +186,13 @@ if os.path.isfile(req_file):
     )
 
     if updated_line:
-        print(f"  OK Updated packages: {updated_line}", flush=True)
+        print(f"  ✅ OK Updated packages: {updated_line}", flush=True)
     elif already_satisfied_count > 0:
-        print(f"  OK No package updates needed ({already_satisfied_count} requirements already satisfied)", flush=True)
+        print(f"  ✅ OK No package updates needed ({already_satisfied_count} requirements already satisfied)", flush=True)
     else:
-        print("  OK Dependency check completed", flush=True)
+        print("  ✅ OK Dependency check completed", flush=True)
 else:
-    print("  WARN No requirements.txt found")  # noqa: F541
+    print("  ⚠️ WARN No requirements.txt found")  # noqa: F541
 
 # Ensure ultralytics + psutil are available
 print("   Verifying ultralytics & psutil ", flush=True)
@@ -223,10 +210,10 @@ _run(
     'print(f\'     torch: {torch.__version__}, CUDA: {torch.version.cuda}\')"',
     check=False,
 )
-print("  OK Dependencies installed", flush=True)
+print("  ✅ OK Dependencies installed", flush=True)
 
 # Run full test suite before dataset download - catch build issues early
-print("   Running tests (automatic) ", flush=True)
+print("   🧪 Running tests (automatic) ", flush=True)
 _run(
     "cd {0} && {1} -m pytest tests/ -v --tb=short -q".format(
         shlex.quote(REPO_DIR), shlex.quote(sys.executable)
@@ -266,11 +253,11 @@ try:
     del _t
 except Exception as _e:
     _has_cuda = False
-    print(f"  WARN PyTorch probe failed: {_e}", flush=True)
+    print(f"  ⚠️ WARN PyTorch probe failed: {_e}", flush=True)
 
 if _is_tpu and not _has_cuda:
     print("\n" + "!" * 60, flush=True)
-    print("  ERROR  TPU RUNTIME - YOLO EGITIMI ICIN UYGUN DEGIL!")
+    print("  🚫 ERROR  TPU RUNTIME - YOLO EGITIMI ICIN UYGUN DEGIL!")
     print("  YOLO/Ultralytics CUDA (GPU) gerektirir, TPU/XLA desteklemez.")
     print("  Lutfen runtime'i GPU'ya cevirin:")
     print("     Runtime -> Change runtime type -> GPU (T4/L4/A100/H100)")
@@ -281,10 +268,10 @@ if _is_tpu and not _has_cuda:
     )
 
 if not _has_cuda:
-    print("\n  WARN  CUDA GPU bulunamadi - CPU ile egitim cok yavas olacak!", flush=True)
+    print("\n  ⚠️ WARN  CUDA GPU bulunamadi - CPU ile egitim cok yavas olacak!", flush=True)
 
 # Full nvidia-smi output
-print("\n   GPU Status:", flush=True)
+print("\n   🖥️ GPU Status:", flush=True)
 _run("nvidia-smi", check=False)
 
 # Set environment variables BEFORE training script imports config.py
@@ -315,9 +302,9 @@ _run(
 # Point YOLO settings to local SSD
 _run('yolo settings runs_dir="/content/runs"', check=False)
 _run('yolo settings datasets_dir="/content/datasets_local"', check=False)
-print("  OK Training output -> /content/runs/ (local SSD)", flush=True)
-print("  OK Datasets dir -> /content/datasets_local/ (local SSD)", flush=True)
-print(f"  OK Post-training sync -> {DRIVE_RUNS} (Google Drive)", flush=True)
+print("  ✅ OK Training output -> /content/runs/ (local SSD)", flush=True)
+print("  ✅ OK Datasets dir -> /content/datasets_local/ (local SSD)", flush=True)
+print(f"  ✅ OK Post-training sync -> {DRIVE_RUNS} (Google Drive)", flush=True)
 
 # Step 5: Stage dataset archive to local SSD, extract, verify, and clean temporary files.
 _banner("5/8 - Dataset to local SSD (DOWNLOAD -> EXTRACT -> VERIFY)")
@@ -330,33 +317,31 @@ LOCAL_TAR = "/content/TRAIN_DATA.tar.gz"
 t0 = time.time()
 existing = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
 
-
 def _detect_train_root(cache_dir: str) -> str | None:
     """Resolve extracted dataset root using the configured dataset subdir."""
     expected_name = (os.environ.get("UAV_DATASET_SUBDIR", "TRAIN_DATA") or "TRAIN_DATA").strip()
     candidate = os.path.join(cache_dir, expected_name)
     return candidate if os.path.isdir(candidate) else None
 
-
 train_root = _detect_train_root(LOCAL_CACHE)
 
 # Fast path: if dataset is already materialized on local SSD, skip tool install
 # and all Drive->SSD copy/extract work.
 if train_root and existing > 5000 and os.path.isfile(CACHE_MARKER):
-    print(f"  [CACHE] Local SSD dataset already ready ({existing} files) - SKIP copy/extract", flush=True)
-    print(f"  [CACHE] Dataset root detected: {train_root}", flush=True)
+    print(f"  📦 [CACHE] Local SSD dataset already ready ({existing} files) - SKIP copy/extract", flush=True)
+    print(f"  📦 [CACHE] Dataset root detected: {train_root}", flush=True)
 else:
     # Install extraction tools only when download/extract may be needed.
-    print("  [SETUP] Installing extraction tools ...", flush=True)
+    print("  🧰 [SETUP] Installing extraction tools ...", flush=True)
     _run("apt-get update -qq && apt-get install -y pigz pv eatmydata 2>&1 | tail -3", check=False)
 
     if os.path.isfile(CACHE_MARKER) and existing > 5000:
         train_root = _detect_train_root(LOCAL_CACHE)
         if train_root:
-            print(f"  [CACHE] Cache complete ({existing} files) - SKIP", flush=True)
-            print(f"  [CACHE] Dataset root detected: {train_root}", flush=True)
+            print(f"  📦 [CACHE] Cache complete ({existing} files) - SKIP", flush=True)
+            print(f"  📦 [CACHE] Dataset root detected: {train_root}", flush=True)
         else:
-            print("  [WARN] Cache marker exists but configured dataset root not found. Rebuilding...", flush=True)
+            print("  ⚠️ WARN Cache marker exists but configured dataset root not found. Rebuilding...", flush=True)
             if os.path.isfile(CACHE_MARKER):
                 os.remove(CACHE_MARKER)
             existing = 0
@@ -554,7 +539,7 @@ else:
 
         dl_elapsed = time.time() - t0
         print(
-            f"  OK Download done in {dl_elapsed:.0f}s "
+            f"  ✅ OK Download done in {dl_elapsed:.0f}s "
             f"({tar_size_gb/max(dl_elapsed, 1)*1024:.0f} MB/s)",
             flush=True,
         )
@@ -610,7 +595,7 @@ else:
 
         ext_elapsed = time.time() - t1
         final_count = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
-        print(f"  OK Extracted in {ext_elapsed:.0f}s - {final_count} files", flush=True)
+        print(f"  ✅ OK Extracted in {ext_elapsed:.0f}s - {final_count} files", flush=True)
 
         # Phase 3: Delete temporary archive, then validate extracted structure.
         # Must free ~78GB immediately - disk can't hold tar.gz + extracted files.
@@ -622,12 +607,12 @@ else:
         train_root = _detect_train_root(LOCAL_CACHE)
         if final_count > 5000 and train_root:
             print(f"   Verification passed: {final_count} files on local SSD", flush=True)
-            print(f"  [VERIFY] Dataset root detected: {train_root}", flush=True)
+            print(f"  🧪 [VERIFY] Dataset root detected: {train_root}", flush=True)
             with open(CACHE_MARKER, 'w') as f:
                 f.write("1")
         else:
             print(
-                f"  [WARN] Verification failed (files={final_count}, root={train_root}) - "
+                f"  ⚠️ WARN Verification failed (files={final_count}, root={train_root}) - "
                 "re-run to retry from Drive",
                 flush=True,
             )
@@ -635,7 +620,7 @@ else:
 elapsed = time.time() - t0
 final_count = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
 print(
-    f"\n  OK Total time: {elapsed:.0f}s - {final_count} files ready on SSD",
+    f"\n  ✅ OK Total time: {elapsed:.0f}s - {final_count} files ready on SSD",
     flush=True,
 )
 
@@ -652,17 +637,16 @@ _run("df -h /content | tail -1 | awk '{print \"     /content  - used: \"$3\"  fr
 _run(f"du -sh {LOCAL_CACHE} | awk '{{print \"     Dataset   - \"$1}}'")
 
 # Run audit before training so split/content issues fail early in logs.
-print("\n   Running Pipeline Audit...", flush=True)
+print("\n   🔍 Running Pipeline Audit...", flush=True)
 _run(f'cd {shlex.quote(REPO_DIR)} && {sys.executable} uav_training/audit.py', check=False)
 _audit_report = os.path.join(REPO_DIR, "artifacts", "audit_report.json")
 if os.path.isfile(_audit_report):
-    print("  OK Audit report generated", flush=True)
+    print("  ✅ OK Audit report generated", flush=True)
 else:
-    print("  WARN Audit report missing!", flush=True)
-
+    print("  ⚠️ WARN Audit report missing!", flush=True)
 
 # Step 6: Launch training and tee output to both notebook and log file.
-_banner("6/8 - Starting training")
+_banner("6/8 - 🤖 Starting training")
 
 # Search for the latest checkpoint (Local SSD first, then Drive)
 def find_latest_checkpoint(*dirs) -> str | None:  # noqa: E302
@@ -675,9 +659,7 @@ def find_latest_checkpoint(*dirs) -> str | None:  # noqa: E302
             return candidates[0]
     return None
 
-
 checkpoint = find_latest_checkpoint("/content/runs", DRIVE_RUNS)
-
 
 train_script_path = os.path.join(REPO_DIR, TRAIN_SCRIPT)
 if not os.path.isfile(train_script_path):
@@ -692,7 +674,7 @@ log_name = f"log_v{VERSION}_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.txt"
 log_path = os.path.join(log_dir, log_name)
 
 if FORCE_FRESH_START:
-    print("  WARN FORCE_FRESH_START enabled - ignoring existing checkpoints.", flush=True)
+    print("  ⚠️ WARN FORCE_FRESH_START enabled - ignoring existing checkpoints.", flush=True)
     checkpoint = None
 
 if checkpoint:
@@ -723,7 +705,6 @@ proc = subprocess.Popen(
     env={**os.environ, "PYTHONUNBUFFERED": "1"}
 )
 
-
 def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):  # noqa: E305
     """
     Periodically sync /content/runs to Drive during training to avoid
@@ -731,7 +712,7 @@ def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):  
     """
     runs_dir = "/content/runs"
     if not os.path.isdir(DRIVE_RUNS):
-        print(f"  WARN  Periodic sync disabled (Drive runs path unavailable): {DRIVE_RUNS}", flush=True)
+        print(f"  ⚠️ WARN  Periodic sync disabled (Drive runs path unavailable): {DRIVE_RUNS}", flush=True)
         return
 
     last_synced_ckpt_mtime = None
@@ -744,7 +725,7 @@ def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):  
         ckpt_candidates = glob.glob(os.path.join(runs_dir, "**", "weights", "last.pt"), recursive=True)
         if not ckpt_candidates:
             if not warned_no_ckpt:
-                print("  INFO  Periodic sync waiting for first checkpoint...", flush=True)
+                print("  🔍 INFO  Periodic sync waiting for first checkpoint...", flush=True)
                 warned_no_ckpt = True
             continue
 
@@ -764,11 +745,10 @@ def _periodic_runs_sync(stop_event: threading.Event, interval_sec: int = 300):  
         last_synced_ckpt_mtime = latest_mtime
         now = datetime.now().strftime("%H:%M:%S")
         print(
-            f"\n  CLOUD  [{now}] Periodic checkpoint sync completed "
+            f"\n  ☁️ CLOUD  [{now}] Periodic checkpoint sync completed "
             f"({os.path.basename(latest_ckpt)} mtime={int(latest_mtime)})",
             flush=True,
         )
-
 
 _sync_stop = threading.Event()
 _sync_thread = None
@@ -778,7 +758,7 @@ if sync_interval > 0:
     _sync_thread.start()
 else:
     print(
-        "  INFO  Periodic runs sync disabled (UAV_SYNC_INTERVAL_SEC<=0). "
+        "  🔍 INFO  Periodic runs sync disabled (UAV_SYNC_INTERVAL_SEC<=0). "
         "Using epoch-end Drive sync.",
         flush=True,
     )
@@ -803,9 +783,9 @@ if _sync_thread is not None:
 print(f"\n{'-'*60}", flush=True)
 
 if exit_code != 0:
-    print(f"  ERROR Training exited with code {exit_code}", flush=True)
+    print(f"  🚫 ERROR Training exited with code {exit_code}", flush=True)
 else:
-    print("   Training completed successfully", flush=True)
+    print("   ✅ Training completed successfully", flush=True)
 
 print(f"   Full log saved: {log_path}", flush=True)
 
@@ -815,13 +795,13 @@ _banner("7/8 - Syncing outputs to Google Drive")
 # Sync logs
 drive_log_dir = os.path.join(DRIVE_UPLOAD, "logs")
 os.makedirs(drive_log_dir, exist_ok=True)
-print(f"  CLOUD  Syncing logs to: {drive_log_dir}", flush=True)
+print(f"  ☁️ CLOUD  Syncing logs to: {drive_log_dir}", flush=True)
 _run(f'rsync -a {shlex.quote(log_dir + "/")} {shlex.quote(drive_log_dir + "/")}', check=False)
 
 # Results are synced by train.py itself, but we can do a fallback sync here just in case
 runs_dir = "/content/runs"
 if os.path.exists(runs_dir):
-    print(f"  CLOUD  Syncing runs to: {DRIVE_RUNS}", flush=True)
+    print(f"  ☁️ CLOUD  Syncing runs to: {DRIVE_RUNS}", flush=True)
     _run(f'rsync -a {shlex.quote(runs_dir + "/")} {shlex.quote(DRIVE_RUNS + "/")}', check=False)
 
 # Step 8: Emit concise run summary and artifact locations.
@@ -859,3 +839,4 @@ if log_files:
         print(f"     -> {os.path.basename(lf)} ({size_kb:.0f} KB)")
 
 _banner(" Training complete - all outputs saved to Google Drive")
+

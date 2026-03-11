@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Checkpoint temizleme - best.pt, last.pt ve son 3 epoch checkpoint disindakileri siler.
 Cross-platform (Windows/Linux/Colab). Otomatik olarak train pipeline tarafindan cagrilir.
@@ -10,13 +10,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-
-from uav_training.emoji_logs import install_emoji_print  # noqa: E402
-
-install_emoji_print(globals())
-
 KEEP_EPOCHS = 3  # best + last + son 3 epoch*.pt
-
 
 def cleanup_checkpoints(weights_dir: Path) -> int:
     """
@@ -43,12 +37,10 @@ def cleanup_checkpoints(weights_dir: Path) -> int:
             pass
     return deleted
 
-
 def cleanup_run(run_dir: Path) -> int:
     """Bir run klasorundeki weights/ altindaki checkpoint'leri temizle."""
     weights_dir = run_dir / "weights"
     return cleanup_checkpoints(weights_dir)
-
 
 def cleanup_all_runs(project_dir: Path) -> int:
     """Proje altindaki tum run klasorlerini temizle."""
@@ -60,9 +52,8 @@ def cleanup_all_runs(project_dir: Path) -> int:
             n = cleanup_run(run_dir)
             if n > 0:
                 total += n
-                print(f"  [CLEANUP] {run_dir.name}: {n} epoch checkpoint silindi", flush=True)
+                print(f"  🧹 [CLEANUP] {run_dir.name}: {n} epoch checkpoint silindi", flush=True)
     return total
-
 
 if __name__ == "__main__":
     from uav_training.config import TRAIN_CONFIG, is_colab
@@ -75,3 +66,4 @@ if __name__ == "__main__":
             project = target
     n = cleanup_all_runs(project)
     print(f"Toplam {n} checkpoint silindi.", flush=True)
+

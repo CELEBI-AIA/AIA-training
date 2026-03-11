@@ -1,4 +1,4 @@
-import os
+﻿import os
 import random
 import argparse
 import sys
@@ -11,12 +11,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from ultralytics import YOLO  # noqa: E402
 from uav_training.config import DATASET_DIR, ARTIFACTS_DIR, IMAGE_EXTENSIONS  # noqa: E402
-from uav_training.emoji_logs import install_emoji_print  # noqa: E402
-
-install_emoji_print(globals())
-
 DEFAULT_INFER_SOURCE = str(DATASET_DIR / "val" / "images")
-
 
 def smoke_infer(model_path, source=DEFAULT_INFER_SOURCE, num_images=5):
     print(f"Loading model from {model_path}...")
@@ -59,7 +54,6 @@ def smoke_infer(model_path, source=DEFAULT_INFER_SOURCE, num_images=5):
     except Exception as e:
         print(f"Inference failed: {e}")
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default="yolo11m.pt", help="Path to model file")
@@ -71,3 +65,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     smoke_infer(args.model, args.source, args.num)
+

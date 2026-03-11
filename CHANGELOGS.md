@@ -502,3 +502,8 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **feat(logs)**: Add `emoji_logs.py` module to safely handle terminal emojis across platforms (Windows/Linux/Colab).
 - **refactor(scripts)**: Replace hardcoded unprintable/garbled unicode characters with standard ASCII or utilizing the new emoji logging system.
 - **release**: Bumped module/script version from `0.8.48` to `0.8.49`.
+
+## 0.8.50 - 2026-03-11
+- **log(colab_bootstrap)**: Embedded emojis directly in status output so Colab displays debug markers without wrapper-based print patching.
+- **refactor(logging)**: Removed `uav_training/emoji_logs.py` and migrated scripts/modules to explicit emoji-prefixed `print` lines.
+- **release**: Bumped module/script version from `0.8.49` to `0.8.50`.

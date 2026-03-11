@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import yaml
 import json
 from pathlib import Path
@@ -22,11 +22,6 @@ from uav_training.config import (  # noqa: E402
     DATASET_DIR,
     IMAGE_EXTENSIONS,
 )
-from uav_training.emoji_logs import install_emoji_print  # noqa: E402
-
-install_emoji_print(globals())
-
-
 def get_subdirs(path):
     try:
         return [d.name for d in path.iterdir() if d.is_dir()]
@@ -34,14 +29,12 @@ def get_subdirs(path):
         print(f"Error accessing subdirs: {exc}")
         return []
 
-
 def read_yaml(path):
     try:
         with open(path, 'r') as f:
             return yaml.safe_load(f)
     except Exception:
         return None
-
 
 def read_txt_classes(path):
     try:
@@ -51,11 +44,9 @@ def read_txt_classes(path):
         print(f"Error reading classes file: {exc}")
         return []
 
-
 def _list_images(path: Path):
     ext_set = set(IMAGE_EXTENSIONS)
     return [p for p in path.glob("*") if p.is_file() and p.suffix.lower() in ext_set]
-
 
 def _compute_split_overlap(split_stems: dict):
     train_val = split_stems["train"] & split_stems["val"]
@@ -69,7 +60,6 @@ def _compute_split_overlap(split_stems: dict):
         "has_overlap": bool(train_val or train_test or val_test),
         "sample_names": sample_names,
     }
-
 
 def scan_and_audit():
     if not ARTIFACTS_DIR.exists():
@@ -111,7 +101,6 @@ def scan_and_audit():
     valid_datasets = [r for r in results if r["status"] == "INCLUDE"]
     print(f"\nAudit complete. Found {len(valid_datasets)} valid datasets.")
     print(f"Report saved to {AUDIT_REPORT}")
-
 
 # We need to accept Path object in audit_directory
 def audit_directory(dir_path):
@@ -310,6 +299,6 @@ def audit_directory(dir_path):
 
     return result
 
-
 if __name__ == "__main__":
     scan_and_audit()
+

@@ -1,17 +1,11 @@
-from pathlib import Path
+﻿from pathlib import Path
 import os
 import sys
-
-from uav_training.emoji_logs import install_emoji_print
-
-install_emoji_print(globals())
-
 # Base paths
 # Getting the project root relative to this config file
 # structure: project_root/uav_training/config.py -> project_root is parent
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATASETS_ROOT = PROJECT_ROOT / "datasets"
-
 
 def _resolve_datasets_train_dir() -> Path:
     """Resolve source dataset root. Default: datasets/TRAIN_DATA."""
@@ -25,7 +19,6 @@ def _resolve_datasets_train_dir() -> Path:
     # Default path for fresh setups before extraction.
     return preferred_path
 
-
 # Source directory for build_dataset (audit must scan the same path).
 # Primary layout: datasets/TRAIN_DATA.
 DATASETS_TRAIN_DIR = _resolve_datasets_train_dir()
@@ -33,7 +26,6 @@ ARTIFACTS_DIR = PROJECT_ROOT / "artifacts" / "uav_model"
 
 # Do not create directories at import time.
 # Directories are created in ensure_colab_config() to keep imports side-effect free.
-
 
 def _get_module_version() -> str:
     """Read __version__ from uav_training/__init__.py without importing the package."""
@@ -47,12 +39,10 @@ def _get_module_version() -> str:
             pass
     return "dev"
 
-
 def is_colab() -> bool:
     """Detect if running inside Google Colab."""
     return os.environ.get("COLAB_RELEASE_TAG") is not None or \
         os.path.exists("/content")
-
 
 # On Colab: dataset lives entirely on LOCAL SSD for max I/O speed.
 # build_dataset.py copies images here (no symlinks!), YOLO reads from here.
@@ -87,13 +77,11 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif", "
 # Hardware auto-detection is intentionally lazy.
 # train.py calls ensure_colab_config() before training to avoid import-time side effects.
 
-
 def setup_torch_backend() -> None:
     """Central TF32 configuration. Call before any CUDA ops."""
     import torch
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
-
 
 def auto_detect_hardware() -> tuple:
     """
@@ -153,7 +141,7 @@ def auto_detect_hardware() -> tuple:
         os.path.exists("/dev/accel0")
     if is_tpu and vram == 0:
         print("\n" + "!" * 60, flush=True)
-        print("  WARN  TPU RUNTIME DETECTED - YOLO EGITIMI ICIN UYGUN DEGIL!")
+        print("  ⚠️ WARN  TPU RUNTIME DETECTED - YOLO EGITIMI ICIN UYGUN DEGIL!")
         print("  YOLO/Ultralytics CUDA (GPU) gerektirir, TPU/XLA desteklemez.")
         print("  Lutfen runtime'i GPU'ya degistirin:")
         print("     Runtime -> Change runtime type -> GPU (T4/L4/A100/H100)")
@@ -168,7 +156,7 @@ def auto_detect_hardware() -> tuple:
     elif is_tpu:
         # TPU detected with vram > 0 (e.g. Colab H100+TPU hybrid) - same fallback
         print("\n" + "!" * 60, flush=True)
-        print("  WARN  TPU RUNTIME DETECTED - YOLO EGITIMI ICIN UYGUN DEGIL!")
+        print("  ⚠️ WARN  TPU RUNTIME DETECTED - YOLO EGITIMI ICIN UYGUN DEGIL!")
         print("  YOLO/Ultralytics CUDA (GPU) gerektirir, TPU/XLA desteklemez.")
         print("  Lutfen runtime'i GPU'ya degistirin:")
         print("     Runtime -> Change runtime type -> GPU (T4/L4/A100/H100)")
@@ -344,7 +332,6 @@ def auto_detect_hardware() -> tuple:
 
     return config_overrides, info
 
-
 # Training configuration (local defaults; Colab overrides applied in ensure_colab_config()).
 
 # In Colab: train to LOCAL SSD for max speed, then copy results to Drive.
@@ -421,7 +408,6 @@ TRAIN_CONFIG = {
 # Call ensure_colab_config() from train.py before training; other modules use default config.
 _colab_config_initialized = False
 
-
 def ensure_colab_config() -> None:
     """Run auto_detect_hardware and update TRAIN_CONFIG when on Colab. Idempotent."""
     # Create artifacts directory here to keep module import side-effect free.
@@ -437,5 +423,6 @@ def ensure_colab_config() -> None:
         TRAIN_CONFIG.update(_overrides)
         _colab_config_initialized = True
     except Exception as e:
-        print(f"WARN Auto hardware detection failed: {e}", flush=True)
+        print(f"⚠️ WARN Auto hardware detection failed: {e}", flush=True)
         print("  Falling back to default config")
+
