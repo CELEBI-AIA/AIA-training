@@ -108,6 +108,11 @@ AUDIT_REPORT = ARTIFACTS_DIR / "audit_report.json"
 TARGET_CLASSES = {
     "vehicle": 0,
     "car": 0,
+    "bus": 0,
+    "truck": 0,
+    "van": 0,
+    "motorcycle": 0,
+    "bicycle": 0,
     "tasit": 0,
     "arac": 0,
     "araba": 0,
@@ -115,6 +120,8 @@ TARGET_CLASSES = {
     "person": 1,
     "pedestrian": 1,
     "people": 1,
+    "woman": 1,
+    "man": 1,
     "insan": 1,
     "uap": 2,
     "uai": 3,
@@ -275,9 +282,9 @@ def auto_detect_hardware() -> tuple:
     # Multi-scale OFF - variable sizes cause OOM with large batches
     multi_scale = False
 
-    # Dynamic cache: High RAM (167GB) -> ram; Normal A100 (~80GB) -> disk; low RAM -> off
-    # Colab: Normal ~80GB, High RAM ~167GB
-    if is_high_ram or ram > 100:
+    # Dynamic cache: With larger datasets, caching in RAM often requires >190GB+.
+    # Safe fallback to "disk" instead of "ram" to prevent memory warnings.
+    if ram >= 250:
         cache = "ram"
     elif ram > 20:
         cache = "disk"
@@ -293,16 +300,16 @@ def auto_detect_hardware() -> tuple:
     compile_mode = "reduce-overhead" if vram >= 35 else False
 
     config_overrides = {
-        "epochs": 65,            # 50 + 15 two-phase profile
-        "phase1_epochs": 50,
-        "phase2_epochs": 15,
+        "epochs": 32,            # 25 + 7 two-phase profile
+        "phase1_epochs": 25,
+        "phase2_epochs": 7,
         "phase2_imgsz": imgsz,
         "phase2_batch": batch,
         "phase2_mosaic": 0.3,
         "phase2_close_mosaic": 0,
         "phase2_lr0": adamw_lr0 * 0.1,
         "phase2_lrf": 0.01,
-        "phase2_copy_paste": 0.3,
+        "phase2_copy_paste": 0.4,
         "phase2_degrees": 0.0,
         "phase2_scale": 0.6,
         "phase2_hsv_s": 0.9,
@@ -315,7 +322,7 @@ def auto_detect_hardware() -> tuple:
         "amp": True,
         "cache": cache,
         "exist_ok": True,
-        "patience": 30,
+        "patience": 15,
         "cos_lr": True,
         "close_mosaic": 5,
         "overlap_mask": True,
@@ -325,7 +332,7 @@ def auto_detect_hardware() -> tuple:
         # reduce unrealistic composites and extreme vertical flips.
         "mosaic": 0.7,
         "scale": 0.4,
-        "copy_paste": 0.2,
+        "copy_paste": 0.3,
         "copy_paste_mode": "flip",
         "flipud": 0.15,
         "fliplr": 0.5,
@@ -377,7 +384,7 @@ def auto_detect_hardware() -> tuple:
     bf16_ok = torch.cuda.is_bf16_supported() if torch.cuda.is_available() else False
     print(f"  BF16      : {'Supported' if bf16_ok else 'Not supported'}")
     print("  TF32      : Enabled (matmul + cuDNN)")
-    print("  Epochs     : 65 (phase1=50, phase2=15)")
+    print("  Epochs     : 32 (phase1=25, phase2=7)")
     print("  AMP        : True (BF16 auto-selected on Ampere+)")
     print(f"{'='*60}\n", flush=True)
 
@@ -395,16 +402,16 @@ else:
 
 # Default config (local / fallback)
 TRAIN_CONFIG = {
-    "epochs": 65,
-    "phase1_epochs": 50,
-    "phase2_epochs": 15,
+    "epochs": 32,
+    "phase1_epochs": 25,
+    "phase2_epochs": 7,
     "phase2_imgsz": 640,
     "phase2_batch": 4,
     "phase2_mosaic": 0.3,
     "phase2_close_mosaic": 0,
     "phase2_lr0": 0.0001,
     "phase2_lrf": 0.01,
-    "phase2_copy_paste": 0.3,
+    "phase2_copy_paste": 0.4,
     "phase2_degrees": 0.0,
     "phase2_scale": 0.6,
     "phase2_hsv_s": 0.9,
@@ -419,13 +426,13 @@ TRAIN_CONFIG = {
     "amp": True,
     "cache": "disk",
     "exist_ok": True,
-    "patience": 30,
+    "patience": 15,
     "cos_lr": True,
     "close_mosaic": 5,
     "overlap_mask": True,
     "mosaic": 0.7,
     "scale": 0.4,
-    "copy_paste": 0.2,
+    "copy_paste": 0.3,
     "copy_paste_mode": "flip",
     "flipud": 0.15,
     "fliplr": 0.5,
