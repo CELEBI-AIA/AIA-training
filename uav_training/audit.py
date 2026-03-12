@@ -22,6 +22,13 @@ from uav_training.config import (  # noqa: E402
     DATASET_DIR,
     IMAGE_EXTENSIONS,
 )
+
+# Import MAPPINGS so audit can recognize datasets with id_map entries
+# even when their YAML class names are numeric (e.g. '0','1','2','3').
+try:
+    from uav_training.build_dataset import MAPPINGS as _BUILD_MAPPINGS
+except ImportError:
+    _BUILD_MAPPINGS = {}
 def get_subdirs(path):
     try:
         return [d.name for d in path.iterdir() if d.is_dir()]
@@ -286,16 +293,23 @@ def audit_directory(dir_path):
         if has_relevant:
             result["status"] = "INCLUDE"
             result["reason"] = "Valid YOLO format with target classes"
+        elif dir_path.name in _BUILD_MAPPINGS:
+            # Dataset has explicit MAPPINGS entry in build_dataset.py
+            # (e.g. id_map for numeric-named classes).
+            has_relevant = True
+            result["status"] = "INCLUDE"
+            result["reason"] = "Valid YOLO format with MAPPINGS id_map entry"
+        else:
+            result["status"] = "SKIP"
+            result["reason"] = "No target classes found in names"
+
+        if has_relevant:
             if result["split_overlap"]["has_overlap"]:
                 result["reason"] += " | Split overlap risk detected"
-
             if is_sample:
                 result["status"] = "SKIP"
                 result["reason"] += " | Sample/inference-only dataset detected"
                 return result
-        else:
-            result["status"] = "SKIP"
-            result["reason"] = "No target classes found in names"
 
     return result
 

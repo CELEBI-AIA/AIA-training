@@ -527,3 +527,8 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **feat(config)**: Optimized phase 2 hyperparams (`mosaic: 0.0`, limited HSV) to improve model recall without heavy color warping during final fine-tuning layers.
 - **fix(colab_bootstrap)**: Relocated dataset environmental variables (`UAV_DATASET_SUBDIR`) to natively extract and detect `uaiuapdataset` folder.
 - **release**: Bumped module/script version from `0.8.52` to `0.8.53`.
+
+## 0.8.54 - 2026-03-12
+- **fix(audit)**: Made audit aware of `build_dataset.py` MAPPINGS `id_map` entries so datasets with numeric YAML class names (teknofest_01, _05, _09, _10, _14) are correctly marked as INCLUDE instead of SKIP.
+- **fix(colab_bootstrap)**: Added `--allow-leakage` flag to bypass known teknofest_17 split overlap; updated `_looks_like_train_root` to detect `teknofest_*` subdirectories.
+- **release**: Bumped module/script version from `0.8.53` to `0.8.54`.
