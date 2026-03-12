@@ -7,7 +7,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATASETS_ROOT = PROJECT_ROOT / "datasets"
 
-_KNOWN_TRAIN_DATA_DIRS = {"UAI_UAP", "drone-vision-project", "megaset"}
+_KNOWN_TRAIN_DATA_DIRS = {"uaiuapdataset", "teknofest_01"}
 
 
 def _looks_like_train_data_dir(path: Path) -> bool:
@@ -41,8 +41,8 @@ def _find_nested_subdir(base: Path, subdir_name: str, max_depth: int = 6) -> Pat
 
 
 def _resolve_datasets_train_dir() -> Path:
-    """Resolve source dataset root. Default: datasets/TRAIN_DATA."""
-    preferred_name = (os.environ.get("UAV_DATASET_SUBDIR", "TRAIN_DATA") or "TRAIN_DATA").strip()
+    """Resolve source dataset root. Default: datasets/uaiuapdataset."""
+    preferred_name = (os.environ.get("UAV_DATASET_SUBDIR", "uaiuapdataset") or "uaiuapdataset").strip()
     preferred_path = DATASETS_ROOT / preferred_name
     if preferred_path.is_dir():
         return preferred_path
@@ -69,7 +69,7 @@ def _resolve_datasets_train_dir() -> Path:
     return preferred_path
 
 # Source directory for build_dataset (audit must scan the same path).
-# Primary layout: datasets/TRAIN_DATA.
+# Primary layout: datasets/uaiuapdataset.
 DATASETS_TRAIN_DIR = _resolve_datasets_train_dir()
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts" / "uav_model"
 
@@ -303,15 +303,15 @@ def auto_detect_hardware() -> tuple:
         "phase2_epochs": 7,
         "phase2_imgsz": imgsz,
         "phase2_batch": batch,
-        "phase2_mosaic": 0.3,
+        "phase2_mosaic": 0.0,  # Turn off mosaic to allow model to see real context in late stages
         "phase2_close_mosaic": 0,
-        "phase2_lr0": adamw_lr0 * 0.1,
+        "phase2_lr0": adamw_lr0 * 0.05,  # gentler learning rate for phase 2 (0.00005)
         "phase2_lrf": 0.01,
-        "phase2_copy_paste": 0.4,
+        "phase2_copy_paste": 0.0,  # avoid artificial artifacts ruining precision
         "phase2_degrees": 0.0,
-        "phase2_scale": 0.6,
-        "phase2_hsv_s": 0.9,
-        "phase2_hsv_v": 0.6,
+        "phase2_scale": 0.3,
+        "phase2_hsv_s": 0.3,  # much milder color jittering
+        "phase2_hsv_v": 0.3,
         "batch": batch,
         "imgsz": imgsz,
         "device": 0,
@@ -405,15 +405,15 @@ TRAIN_CONFIG = {
     "phase2_epochs": 7,
     "phase2_imgsz": 640,
     "phase2_batch": 4,
-    "phase2_mosaic": 0.3,
+    "phase2_mosaic": 0.0,
     "phase2_close_mosaic": 0,
-    "phase2_lr0": 0.0001,
+    "phase2_lr0": 0.00005,
     "phase2_lrf": 0.01,
-    "phase2_copy_paste": 0.4,
+    "phase2_copy_paste": 0.0,
     "phase2_degrees": 0.0,
-    "phase2_scale": 0.6,
-    "phase2_hsv_s": 0.9,
-    "phase2_hsv_v": 0.6,
+    "phase2_scale": 0.3,
+    "phase2_hsv_s": 0.3,
+    "phase2_hsv_v": 0.3,
     "batch": 4,           # Conservative for local 6GB VRAM
     "imgsz": 640,
     "device": 0,

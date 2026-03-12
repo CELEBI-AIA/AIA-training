@@ -7,15 +7,16 @@ VERSION = "dev"
 
 # Runtime configuration (only values needed to start a run)
 REPO_URL = "https://github.com/CELEBI-AIA/AIA-training.git"
-REPO_BRANCH = "main"
-# TRAIN_DATA.tar.gz: contents are UAI_UAP/, drone-vision-project/, megaset/ directly (no parent TRAIN_DATA folder)
-DRIVE_DATASET = "/content/drive/MyDrive/AIA/datasets/TRAIN_DATA.tar.gz"
+REPO_BRANCH = "finetune"
+# uaiuapdataset.tar.gz: contents are extracted and handled dynamically via build_dataset mappings.
+DRIVE_DATASET = "/content/drive/MyDrive/AIA/datasets/uaiuapdataset.tar.gz"
 LOCAL_CACHE = "/content/datasets_local"
 DRIVE_RUNS = "/content/drive/MyDrive/AIA/runs"
 DRIVE_UPLOAD = "/content/drive/MyDrive/AIA"  # best.pt upload destination
 TRAIN_SCRIPT = "uav_training/train.py"
 TWO_PHASE_TRAINING = True  # Default training profile: phase1 + phase2.
 FORCE_FRESH_START = True  # If True, ignore all existing checkpoints.
+FINETUNE_MODEL = "/content/drive/MyDrive/AIA/best_mAP50-0.944_mAP50-95-0.784.pt"  # Fine-tune base
 
 import subprocess  # noqa: E402
 import sys  # noqa: E402
@@ -793,6 +794,11 @@ if checkpoint:
         "--model", checkpoint,
         "--resume",
     ]
+elif FINETUNE_MODEL and os.path.isfile(FINETUNE_MODEL):
+    print(f"   Starting fine-tuning from pre-trained model: {FINETUNE_MODEL}", flush=True)
+    train_cmd = [sys.executable, "-u", train_script_path, "--model", FINETUNE_MODEL]
+    if TWO_PHASE_TRAINING:
+        train_cmd.append("--two-phase")
 else:
     print("   No checkpoint found or fresh start forced - starting fresh training", flush=True)
     train_cmd = [sys.executable, "-u", train_script_path]

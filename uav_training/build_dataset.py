@@ -43,44 +43,84 @@ from uav_training.config import (  # noqa: E402
     TRAIN_CONFIG,
     IMAGE_EXTENSIONS,
 )
-# Mapping configuration for datasets under DATASETS_TRAIN_DIR.
-# TRAIN_DATA.tar.gz extracts directly to UAI_UAP/, drone-vision-project/, megaset/ (no parent folder).
 MAPPINGS = {
-    # Main UAI/UAP dataset in TRAIN_DATA.tar.gz.
-    # names: ["UAI", "UAP"]
-    "UAI_UAP": {
-        "source_names": ["UAI", "UAP"],
-        "map": {
-            "UAI": 3,
-            "UAP": 2,
-        },
-        "oversample": 5,
-        "sampling_rate": 1.0,
-    },
+    # ---------------------------------------------------------
+    # TEKNOFEST UAI/UAP CUSTOM DATASETS
+    # Extract from uaiuapdataset.tar.gz
+    # ---------------------------------------------------------
 
-    # vehicle/human datasets
-    "drone-vision-project": {
-        "source_names": ["car", "pedestrian"],
-        "map": {
-            "car": 0,
-            "pedestrian": 1,
-        },
-        "oversample": 2,
+    # ---------------------------------------------------------
+    # TEKNOFEST UAI/UAP CUSTOM DATASETS
+    # Extract from uaiuapdataset.tar.gz
+    # ---------------------------------------------------------
+    "teknofest_01": {
+        "id_map": {0: 0, 1: 1, 2: 2, 3: 3},
         "sampling_rate": 1.0,
     },
-    "megaset": {
-        "source_names": ["vehicle", "pedestrian"],
-        "map": {
-            "vehicle": 0,
-            "pedestrian": 1,
-        },
-        "id_map": {0: 0, 1: 1},
-        "oversample": 3,
-        "human_extra_oversample": 3,  # Pure-human images get +3 passes (~5x) for stronger human focus.
-        "sampling_rate": 1.0,  # Process all images, class filtering is applied inside.
-        "smart_sample": True,
-        # Slightly downweight vehicle-only frames, keep all human frames.
-        "smart_sample_keep_prob": {0: 0.05, 1: 1.00, 2: 1.00, 3: 1.00},
+    "teknofest_02": {
+        "source_names": ["UAI", "UAP", "person", "vehicle"],
+        "map": {"UAI": 3, "UAP": 2, "person": 1, "vehicle": 0},
+        "sampling_rate": 1.0,
+    },
+    # teknofest_03 is deleted/duplicate
+    "teknofest_04": {
+        "source_names": ["uai", "uap"],
+        "map": {"uai": 3, "uap": 2},
+        "sampling_rate": 1.0,
+    },
+    "teknofest_05": {
+        "id_map": {0: 1, 1: 0, 2: 3, 3: 2},
+        "sampling_rate": 1.0,
+    },
+    "teknofest_06": {
+        "source_names": ["UAI", "UAP", "insan", "tasit"],
+        "map": {"UAI": 3, "UAP": 2, "insan": 1, "tasit": 0},
+        "sampling_rate": 1.0,
+    },
+    # teknofest_07 is deleted/duplicate
+    "teknofest_08": {
+        "source_names": ["Person", "Vehicle"],
+        "map": {"Person": 1, "Vehicle": 0},
+        "sampling_rate": 1.0,
+    },
+    "teknofest_09": {
+        "id_map": {0: 0, 1: 1, 2: 3, 3: 2},
+        "sampling_rate": 1.0,
+    },
+    "teknofest_10": {
+        "source_names": ["0", "1", "2_uap", "3_uai"],
+        "map": {"0": 0, "1": 1, "2_uap": 2, "3_uai": 3},
+        "sampling_rate": 1.0,
+    },
+    "teknofest_11": {
+        "source_names": ["person", "uai", "uap"],
+        "map": {"person": 1, "uai": 3, "uap": 2},
+        "sampling_rate": 1.0,
+    },
+    "teknofest_12": {
+        "source_names": ["insan", "tasit", "uai", "uap"],
+        "map": {"insan": 1, "tasit": 0, "uai": 3, "uap": 2},
+        "sampling_rate": 1.0,
+    },
+    # teknofest_13 is deleted/duplicate
+    "teknofest_14": {
+        "source_names": ["ambulans"],
+        "map": {"ambulans": 3},
+        "sampling_rate": 1.0,
+    },
+    "teknofest_15": {
+        "source_names": ["car", "insan", "uai", "uap"],
+        "map": {"car": 0, "insan": 1, "uai": 3, "uap": 2},
+        "sampling_rate": 1.0,
+    },
+    "teknofest_16": {
+        "source_names": ["Human", "UAI", "UAP", "Vehicle"],
+        "map": {"Human": 1, "UAI": 3, "UAP": 2, "Vehicle": 0},
+        "sampling_rate": 1.0,
+    },
+    "teknofest_17": {
+        "id_map": {0: 2, 1: 3},
+        "sampling_rate": 1.0,
     },
 }
 
