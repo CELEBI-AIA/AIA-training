@@ -282,7 +282,7 @@ _run("nvidia-smi", check=False)
 # Set environment variables BEFORE training script imports config.py
 os.environ["UAV_PROJECT_DIR"] = DRIVE_RUNS
 os.environ["DRIVE_UPLOAD_DIR"] = DRIVE_UPLOAD
-os.environ["UAV_DATASET_SUBDIR"] = "TRAIN_DATA"
+os.environ["UAV_DATASET_SUBDIR"] = "uaiuapdataset"
 
 # --- DataLoader thread limiter ---
 cpu_count = os.cpu_count() or 8
@@ -338,7 +338,7 @@ def _detect_train_root(cache_dir: str) -> str | None:
             return False
         return bool(child_dirs & expected_dirs)
 
-    expected_name = (os.environ.get("UAV_DATASET_SUBDIR", "TRAIN_DATA") or "TRAIN_DATA").strip()
+    expected_name = (os.environ.get("UAV_DATASET_SUBDIR", "uaiuapdataset") or "uaiuapdataset").strip()
 
     # 0) Direct-root layout:
     # /content/datasets_local/{UAI_UAP,drone-vision-project,megaset}
@@ -380,7 +380,7 @@ def _ensure_canonical_train_root(cache_dir: str, train_root: str | None) -> str 
     """Ensure cache_dir/TRAIN_DATA exists (symlink) even when archive extracted nested."""
     if not train_root:
         return None
-    expected_name = (os.environ.get("UAV_DATASET_SUBDIR", "TRAIN_DATA") or "TRAIN_DATA").strip()
+    expected_name = (os.environ.get("UAV_DATASET_SUBDIR", "uaiuapdataset") or "uaiuapdataset").strip()
     canonical = os.path.join(cache_dir, expected_name)
     train_root_abs = os.path.abspath(train_root)
     canonical_abs = os.path.abspath(canonical)
