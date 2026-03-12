@@ -520,3 +520,10 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **fix(colab_bootstrap)**: Corrected audit_report path under `artifacts/uav_model` and documented TRAIN_DATA.tar.gz direct-root layout in comments.
 - **docs(datasets,README)**: Simplified dataset reference to UAI_UAP, drone-vision-project, megaset and documented TRAIN_DATA archive layout and Colab/local paths.
 - **release**: Bumped module/script version from `0.8.51` to `0.8.52`.
+
+## 0.8.53 - 2026-03-12
+- **feat(build_dataset)**: Integrated the massive UAI/UAP multi-folder dataset `uaiuapdataset.tar.gz` composed of 17 different `teknofest_XX` subsets.
+- **feat(build_dataset)**: Implemented complex class mapping matrix (id_map vs source_names) per Teknofest subset to unify completely divergent label standards into canonical `[vehicle, human, uap, uai]`.
+- **feat(config)**: Optimized phase 2 hyperparams (`mosaic: 0.0`, limited HSV) to improve model recall without heavy color warping during final fine-tuning layers.
+- **fix(colab_bootstrap)**: Relocated dataset environmental variables (`UAV_DATASET_SUBDIR`) to natively extract and detect `uaiuapdataset` folder.
+- **release**: Bumped module/script version from `0.8.52` to `0.8.53`.

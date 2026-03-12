@@ -1,4 +1,4 @@
-# UAV Training — YOLO Object Detection (v0.8.51)
+# UAV Training — YOLO Object Detection (v0.8.52)
 
 YOLO11m (Ultralytics) tabanlı İHA görüntülerinden nesne tespit modülü. Teknofest yarışması için optimize edilmiş.
 
