@@ -282,12 +282,10 @@ def auto_detect_hardware() -> tuple:
     # Multi-scale OFF - variable sizes cause OOM with large batches
     multi_scale = False
 
-    # Dynamic cache: With larger datasets, caching in RAM often requires >190GB+.
-    # Safe fallback to "disk" instead of "ram" to prevent memory warnings.
-    if ram >= 250:
-        cache = "ram"
-    elif ram > 20:
-        cache = "disk"
+    # Let Ultralytics dynamically manage caching strategy automatically
+    # True means it will automatically cache in RAM if it fits, else it falls back.
+    if is_high_ram or ram > 20:
+        cache = True
     else:
         cache = False
 
