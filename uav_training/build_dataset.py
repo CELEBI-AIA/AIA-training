@@ -45,13 +45,50 @@ from uav_training.config import (  # noqa: E402
 )
 MAPPINGS = {
     # ---------------------------------------------------------
-    # TEKNOFEST UAI/UAP CUSTOM DATASETS
-    # Extract from uaiuapdataset.tar.gz
+    # ORIGINAL TRAIN_DATA DATASETS
+    # TRAIN_DATA.tar.gz: UAI_UAP/, drone-vision-project/, megaset/
     # ---------------------------------------------------------
+
+    # Main UAI/UAP dataset in TRAIN_DATA.tar.gz.
+    # names: ["UAI", "UAP"]
+    "UAI_UAP": {
+        "source_names": ["UAI", "UAP"],
+        "map": {
+            "UAI": 3,
+            "UAP": 2,
+        },
+        "oversample": 5,
+        "sampling_rate": 1.0,
+    },
+
+    # vehicle/human datasets
+    "drone-vision-project": {
+        "source_names": ["car", "pedestrian"],
+        "map": {
+            "car": 0,
+            "pedestrian": 1,
+        },
+        "oversample": 2,
+        "sampling_rate": 1.0,
+    },
+    "megaset": {
+        "source_names": ["vehicle", "pedestrian"],
+        "map": {
+            "vehicle": 0,
+            "pedestrian": 1,
+        },
+        "id_map": {0: 0, 1: 1},
+        "oversample": 3,
+        "human_extra_oversample": 3,  # Pure-human images get +3 passes (~5x) for stronger human focus.
+        "sampling_rate": 1.0,  # Process all images, class filtering is applied inside.
+        "smart_sample": True,
+        # Slightly downweight vehicle-only frames, keep all human frames.
+        "smart_sample_keep_prob": {0: 0.05, 1: 1.00, 2: 1.00, 3: 1.00},
+    },
 
     # ---------------------------------------------------------
     # TEKNOFEST UAI/UAP CUSTOM DATASETS
-    # Extract from uaiuapdataset.tar.gz
+    # From uaiuapdataset.tar.gz (merged into TRAIN_DATA)
     # ---------------------------------------------------------
     "teknofest_01": {
         "id_map": {0: 0, 1: 1, 2: 2, 3: 3},

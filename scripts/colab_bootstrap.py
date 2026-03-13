@@ -7,9 +7,9 @@ VERSION = "dev"
 
 # Runtime configuration (only values needed to start a run)
 REPO_URL = "https://github.com/CELEBI-AIA/AIA-training.git"
-REPO_BRANCH = "finetune"
-# uaiuapdataset.tar.gz: contents are extracted and handled dynamically via build_dataset mappings.
-DRIVE_DATASET = "/content/drive/MyDrive/AIA/datasets/uaiuapdataset.tar.gz"
+REPO_BRANCH = "main"
+# Combined dataset: TRAIN_DATA + uaiuapdataset merged into single archive.
+DRIVE_DATASET = "/content/drive/MyDrive/AIA/datasets/TRAIN_DATA_COMBINED.tar.gz"
 LOCAL_CACHE = "/content/datasets_local"
 DRIVE_RUNS = "/content/drive/MyDrive/AIA/runs"
 DRIVE_UPLOAD = "/content/drive/MyDrive/AIA"  # best.pt upload destination
@@ -282,7 +282,7 @@ _run("nvidia-smi", check=False)
 # Set environment variables BEFORE training script imports config.py
 os.environ["UAV_PROJECT_DIR"] = DRIVE_RUNS
 os.environ["DRIVE_UPLOAD_DIR"] = DRIVE_UPLOAD
-os.environ["UAV_DATASET_SUBDIR"] = "uaiuapdataset"
+os.environ["UAV_DATASET_SUBDIR"] = ""  # direct-root layout: all datasets at cache root
 
 # --- DataLoader thread limiter ---
 cpu_count = os.cpu_count() or 8
@@ -339,29 +339,34 @@ def _detect_train_root(cache_dir: str) -> str | None:
         # Allow nested generic folders if they match teknofest explicitly
         return any(d in expected_dirs or d.startswith("teknofest_") for d in child_dirs)
 
-    expected_name = (os.environ.get("UAV_DATASET_SUBDIR", "uaiuapdataset") or "uaiuapdataset").strip()
+    expected_name = (os.environ.get("UAV_DATASET_SUBDIR", "") or "").strip()
 
     # 0) Direct-root layout:
-    # /content/datasets_local/{UAI_UAP,drone-vision-project,megaset}
+    # /content/datasets_local/{UAI_UAP,drone-vision-project,megaset,teknofest_XX}
     if _looks_like_train_root(cache_dir):
         return cache_dir
 
-    # 1) Canonical location.
-    candidate = os.path.join(cache_dir, expected_name)
-    if _looks_like_train_root(candidate):
-        return candidate
+    # 1) TRAIN_DATA wrapper (combined archive extracts to TRAIN_DATA/ subdirectory).
+    train_data_candidate = os.path.join(cache_dir, "TRAIN_DATA")
+    if _looks_like_train_root(train_data_candidate):
+        return train_data_candidate
 
-    # 2) Common archive root patterns.
-    common_candidates = (
-        os.path.join(cache_dir, "dataset_extracted", expected_name),
-        os.path.join(cache_dir, "content", "dataset_extracted", expected_name),
-        os.path.join(cache_dir, "content", "datasets", expected_name),
-    )
-    for c in common_candidates:
-        if _looks_like_train_root(c):
-            return c
+    # 2) Explicit env-var subdirectory.
+    if expected_name:
+        candidate = os.path.join(cache_dir, expected_name)
+        if _looks_like_train_root(candidate):
+            return candidate
 
-    # 3) Bounded recursive fallback (handles unexpected tar top-level prefixes).
+    # 3) Common archive root patterns.
+    search_names = [n for n in (expected_name, "TRAIN_DATA") if n]
+    common_prefixes = ("dataset_extracted", "content/dataset_extracted", "content/datasets")
+    for prefix in common_prefixes:
+        for name in search_names:
+            c = os.path.join(cache_dir, prefix, name)
+            if _looks_like_train_root(c):
+                return c
+
+    # 4) Bounded recursive fallback (handles unexpected tar top-level prefixes).
     max_depth = int(os.environ.get("UAV_DATASET_SCAN_MAX_DEPTH", "6"))
     cache_abs = os.path.abspath(cache_dir)
     for root, dirs, _ in os.walk(cache_abs):
@@ -370,8 +375,9 @@ def _detect_train_root(cache_dir: str) -> str | None:
         if depth > max_depth:
             dirs[:] = []
             continue
-        if expected_name in dirs:
-            c = os.path.join(root, expected_name)
+        # Check every directory at this level
+        for d in dirs:
+            c = os.path.join(root, d)
             if _looks_like_train_root(c):
                 return c
     return None
@@ -381,16 +387,10 @@ def _ensure_canonical_train_root(cache_dir: str, train_root: str | None) -> str 
     """Ensure cache_dir/TRAIN_DATA exists (symlink) even when archive extracted nested."""
     if not train_root:
         return None
-    expected_name = (os.environ.get("UAV_DATASET_SUBDIR", "uaiuapdataset") or "uaiuapdataset").strip()
-    canonical = os.path.join(cache_dir, expected_name)
     train_root_abs = os.path.abspath(train_root)
-    canonical_abs = os.path.abspath(canonical)
     cache_abs = os.path.abspath(cache_dir)
 
-    if train_root_abs == canonical_abs:
-        return canonical
-
-    # Direct-root mode: avoid creating TRAIN_DATA -> cache_dir symlink loop.
+    # Direct-root mode: train_root == cache_dir (all datasets directly inside).
     if train_root_abs == cache_abs:
         print(
             f"  📦 [CACHE] Dataset root detected at cache root: {train_root_abs}",
@@ -398,6 +398,16 @@ def _ensure_canonical_train_root(cache_dir: str, train_root: str | None) -> str 
         )
         return train_root_abs
 
+    # train_root is already a direct child of cache_dir (e.g. cache_dir/TRAIN_DATA).
+    if os.path.dirname(train_root_abs) == cache_abs:
+        print(
+            f"  📦 [CACHE] Dataset root detected: {train_root_abs}",
+            flush=True,
+        )
+        return train_root_abs
+
+    # Deeply nested: create a symlink from cache_dir/TRAIN_DATA -> train_root for config.py
+    canonical = os.path.join(cache_dir, "TRAIN_DATA")
     try:
         if os.path.lexists(canonical):
             if os.path.islink(canonical) or os.path.isfile(canonical):
