@@ -93,71 +93,87 @@ MAPPINGS = {
     "teknofest_01": {
         "id_map": {0: 0, 1: 1, 2: 2, 3: 3},
         "sampling_rate": 1.0,
+        "oversample": 2,
     },
     "teknofest_02": {
         "source_names": ["UAI", "UAP", "person", "vehicle"],
         "map": {"UAI": 3, "UAP": 2, "person": 1, "vehicle": 0},
         "sampling_rate": 1.0,
+        "smart_sample": True,  # 77K vehicle bbox → downsample to ~10%
+        "smart_sample_keep_prob": {0: 0.10, 1: 1.00, 2: 1.00, 3: 1.00},
     },
     # teknofest_03 is deleted/duplicate
     "teknofest_04": {
         "source_names": ["uai", "uap"],
         "map": {"uai": 3, "uap": 2},
         "sampling_rate": 1.0,
+        "oversample": 5,  # tiny pure UAI/UAP dataset (187 imgs)
     },
     "teknofest_05": {
         "id_map": {0: 1, 1: 0, 2: 3, 3: 2},
         "sampling_rate": 1.0,
+        "oversample": 2,
     },
     "teknofest_06": {
         "source_names": ["UAI", "UAP", "insan", "tasit"],
         "map": {"UAI": 3, "UAP": 2, "insan": 1, "tasit": 0},
         "sampling_rate": 1.0,
+        "smart_sample": True,  # 295K vehicle bbox → downsample to ~10%
+        "smart_sample_keep_prob": {0: 0.10, 1: 1.00, 2: 1.00, 3: 1.00},
     },
     # teknofest_07 is deleted/duplicate
     "teknofest_08": {
         "source_names": ["Person", "Vehicle"],
         "map": {"Person": 1, "Vehicle": 0},
         "sampling_rate": 1.0,
+        "oversample": 1,  # vehicle/human only, already enough vehicle data
     },
     "teknofest_09": {
         "id_map": {0: 0, 1: 1, 2: 3, 3: 2},
         "sampling_rate": 1.0,
+        "oversample": 2,
     },
     "teknofest_10": {
         "source_names": ["0", "1", "2_uap", "3_uai"],
         "map": {"0": 0, "1": 1, "2_uap": 2, "3_uai": 3},
         "sampling_rate": 1.0,
+        "oversample": 3,  # small UAI/UAP dataset (664 imgs)
     },
     "teknofest_11": {
         "source_names": ["person", "uai", "uap"],
         "map": {"person": 1, "uai": 3, "uap": 2},
         "sampling_rate": 1.0,
+        "oversample": 3,  # small UAI/UAP dataset (1.9K imgs)
     },
     "teknofest_12": {
         "source_names": ["insan", "tasit", "uai", "uap"],
         "map": {"insan": 1, "tasit": 0, "uai": 3, "uap": 2},
         "sampling_rate": 1.0,
+        "oversample": 3,  # small UAI/UAP dataset (450 imgs)
     },
     # teknofest_13 is deleted/duplicate
     "teknofest_14": {
         "source_names": ["ambulans"],
         "map": {"ambulans": 3},
         "sampling_rate": 1.0,
+        "oversample": 5,  # tiny pure UAI dataset (54 imgs)
     },
     "teknofest_15": {
         "source_names": ["car", "insan", "uai", "uap"],
         "map": {"car": 0, "insan": 1, "uai": 3, "uap": 2},
         "sampling_rate": 1.0,
+        "oversample": 3,  # good UAP/UAI ratio (2.7K imgs)
     },
     "teknofest_16": {
         "source_names": ["Human", "UAI", "UAP", "Vehicle"],
         "map": {"Human": 1, "UAI": 3, "UAP": 2, "Vehicle": 0},
         "sampling_rate": 1.0,
+        "oversample": 3,  # small UAI/UAP dataset (130 imgs)
     },
     "teknofest_17": {
         "id_map": {0: 2, 1: 3},
         "sampling_rate": 1.0,
+        "oversample": 5,  # pure UAP/UAI dataset (4.1K imgs)
     },
 }
 
