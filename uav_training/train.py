@@ -745,8 +745,8 @@ def train(epochs=None, batch=None, device=None, model_path=None, resume=False, t
                 resume=resume,
             )
 
-        phase1_epochs = int(TRAIN_CONFIG.get("phase1_epochs", 85))
-        phase2_epochs = int(TRAIN_CONFIG.get("phase2_epochs", 15))
+        phase1_epochs = int(TRAIN_CONFIG.get("phase1_epochs", 25))
+        phase2_epochs = int(TRAIN_CONFIG.get("phase2_epochs", 5))
         if epochs is not None and int(epochs) > 1:
             # Keep phase-2 length stable, assign the remainder to phase-1.
             phase2_epochs = min(phase2_epochs, int(epochs) - 1)
@@ -848,7 +848,7 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, help="cuda device, i.e. 0 or 0,1,2,3 or cpu")
     parser.add_argument("--model", type=str, help="Model path or size (e.g. yolo11m.pt)")
     parser.add_argument("--resume", action="store_true", help="Resume training from last checkpoint")
-    parser.add_argument("--two-phase", action="store_true", help="Run 50+15 two-phase training profile")
+    parser.add_argument("--two-phase", action="store_true", help="Run 25+5 two-phase training profile")
     parser.add_argument("--allow-leakage", action="store_true", help="Override data leakage check from audit report")
 
     args = parser.parse_args()

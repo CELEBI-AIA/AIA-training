@@ -74,9 +74,9 @@ pip install -r requirements.txt
 
 # Train (UAV Detection)
 cd uav_training
-python train.py --epochs 65 --batch 4 --device 0
+python train.py --epochs 30 --batch 4 --device 0
 
-# Recommended two-phase profile (50 + 15)
+# Recommended two-phase profile (25 + 5)
 python train.py --two-phase --batch 4 --device 0
 
 # Resume from checkpoint
@@ -112,7 +112,7 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 |---------------|--------------------------------------------|
 | Model         | `yolo11m.pt` (20.1M params, 68 GFLOPs)    |
 | Image Size    | 1024 (A100/H100) / 640 (T4/L4)             |
-| Epochs        | 65 (Phase1: 50 + Phase2: 15, Patience: 30) |
+| Epochs        | 30 (Phase1: 25 + Phase2: 5, Patience: 10) |
 | Optimizations | `optimizer=AdamW`, `lr0=0.001`, `close_mosaic=5` |
 | Augmentations | `scale=0.4`, `copy_paste=0.3`, `flipud=0.5` |
 | AMP (BF16)    | ✅ Enabled (`amp=True`, Ampere+ GPU'da Ultralytics otomatik BF16 seçer) |

@@ -14,8 +14,8 @@ LOCAL_CACHE = "/content/datasets_local"
 DRIVE_RUNS = "/content/drive/MyDrive/AIA/runs"
 DRIVE_UPLOAD = "/content/drive/MyDrive/AIA"  # best.pt upload destination
 TRAIN_SCRIPT = "uav_training/train.py"
-TWO_PHASE_TRAINING = True  # Default training profile: phase1 + phase2.
-FORCE_FRESH_START = True  # If True, ignore all existing checkpoints.
+TWO_PHASE_TRAINING = True  # Run 25+5 optimized profile by default (M-01)
+FORCE_FRESH_START = False  # Ignore existing checkpoints and start fresh (B-05)
 FINETUNE_MODEL = "/content/drive/MyDrive/AIA/best_mAP50-0.944_mAP50-95-0.784.pt"  # Fine-tune base
 
 import subprocess  # noqa: E402
@@ -971,4 +971,3 @@ if log_files:
         print(f"     -> {os.path.basename(lf)} ({size_kb:.0f} KB)")
 
 _banner(" Training complete - all outputs saved to Google Drive")
-

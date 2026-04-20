@@ -299,9 +299,9 @@ def auto_detect_hardware() -> tuple:
     compile_mode = "reduce-overhead" if vram >= 35 else False
 
     config_overrides = {
-        "epochs": 32,            # 25 + 7 two-phase profile
+        "epochs": 30,            # 25 + 5 two-phase profile
         "phase1_epochs": 25,
-        "phase2_epochs": 7,
+        "phase2_epochs": 5,
         "phase2_imgsz": imgsz,
         "phase2_batch": batch,
         "phase2_mosaic": 0.0,  # Turn off mosaic to allow model to see real context in late stages
@@ -321,17 +321,15 @@ def auto_detect_hardware() -> tuple:
         "amp": True,
         "cache": cache,
         "exist_ok": True,
-        "patience": 15,
+        "patience": 10,
         "cos_lr": True,
         "close_mosaic": 5,
         "overlap_mask": True,
 
-        # Augmentation profile (UAV and small-object optimized, top-down bias).
-        # For top-down aerial videos, slightly lower mosaic and flipud
-        # reduce unrealistic composites and extreme vertical flips.
-        "mosaic": 0.7,
-        "scale": 0.4,
-        "copy_paste": 0.3,
+        # ── Augmentation (UAV & Small Object Optimized) ──
+        "mosaic": 1.0,
+        "scale": 0.5,
+        "copy_paste": 0.4,
         "copy_paste_mode": "flip",
         "flipud": 0.15,
         "fliplr": 0.5,
@@ -383,7 +381,7 @@ def auto_detect_hardware() -> tuple:
     bf16_ok = torch.cuda.is_bf16_supported() if torch.cuda.is_available() else False
     print(f"  BF16      : {'Supported' if bf16_ok else 'Not supported'}")
     print("  TF32      : Enabled (matmul + cuDNN)")
-    print("  Epochs     : 32 (phase1=25, phase2=7)")
+    print("  Epochs     : 30 (phase1=25, phase2=5)")
     print("  AMP        : True (BF16 auto-selected on Ampere+)")
     print(f"{'='*60}\n", flush=True)
 
@@ -401,9 +399,9 @@ else:
 
 # Default config (local / fallback)
 TRAIN_CONFIG = {
-    "epochs": 32,
+    "epochs": 30,
     "phase1_epochs": 25,
-    "phase2_epochs": 7,
+    "phase2_epochs": 5,
     "phase2_imgsz": 640,
     "phase2_batch": 4,
     "phase2_mosaic": 0.0,
@@ -425,13 +423,13 @@ TRAIN_CONFIG = {
     "amp": True,
     "cache": "disk",
     "exist_ok": True,
-    "patience": 15,
+    "patience": 10,
     "cos_lr": True,
     "close_mosaic": 5,
     "overlap_mask": True,
-    "mosaic": 0.7,
-    "scale": 0.4,
-    "copy_paste": 0.3,
+    "mosaic": 1.0,
+    "scale": 0.5,
+    "copy_paste": 0.4,
     "copy_paste_mode": "flip",
     "flipud": 0.15,
     "fliplr": 0.5,
@@ -482,4 +480,3 @@ def ensure_colab_config() -> None:
     except Exception as e:
         print(f"⚠️ WARN Auto hardware detection failed: {e}", flush=True)
         print("  Falling back to default config")
-

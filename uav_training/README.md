@@ -18,7 +18,7 @@ YOLO11m (Ultralytics) tabanlı İHA görüntülerinden nesne tespit modülü. Te
 | `config.py` | Paths, class definitions, hyperparameters, IMAGE_EXTENSIONS. Colab'da `ensure_colab_config()` ile lazy hardware detection. |
 | `audit.py` | `datasets/` (UAI_UAP, drone-vision-project, megaset) tarar, audit raporu üretir. |
 | `build_dataset.py` | Birden fazla dataset'i birleştirir → tek YOLO formatı, sınıf eşlemesi, orphan/duplicate cleanup. |
-| `train.py` | YOLO11m eğitimi, auto-resume, iki fazlı profil (50+15), leakage denetimi. |
+| `train.py` | YOLO11m eğitimi, auto-resume, iki fazlı profil (25+5), leakage denetimi. |
 | `val_utils.py` | Per-class AP50, temporal leakage check. |
 | `inference.py` | Örnek görüntülerde hızlı inference testi. |
 | `visualize_dataset.py` | Bounding box görselleştirme; `--split train|val|test` ile split seçimi. |
@@ -37,9 +37,9 @@ python audit.py
 python build_dataset.py
 
 # 3. Train (single phase)
-python train.py --epochs 65 --batch 4 --device 0
+python train.py --epochs 30 --batch 4 --device 0
 
-# 3b. Train (önerilen iki fazlı profil: 50 + 15)
+# 3b. Train (önerilen iki fazlı profil: 25 + 5)
 python train.py --two-phase --batch 4 --device 0
 
 # 4. Resume
@@ -60,9 +60,9 @@ python inference.py --model path/to/best.pt --source path/to/images
 
 ```python
 TRAIN_CONFIG = {
-    "epochs": 65,
-    "phase1_epochs": 50,
-    "phase2_epochs": 15,
+    "epochs": 30,
+    "phase1_epochs": 25,
+    "phase2_epochs": 5,
     "phase2_imgsz": 896,
     "phase2_mosaic": 0.0,
     "phase2_lr0": 0.0001,   # Fine-tuning için Phase-1'den düşük
@@ -73,7 +73,7 @@ TRAIN_CONFIG = {
     "workers": 8,
     "amp": True,            # Mixed precision (BF16 Ampere+)
     "cache": "disk",       # Local default; Colab'da RAM/disk/False dinamik
-    "patience": 30,
+    "patience": 10,
     "cos_lr": True,
     "optimizer": "AdamW",
     "lr0": 0.001,

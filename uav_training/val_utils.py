@@ -13,7 +13,7 @@ TARGET_THRESHOLDS = {
 
 def run_per_class_val(model_path: str, data_path: str, split: str = "val", verbose: bool = True) -> dict:
     """
-    Run validation and return per-class AP50.
+    Run validation and return per-class AP50 and AP50-95.
     Raises FileNotFoundError if dataset.yaml not found.
     """
     try:
@@ -30,29 +30,55 @@ def run_per_class_val(model_path: str, data_path: str, split: str = "val", verbo
     metrics = model.val(data=str(yaml_path), split=split, verbose=verbose)
 
     class_names = ["vehicle", "human", "uap", "uai"]
-    maps = getattr(metrics.box, "ap50", None)
-    if maps is None:
-        maps = [0.0] * 4
-    if not hasattr(maps, "__iter__"):
-        maps = [float(maps)] * 4
+    ap50 = getattr(metrics.box, "ap50", None)
+    ap50_95 = getattr(metrics.box, "maps", None)
 
-    result = dict(zip(class_names, [float(m) for m in maps[:4]]))
+    if ap50 is None:
+        ap50 = [0.0] * 4
+    if ap50_95 is None:
+        ap50_95 = [0.0] * 4
+
+    if not hasattr(ap50, "__iter__"):
+        ap50 = [float(ap50)] * 4
+    if not hasattr(ap50_95, "__iter__"):
+        ap50_95 = [float(ap50_95)] * 4
+
+    result = {
+        cls: {
+            "ap50": float(ap50[idx]) if idx < len(ap50) else 0.0,
+            "ap50_95": float(ap50_95[idx]) if idx < len(ap50_95) else 0.0,
+        }
+        for idx, cls in enumerate(class_names)
+    }
     return result
 
 def print_per_class_report(result: dict) -> None:
-    """Print per-class mAP50 with thresholds."""
+    """Print per-class mAP50 and mAP50-95 with thresholds."""
     print("\n" + "=" * 50, flush=True)
-    print("  📊 PER-CLASS mAP50", flush=True)
+    print("  📊 PER-CLASS mAP (AP50 / AP50-95)", flush=True)
     print("=" * 50, flush=True)
-    for name, ap50 in result.items():
+    ap50_by_class = {}
+    for name, value in result.items():
+        if isinstance(value, dict):
+            ap50 = float(value.get("ap50", 0.0))
+            ap50_95 = float(value.get("ap50_95", 0.0))
+        else:
+            # Backward compatibility with older tests/callers.
+            ap50 = float(value)
+            ap50_95 = 0.0
+        ap50_by_class[name] = ap50
         min_ok, target = TARGET_THRESHOLDS.get(name, (0.0, 0.0))
         status = "✅ OK" if ap50 >= min_ok else "LOW"
         if ap50 < min_ok:
             status += f" (min={min_ok})"
-        print(f"  {name:<10}: {ap50:.4f}  [{status}]  (target: {target})", flush=True)
+        print(
+            f"  {name:<10}: AP50={ap50:.4f} | AP50-95={ap50_95:.4f}  "
+            f"[{status}]  (target AP50: {target})",
+            flush=True,
+        )
     print("=" * 50, flush=True)
 
-    low = [n for n, v in result.items() if v < TARGET_THRESHOLDS.get(n, (0, 0))[0]]
+    low = [n for n, v in ap50_by_class.items() if v < TARGET_THRESHOLDS.get(n, (0, 0))[0]]
     if low:
         print(f"\nUYARI: {', '.join(low)} hedefin altinda.", flush=True)
         print("\nPhase 2'de dinamik augmentasyon (copy_paste) kullanilabilir.", flush=True)
@@ -88,4 +114,3 @@ def check_temporal_leakage(dataset_dir) -> dict:
         "train_stems": len(train_stems),
         "val_stems": len(val_stems),
     }
-

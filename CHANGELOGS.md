@@ -532,3 +532,17 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **fix(audit)**: Made audit aware of `build_dataset.py` MAPPINGS `id_map` entries so datasets with numeric YAML class names (teknofest_01, _05, _09, _10, _14) are correctly marked as INCLUDE instead of SKIP.
 - **fix(colab_bootstrap)**: Added `--allow-leakage` flag to bypass known teknofest_17 split overlap; updated `_looks_like_train_root` to detect `teknofest_*` subdirectories.
 - **release**: Bumped module/script version from `0.8.53` to `0.8.54`.
+
+## 0.8.55 - 2026-04-20
+- **perf(training)**: Updated default training profile to 30 total epochs with two-phase split 25+5 (epochs=30, phase1_epochs=25, phase2_epochs=5) in uav_training/config.py.
+- **perf(training)**: Reduced early-stopping window from patience=30 to patience=10 to stop non-improving runs earlier and save GPU time.
+- **docs(training-config)**: Synced profile references in README.md, uav_training/README.md, uav_training/train.py help text, and scripts/colab_bootstrap.py comments to match the new defaults.
+
+## 0.8.56 - 2026-04-20
+- **feat(training-config)**: Increased default augmentation strength in `uav_training/config.py` with `scale: 0.4 -> 0.5` and `copy_paste: 0.3 -> 0.4` to improve UAP/UAI recall during the main training phase.
+- **note(training-config)**: Left phase-2 augmentation values unchanged so the final refinement stage remains closer to natural scene statistics while human false-positive risk is monitored separately.
+
+## 0.8.57 - 2026-04-20
+- **feat(validation-report)**: Extended per-class validation output in `uav_training/val_utils.py` to return both AP50 and AP50-95, while keeping backward compatibility for older callers.
+- **feat(validation-cli)**: Added optional markdown/text report export to `scripts/run_per_class_val.py` so evaluation artifacts can be saved directly from the CLI.
+- **feat(dataset-curation)**: Added `scripts/curate_competition_test_split.py` to build a competition-like test split, sanitize YOLO labels, and emit a JSON curation summary for review.
