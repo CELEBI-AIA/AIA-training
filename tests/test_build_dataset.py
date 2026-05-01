@@ -1,5 +1,5 @@
 import pytest
-from uav_training.build_dataset import resolve_target_split, _assert_non_empty_output
+from uav_training.build_dataset import MAPPINGS, resolve_target_split, _assert_non_empty_output
 
 
 def test_resolve_target_split_default_policy():
@@ -36,3 +36,15 @@ def test_assert_non_empty_output_passes_with_train_and_val_images(tmp_path):
     (train_images / "a.jpg").write_bytes(b"x")
     (val_images / "b.jpg").write_bytes(b"x")
     _assert_non_empty_output(tmp_path, tmp_path)
+
+
+def test_thyz_2026_auto_labeled_mapping_is_canonical_uap_uai_only():
+    mapping = MAPPINGS["THYZ_2026_UAP_UAI_auto_labeled"]
+    assert mapping["id_map"] == {2: 2, 3: 3}
+    assert mapping["oversample"] >= 5
+
+
+def test_thyz_2026_augmented_mapping_is_train_weighted_canonical_uap_uai_only():
+    mapping = MAPPINGS["THYZ_2026_UAP_UAI_augmented"]
+    assert mapping["id_map"] == {2: 2, 3: 3}
+    assert mapping["oversample"] >= 2

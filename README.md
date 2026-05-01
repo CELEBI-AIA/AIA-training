@@ -100,7 +100,7 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 
 ### Pipeline
 
-1. `audit.py` — `datasets/` altındaki UAI_UAP, drone-vision-project, megaset klasörlerini tarar
+1. `audit.py` — `datasets/` altındaki UAI_UAP, drone-vision-project, megaset ve 2026 kaynak klasörlerini tarar
 2. `build_dataset.py` — Birden fazla dataset'i birleştirir (class remapping, smart sampling, orphan/duplicate cleanup)
 3. `train.py` — YOLO11m eğitimi (auto-resume, torch.compile, mAP-based best.pt rename)
 4. `inference.py` — Validation görüntülerinde smoke test
@@ -114,7 +114,7 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 | Image Size    | 1024 (A100/H100) / 640 (T4/L4)             |
 | Epochs        | 30 (Phase1: 25 + Phase2: 5, Patience: 10) |
 | Optimizations | `optimizer=AdamW`, `lr0=0.001`, `close_mosaic=5` |
-| Augmentations | `scale=0.4`, `copy_paste=0.3`, `flipud=0.5` |
+| Augmentations | `scale=0.5`, `copy_paste=0.4`, `flipud=0.15` |
 | AMP (BF16)    | ✅ Enabled (`amp=True`, Ampere+ GPU'da Ultralytics otomatik BF16 seçer) |
 | torch.compile | ✅ VRAM ≥35GB **ve** Python 3.10+ için `reduce-overhead` (3.12 desteklenir), diğer durumlarda kapalı |
 | Cache         | Dinamik (High RAM >120GB: `ram`, Normal ~80GB: `disk`, düşük: off) |
@@ -142,6 +142,8 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 | Dataset               | Oversample | Smart Sample |
 |-----------------------|------------|--------------|
 | UAI_UAP               | 5x         | —            |
+| THYZ_2026_UAP_UAI_auto_labeled | 6x | —            |
+| THYZ_2026_UAP_UAI_augmented | 2x | bbox-safe offline augmentation |
 | drone-vision-project  | 3x         | —            |
 | megaset (24k images)   | 5x         | ✅ 100% human, 30% vehicle |
 
@@ -194,5 +196,3 @@ YOLO11m (Ultralytics) tabanlı nesne tespit eğitimi.
 ## 📄 License
 
 [MIT](LICENSE)
-
-

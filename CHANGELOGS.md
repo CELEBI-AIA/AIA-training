@@ -546,3 +546,28 @@ Version format: UAV module uses `0.8.XX` (e.g. 0.8.35). Historical entries may u
 - **feat(validation-report)**: Extended per-class validation output in `uav_training/val_utils.py` to return both AP50 and AP50-95, while keeping backward compatibility for older callers.
 - **feat(validation-cli)**: Added optional markdown/text report export to `scripts/run_per_class_val.py` so evaluation artifacts can be saved directly from the CLI.
 - **feat(dataset-curation)**: Added `scripts/curate_competition_test_split.py` to build a competition-like test split, sanitize YOLO labels, and emit a JSON curation summary for review.
+
+## 0.8.58 - 2026-04-24
+- **docs(validation-report)**: Added `artifacts/uav_model/per_class_phase1_best_report.md` documenting the Phase 1 best per-class validation attempt and the missing local `dataset.yaml` blocker.
+
+## 0.8.59 - 2026-04-30
+- **feat(dataset-2026)**: Added `scripts/extract_thyz_2026_uap_uai_candidates.py` to extract high-confidence UAP/UAİ YOLO candidates from the official 2026 TEKNOFEST sample video.
+- **feat(build_dataset)**: Added optional `THYZ_2026_UAP_UAI_auto_labeled` source mapping with canonical `2=uap`, `3=uai` labels and `oversample: 6`.
+- **docs(dataset-2026)**: Documented the 2026 sample-video source and updated training docs to reflect the active augmentation profile.
+
+## 0.8.60 - 2026-04-30
+- **feat(dataset-2026)**: Added `scripts/augment_thyz_2026_uap_uai.py` for bbox-safe offline augmentation of the scarce 2026 UAP/UAİ frames.
+- **feat(build_dataset)**: Added `THYZ_2026_UAP_UAI_augmented` as a canonical UAP/UAİ source with `oversample: 2`, while leaving validation on natural frames.
+- **docs(dataset-2026)**: Documented the offline augmentation techniques and dataset source.
+
+## 0.8.61 - 2026-04-30
+- **feat(dataset-2026)**: Increased default 2026 offline augmentation from 8+4 variants to 16+8 variants and added cross-scene copy-paste onto other natural 2026 frames.
+- **docs(dataset-2026)**: Documented cross-scene copy-paste as part of the 2026 augmentation profile.
+
+## 0.8.62 - 2026-05-01
+- **fix(dataset-2026)**: Tightened 2026 offline copy-paste augmentation by pasting only marker-colored pixels instead of rectangular padded patches.
+- **fix(dataset-2026)**: Recomputed pasted-object boxes from the transformed marker box instead of the padded patch extent, reducing loose labels and artificial background blocks.
+- **fix(dataset-2026)**: Added a ground-like placement filter so synthetic pasted markers avoid bright roofs, cars, and other implausible surfaces.
+- **fix(dataset-2026)**: Dropped heavily clipped or extreme-aspect augmented boxes after geometric transforms to remove edge-strip labels.
+- **perf(dataset-2026)**: Cached source frames during augmentation generation and made the default variant count more conservative (`10+5`) for higher precision per generated sample.
+- **release**: Bumped UAV training module version from `0.8.61` to `0.8.62`.

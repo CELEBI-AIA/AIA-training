@@ -77,6 +77,24 @@ Build sırasında uygun/uygun olmayan varyantlar aynı hedef sınıfa **birleşt
 
 UAI/UAP iniş alanı dataseti. `oversample: 5`.
 
+### 1.1. THYZ_2026_UAP_UAI_auto_labeled
+
+| Orijinal İsim | → Hedef ID | Hedef Sınıf |
+|---------------|:----------:|-------------|
+| uap           | **2**      | uap         |
+| uai           | **3**      | uai         |
+
+2026 resmi TEKNOFEST örnek videosundan (`THYZ_2026_Ornek_Veri_1.MP4`) çıkarılan yüksek güvenli UAP/UAİ marker kareleri. Üretim betiği: `scripts/extract_thyz_2026_uap_uai_candidates.py`. Label dosyaları canonical YOLO id ile yazılır (`2=uap`, `3=uai`), build tarafında `oversample: 6`.
+
+### 1.2. THYZ_2026_UAP_UAI_augmented
+
+| Orijinal İsim | → Hedef ID | Hedef Sınıf |
+|---------------|:----------:|-------------|
+| uap           | **2**      | uap         |
+| uai           | **3**      | uai         |
+
+`THYZ_2026_UAP_UAI_auto_labeled` train split'inden üretilen bbox-safe offline augmentation dataseti. Üretim betiği: `scripts/augment_thyz_2026_uap_uai.py`. Teknikler: focused crop, bbox reprojection ile affine, marker-mask tabanlı in-scene/cross-scene copy-paste, brightness/contrast/HSV jitter, sensor noise, motion/defocus blur, bbox-safe cutout. Validation split özellikle üretilmez; metrikler doğal frame'lerde kalır. Build tarafında `oversample: 2`.
+
 ### 2. drone-vision-project
 
 | Orijinal İsim | → Hedef ID | Hedef Sınıf |
