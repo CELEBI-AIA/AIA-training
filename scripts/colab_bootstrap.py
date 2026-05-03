@@ -8,8 +8,13 @@ VERSION = "dev"
 # Runtime configuration (only values needed to start a run)
 REPO_URL = "https://github.com/CELEBI-AIA/AIA-training.git"
 REPO_BRANCH = "main"
-# Combined dataset: TRAIN_DATA + uaiuapdataset merged into single archive.
-DRIVE_DATASET = "/content/drive/MyDrive/AIA/datasets/TRAIN_DATA_COMBINED.tar.gz"
+# Dataset archives on Drive — her biri ayrı zip/tar.gz olarak tutulur,
+# Colab runtime'da LOCAL_CACHE'e çıkarılır ve build_dataset.py birleştirir.
+# Desteklenen formatlar: .tar.gz, .tgz, .zip
+DRIVE_DATASETS = [
+    "/content/drive/MyDrive/AIA/datasets/TRAIN_DATA_COMBINED.tar.gz",
+    "/content/drive/MyDrive/AIA/datasets/Label_roboflow_bbox.zip",
+]
 LOCAL_CACHE = "/content/datasets_local"
 DRIVE_RUNS = "/content/drive/MyDrive/AIA/runs"
 DRIVE_UPLOAD = "/content/drive/MyDrive/AIA"  # best.pt upload destination
@@ -130,21 +135,22 @@ drive.mount("/content/drive", force_remount=_force_remount)
 
 DRIVE_UPLOAD = _resolve_drive_path(DRIVE_UPLOAD)
 DRIVE_RUNS = _resolve_drive_path(DRIVE_RUNS)
-DRIVE_DATASET = _resolve_drive_path(DRIVE_DATASET)
+DRIVE_DATASETS = [_resolve_drive_path(p) for p in DRIVE_DATASETS]
 
-if not os.path.isfile(DRIVE_DATASET):
+missing = [p for p in DRIVE_DATASETS if not os.path.isfile(p)]
+if missing:
     raise FileNotFoundError(
-        f"Dataset archive not found at {DRIVE_DATASET}. "
-        "Upload your TRAIN_DATA.tar.gz to Google Drive first."
+        "Dataset archive(s) not found on Drive:\n" +
+        "\n".join(f"  - {p}" for p in missing) +
+        "\nUpload them to Google Drive first."
     )
 
 os.makedirs(DRIVE_RUNS, exist_ok=True)
 os.makedirs(DRIVE_UPLOAD, exist_ok=True)
 print("  ✅ OK Drive mounted", flush=True)
-print(f"  ✅ OK Dataset archive: {DRIVE_DATASET}")
-# Print archive size
-tar_size = os.path.getsize(DRIVE_DATASET) / (1024**3)
-print(f"  ✅ OK Archive size: {tar_size:.2f} GB")
+for _ds_path in DRIVE_DATASETS:
+    _ds_gb = os.path.getsize(_ds_path) / (1024**3)
+    print(f"  ✅ OK Dataset archive: {_ds_path} ({_ds_gb:.2f} GB)")
 print(f"  ✅ OK Runs dir: {DRIVE_RUNS}")
 print(f"  ✅ OK Upload dir: {DRIVE_UPLOAD}")
 
@@ -311,14 +317,15 @@ print("  ✅ OK Training output -> /content/runs/ (local SSD)", flush=True)
 print("  ✅ OK Datasets dir -> /content/datasets_local/ (local SSD)", flush=True)
 print(f"  ✅ OK Post-training sync -> {DRIVE_RUNS} (Google Drive)", flush=True)
 
-# Step 5: Stage dataset archive to local SSD, extract, verify, and clean temporary files.
-_banner("5/8 - Dataset to local SSD (DOWNLOAD -> EXTRACT -> VERIFY)")
+# Step 5: Stage dataset archives to local SSD, extract, verify.
+# DRIVE_DATASETS listesindeki her zip/tar.gz ayrı ayrı çıkarılır,
+# hepsi LOCAL_CACHE altında yan yana durur, build_dataset.py birleştirir.
+_banner("5/8 - Datasets to local SSD (DOWNLOAD -> EXTRACT -> VERIFY)")
 
 os.makedirs(LOCAL_CACHE, exist_ok=True)
 
 CACHE_MARKER = os.path.join(LOCAL_CACHE, ".done")
 NCPU = os.cpu_count() or 2
-LOCAL_TAR = "/content/TRAIN_DATA.tar.gz"
 t0 = time.time()
 existing = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
 
@@ -328,7 +335,7 @@ def _detect_train_root(cache_dir: str) -> str | None:
     def _looks_like_train_root(path: str) -> bool:
         if not os.path.isdir(path):
             return False
-        expected_dirs = {"UAI_UAP", "drone-vision-project", "megaset"}
+        expected_dirs = {"UAI_UAP", "drone-vision-project", "megaset", "Label_roboflow"}
         try:
             child_dirs = {
                 d for d in os.listdir(path)
@@ -439,15 +446,14 @@ if train_root and existing > 5000 and not os.path.isfile(CACHE_MARKER):
         flush=True,
     )
 
-# Fast path: if dataset is already materialized on local SSD, skip tool install
-# and all Drive->SSD copy/extract work.
+# Fast path: all archives already extracted on local SSD.
 if train_root and existing > 5000 and os.path.isfile(CACHE_MARKER):
     print(f"  📦 [CACHE] Local SSD dataset already ready ({existing} files) - SKIP copy/extract", flush=True)
     print(f"  📦 [CACHE] Dataset root detected: {train_root}", flush=True)
 else:
     # Install extraction tools only when download/extract may be needed.
     print("  🧰 [SETUP] Installing extraction tools ...", flush=True)
-    _run("apt-get update -qq && apt-get install -y pigz pv eatmydata 2>&1 | tail -3", check=False)
+    _run("apt-get update -qq && apt-get install -y pigz pv eatmydata unzip 2>&1 | tail -3", check=False)
 
     if os.path.isfile(CACHE_MARKER) and existing > 5000:
         train_root = _detect_train_root(LOCAL_CACHE)
@@ -456,285 +462,174 @@ else:
             print(f"  📦 [CACHE] Cache complete ({existing} files) - SKIP", flush=True)
             print(f"  📦 [CACHE] Dataset root detected: {train_root}", flush=True)
         else:
-            print("  ⚠️ WARN Cache marker exists but configured dataset root not found. Rebuilding...", flush=True)
+            print("  ⚠️ WARN Cache marker exists but dataset root not found. Rebuilding...", flush=True)
             if os.path.isfile(CACHE_MARKER):
                 os.remove(CACHE_MARKER)
             existing = 0
 
     cached_root = _ensure_canonical_train_root(LOCAL_CACHE, _detect_train_root(LOCAL_CACHE))
     if not (os.path.isfile(CACHE_MARKER) and existing > 5000 and cached_root):
-        # Cleanup before download to avoid local SSD exhaustion.
-        # Colab SSD is ~200GB. We need ~78GB for tar.gz + ~78GB for extracted files.
-        # Clean up leftovers from previous runs to prevent disk overflow.
-        if os.path.isfile(LOCAL_TAR):
-            _old_tar_gb = os.path.getsize(LOCAL_TAR) / (1024**3)
-            os.remove(LOCAL_TAR)
-            print(f"    Removed old tar.gz - freed {_old_tar_gb:.1f} GB", flush=True)
         if existing > 0 and existing <= 5000:
-            # Partial/broken old extraction - remove it
             import shutil as _shutil
             _shutil.rmtree(LOCAL_CACHE, ignore_errors=True)
             os.makedirs(LOCAL_CACHE, exist_ok=True)
             existing = 0
             print("    Removed incomplete old dataset", flush=True)
 
-        # Show disk space before we start
         _run("df -h /content | tail -1 | awk '{print \"   Disk: used \"$3\"  free \"$4\"  (\"$5\" full)\"}'")
 
-        # Phase 1: Copy archive from Drive to local SSD.
-        # Uses Python file I/O with real-time progress - dd/pv output is
-        # invisible in Colab because it goes to stderr which Colab swallows.
-        tar_size_bytes = os.path.getsize(DRIVE_DATASET)
-        tar_size_gb = tar_size_bytes / (1024**3)
-
-        _need_download = True
-        if os.path.isfile(LOCAL_TAR):
-            if os.path.getsize(LOCAL_TAR) == tar_size_bytes:
-                print(
-                    f"   tar.gz already on local SSD ({tar_size_gb:.1f} GB) "
-                    "- skip download",
-                    flush=True,
-                )
-                _need_download = False
-            else:
-                print("    Partial file - re-downloading", flush=True)
-                os.remove(LOCAL_TAR)
-
-        if _need_download:
-            # Parallel (4 workers) default; set UAV_DOWNLOAD_METHOD=pv for sequential.
-            _dl_method = os.environ.get("UAV_DOWNLOAD_METHOD", "parallel").strip().lower()
-            _pv_buf = os.environ.get("UAV_PV_BUFFER", "128m").strip().lower()
-            _use_pv = _dl_method == "pv" and shutil.which("pv")
-
-            if _use_pv:
-                # Sequential: pv with 128MB buffer - best for Drive FUSE
-                # pv stderr is invisible in Colab; use file-size polling for progress
-                print(
-                    f"   Downloading {tar_size_gb:.1f} GB -> local SSD (pv, {_pv_buf} buffer) ",
-                    flush=True,
-                )
-                print(f"     {DRIVE_DATASET} -> {LOCAL_TAR}", flush=True)
-                _dl_start = time.time()
-                _pv_done = threading.Event()
-
-                def _pv_progress():
-                    while not _pv_done.is_set():
-                        time.sleep(2.0)
-                        if not os.path.isfile(LOCAL_TAR):
-                            continue
-                        c = os.path.getsize(LOCAL_TAR)
-                        if c >= tar_size_bytes:
-                            break
-                        elapsed = time.time() - _dl_start
-                        pct = c / tar_size_bytes * 100
-                        speed_mb = (c / (1024**2)) / max(elapsed, 0.1)
-                        remaining_sec = (tar_size_bytes - c) / max(c / max(elapsed, 0.1), 1)
-                        mins, secs = divmod(int(remaining_sec), 60)
-                        print(
-                            f"\r    {pct:5.1f}%  |  "
-                            f"{c/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
-                            f"{speed_mb:.0f} MB/s  |  ETA {mins}m {secs}s   ",
-                            end="",
-                            flush=True,
-                        )
-
-                _prog_thread = threading.Thread(target=_pv_progress, daemon=True)
-                _prog_thread.start()
-                try:
-                    with open(LOCAL_TAR, "wb") as dst:
-                        proc = subprocess.Popen(
-                            ["pv", "-B", _pv_buf, "-f", DRIVE_DATASET],
-                            stdout=dst,
-                            stderr=subprocess.DEVNULL,
-                        )
-                        proc.wait()
-                    if proc.returncode != 0:
-                        raise RuntimeError(f"pv exited with code {proc.returncode}")
-                finally:
-                    _pv_done.set()
-                    _prog_thread.join(timeout=3)
-                # Final progress line
-                c = os.path.getsize(LOCAL_TAR)
-                elapsed = time.time() - _dl_start
-                pct = c / tar_size_bytes * 100
-                speed_mb = (c / (1024**2)) / max(elapsed, 0.1)
-                print(
-                    f"\r    {pct:5.1f}%  |  "
-                    f"{c/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
-                    f"{speed_mb:.0f} MB/s  |  done      ",
-                    flush=True,
-                )
-            else:
-                # Parallel fallback (UAV_DOWNLOAD_METHOD=parallel or pv missing)
-                N_WORKERS = max(1, min(8, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "8"))))
-                CHUNK = 32 * 1024 * 1024  # 32 MB - larger = fewer syscalls, less contention
-                print(
-                    f"   Downloading {tar_size_gb:.1f} GB -> local SSD ({N_WORKERS} workers, 32MB chunks) ",
-                    flush=True,
-                )
-                print(f"     {DRIVE_DATASET} -> {LOCAL_TAR}", flush=True)
-                chunk_size = (tar_size_bytes + N_WORKERS - 1) // N_WORKERS
-                _dl_start = time.time()
-                _copied_lock = threading.Lock()
-                _copied = [0]
-                _done = threading.Event()
-
-                def _copy_range(start: int, end: int) -> int:
-                    n = 0
-                    fd_dst = os.open(LOCAL_TAR, os.O_RDWR)
-                    try:
-                        with open(DRIVE_DATASET, "rb") as src:
-                            src.seek(start)
-                            remaining = end - start
-                            current_offset = start
-                            while remaining > 0:
-                                to_read = min(CHUNK, remaining)
-                                buf = src.read(to_read)
-                                if not buf:
-                                    break
-                                os.pwrite(fd_dst, buf, current_offset)
-                                n += len(buf)
-                                remaining -= len(buf)
-                                current_offset += len(buf)
-                                with _copied_lock:
-                                    _copied[0] += len(buf)
-                    finally:
-                        os.close(fd_dst)
-                    return n
-
-                def _progress_loop():
-                    while not _done.is_set():
-                        time.sleep(2.0)
-                        with _copied_lock:
-                            c = _copied[0]
-                        if c >= tar_size_bytes:
-                            break
-                        elapsed = time.time() - _dl_start
-                        pct = c / tar_size_bytes * 100
-                        speed_mb = (c / (1024**2)) / max(elapsed, 0.1)
-                        remaining_sec = (tar_size_bytes - c) / max(c / max(elapsed, 0.1), 1)
-                        mins, secs = divmod(int(remaining_sec), 60)
-                        sys.stdout.write(
-                            f"\r    {pct:5.1f}%  |  "
-                            f"{c/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
-                            f"{speed_mb:.0f} MB/s  |  "
-                            f"ETA {mins}m {secs}s   "
-                        )
-                        sys.stdout.flush()
-
-                with open(LOCAL_TAR, "wb") as f:
-                    f.truncate(tar_size_bytes)
-
-                _prog_thread = threading.Thread(target=_progress_loop, daemon=True)
-                _prog_thread.start()
-
-                try:
-                    with ThreadPoolExecutor(max_workers=N_WORKERS) as ex:
-                        futures = [
-                            ex.submit(_copy_range, i * chunk_size, min((i + 1) * chunk_size, tar_size_bytes))
-                            for i in range(N_WORKERS)
-                            if i * chunk_size < tar_size_bytes
-                        ]
-                        for _ in as_completed(futures):
-                            pass
-                finally:
-                    _done.set()
-                    _prog_thread.join(timeout=3)
-
-                with _copied_lock:
-                    c = _copied[0]
-                elapsed = time.time() - _dl_start
-                pct = c / tar_size_bytes * 100
-                speed_mb = (c / (1024**2)) / max(elapsed, 0.1)
-                sys.stdout.write(
-                    f"\r    {pct:5.1f}%  |  "
-                    f"{c/(1024**3):.1f}/{tar_size_gb:.1f} GB  |  "
-                    f"{speed_mb:.0f} MB/s  |  done      \n"
-                )
-                sys.stdout.flush()
-
-        dl_elapsed = time.time() - t0
-        print(
-            f"  ✅ OK Download done in {dl_elapsed:.0f}s "
-            f"({tar_size_gb/max(dl_elapsed, 1)*1024:.0f} MB/s)",
-            flush=True,
-        )
-
-        # Phase 2: Extract from local SSD copy (fast NVMe path).
-        # stdbuf: 128MB pipe buffer for pigz->tar throughput (larger = less blocking)
-        # eatmydata: skip fsync for faster writes (safe to re-extract on crash)
-        # pigz -p NCPU: parallel decompression; tar -b 10240: larger blocks = less overhead
-        t1 = time.time()
+        # ── Process each archive in DRIVE_DATASETS ──────────────────────────
         TAR_FAST = "--no-same-owner --no-same-permissions -b 10240"
         PIPE_BUF = os.environ.get("UAV_EXTRACT_PIPE_BUF", "128M")
-        CKPT = 100000  # less frequent progress = less overhead
+        CKPT = 100000
         _eatmydata = "eatmydata " if shutil.which("eatmydata") else ""
 
-        if existing > 100:
-            print(
-                f"    Incremental extraction ({existing} existing files) ",
-                flush=True,
-            )
-            _ext_cmd = (
-                f'stdbuf -o {PIPE_BUF} pigz -d -c -p {NCPU} {shlex.quote(LOCAL_TAR)} '
-                f'| stdbuf -i {PIPE_BUF} {_eatmydata}tar -xf - -C {shlex.quote(LOCAL_CACHE)} '
-                f'{TAR_FAST} --skip-old-files '
-                f'--checkpoint={CKPT} --checkpoint-action=echo="  %u files checked"'
-            )
-        else:
-            _ed = "eatmydata, " if _eatmydata else ""
-            print(
-                f"   Full extraction -> {LOCAL_CACHE} "
-                f"({_ed}pigz {NCPU} cores, {PIPE_BUF} pipe)",
-                flush=True,
-            )
-            _ext_cmd = (
-                f'stdbuf -o {PIPE_BUF} pigz -d -c -p {NCPU} {shlex.quote(LOCAL_TAR)} '
-                f'| stdbuf -i {PIPE_BUF} {_eatmydata}tar -xf - -C {shlex.quote(LOCAL_CACHE)} '
-                f'{TAR_FAST} '
-                f'--checkpoint={CKPT} --checkpoint-action=echo="  %u files extracted"'
-            )
+        for _archive_path in DRIVE_DATASETS:
+            _arch_name = os.path.basename(_archive_path)
+            _arch_size_bytes = os.path.getsize(_archive_path)
+            _arch_size_gb = _arch_size_bytes / (1024**3)
+            _is_zip = _archive_path.lower().endswith(".zip")
+            _local_tmp = f"/content/{_arch_name}"
 
-        # Stream extraction output in real-time (not buffered like _run)
-        _ext_proc = subprocess.Popen(
-            _ext_cmd, shell=True,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT
-        )
-        _ext_fd = _ext_proc.stdout.fileno()
-        while True:
-            _chunk = os.read(_ext_fd, 4096)
-            if not _chunk:
-                break
-            sys.stdout.write(_chunk.decode('utf-8', errors='replace'))
-            sys.stdout.flush()
-        _ext_proc.wait()
+            print(f"\n  📦 [{_arch_name}] {_arch_size_gb:.2f} GB", flush=True)
 
-        ext_elapsed = time.time() - t1
-        final_count = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
-        print(f"  ✅ OK Extracted in {ext_elapsed:.0f}s - {final_count} files", flush=True)
+            # Phase 1: Copy archive to local SSD
+            _need_copy = True
+            if os.path.isfile(_local_tmp) and os.path.getsize(_local_tmp) == _arch_size_bytes:
+                print(f"    Already on local SSD — skip copy", flush=True)
+                _need_copy = False
 
-        # Phase 3: Delete temporary archive, then validate extracted structure.
-        # Must free ~78GB immediately - disk can't hold tar.gz + extracted files.
-        # Drive still has the original if we need to retry.
-        if os.path.isfile(LOCAL_TAR):
-            os.remove(LOCAL_TAR)
-            print(f"    Deleted local tar.gz - freed {tar_size_gb:.1f} GB", flush=True)
+            if _need_copy:
+                _dl_method = os.environ.get("UAV_DOWNLOAD_METHOD", "parallel").strip().lower()
+                _pv_buf = os.environ.get("UAV_PV_BUFFER", "128m").strip().lower()
+                _use_pv = _dl_method == "pv" and shutil.which("pv")
+                N_WORKERS = max(1, min(8, int(os.environ.get("UAV_DOWNLOAD_WORKERS", "8"))))
+                CHUNK = 32 * 1024 * 1024
+
+                if _use_pv:
+                    print(f"    Copying (pv) -> {_local_tmp}", flush=True)
+                    _dl_start = time.time()
+                    _pv_done = threading.Event()
+
+                    def _pv_prog(_path=_local_tmp, _sz=_arch_size_bytes, _gb=_arch_size_gb):
+                        _t0 = time.time()
+                        while not _pv_done.is_set():
+                            time.sleep(2.0)
+                            if not os.path.isfile(_path): continue
+                            c = os.path.getsize(_path)
+                            if c >= _sz: break
+                            elapsed = time.time() - _t0
+                            pct = c / _sz * 100
+                            speed = (c / 1024**2) / max(elapsed, 0.1)
+                            eta = (_sz - c) / max(c / max(elapsed, 0.1), 1)
+                            m, s = divmod(int(eta), 60)
+                            print(f"\r    {pct:5.1f}% | {c/1024**3:.1f}/{_gb:.1f}GB | {speed:.0f}MB/s | ETA {m}m{s}s  ", end="", flush=True)
+
+                    _pt = threading.Thread(target=_pv_prog, daemon=True)
+                    _pt.start()
+                    try:
+                        with open(_local_tmp, "wb") as _dst:
+                            _pv_proc = subprocess.Popen(["pv", "-B", _pv_buf, "-f", _archive_path], stdout=_dst, stderr=subprocess.DEVNULL)
+                            _pv_proc.wait()
+                    finally:
+                        _pv_done.set()
+                        _pt.join(timeout=3)
+                else:
+                    print(f"    Copying ({N_WORKERS} workers) -> {_local_tmp}", flush=True)
+                    chunk_size = (_arch_size_bytes + N_WORKERS - 1) // N_WORKERS
+                    _dl_start = time.time()
+                    _copied_lock = threading.Lock()
+                    _copied = [0]
+                    _done_evt = threading.Event()
+
+                    def _copy_range(_start, _end, _src=_archive_path, _dst=_local_tmp, _sz=_arch_size_bytes, _lock=_copied_lock, _counter=_copied):
+                        _fd = os.open(_dst, os.O_RDWR)
+                        try:
+                            with open(_src, "rb") as _f:
+                                _f.seek(_start)
+                                _rem = _end - _start
+                                _off = _start
+                                while _rem > 0:
+                                    _buf = _f.read(min(CHUNK, _rem))
+                                    if not _buf: break
+                                    os.pwrite(_fd, _buf, _off)
+                                    _rem -= len(_buf); _off += len(_buf)
+                                    with _lock: _counter[0] += len(_buf)
+                        finally:
+                            os.close(_fd)
+
+                    def _prog_loop(_sz=_arch_size_bytes, _gb=_arch_size_gb, _lock=_copied_lock, _counter=_copied, _stop=_done_evt):
+                        _t0 = time.time()
+                        while not _stop.is_set():
+                            time.sleep(2.0)
+                            with _lock: c = _counter[0]
+                            if c >= _sz: break
+                            elapsed = time.time() - _t0
+                            pct = c / _sz * 100
+                            speed = (c / 1024**2) / max(elapsed, 0.1)
+                            eta = (_sz - c) / max(c / max(elapsed, 0.1), 1)
+                            m, s = divmod(int(eta), 60)
+                            sys.stdout.write(f"\r    {pct:5.1f}% | {c/1024**3:.1f}/{_gb:.1f}GB | {speed:.0f}MB/s | ETA {m}m{s}s  ")
+                            sys.stdout.flush()
+
+                    with open(_local_tmp, "wb") as _f: _f.truncate(_arch_size_bytes)
+                    _prog_t = threading.Thread(target=_prog_loop, daemon=True)
+                    _prog_t.start()
+                    try:
+                        with ThreadPoolExecutor(max_workers=N_WORKERS) as ex:
+                            futs = [ex.submit(_copy_range, i * chunk_size, min((i + 1) * chunk_size, _arch_size_bytes)) for i in range(N_WORKERS) if i * chunk_size < _arch_size_bytes]
+                            for _ in as_completed(futs): pass
+                    finally:
+                        _done_evt.set(); _prog_t.join(timeout=3)
+                    c = _copied[0]
+                    elapsed = time.time() - _dl_start
+                    sys.stdout.write(f"\r    100.0% | {c/1024**3:.1f}/{_arch_size_gb:.1f}GB | {(c/1024**2)/max(elapsed,0.1):.0f}MB/s | done      \n")
+                    sys.stdout.flush()
+
+                print(f"  ✅ OK Copied {_arch_name} to local SSD", flush=True)
+
+            # Phase 2: Extract
+            t1 = time.time()
+            if _is_zip:
+                print(f"    Extracting zip -> {LOCAL_CACHE}", flush=True)
+                _run(f"unzip -o -q {shlex.quote(_local_tmp)} -d {shlex.quote(LOCAL_CACHE)}", check=True)
+            else:
+                print(f"    Extracting tar.gz -> {LOCAL_CACHE} (pigz {NCPU} cores)", flush=True)
+                _ext_cmd = (
+                    f'stdbuf -o {PIPE_BUF} pigz -d -c -p {NCPU} {shlex.quote(_local_tmp)} '
+                    f'| stdbuf -i {PIPE_BUF} {_eatmydata}tar -xf - -C {shlex.quote(LOCAL_CACHE)} '
+                    f'{TAR_FAST} --skip-old-files '
+                    f'--checkpoint={CKPT} --checkpoint-action=echo="  %u files"'
+                )
+                _ext_proc = subprocess.Popen(_ext_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                _ext_fd = _ext_proc.stdout.fileno()
+                while True:
+                    _chunk = os.read(_ext_fd, 4096)
+                    if not _chunk: break
+                    sys.stdout.write(_chunk.decode("utf-8", errors="replace"))
+                    sys.stdout.flush()
+                _ext_proc.wait()
+
+            print(f"  ✅ OK Extracted {_arch_name} in {time.time()-t1:.0f}s", flush=True)
+
+            # Phase 3: Delete local copy to free disk
+            if os.path.isfile(_local_tmp):
+                os.remove(_local_tmp)
+                print(f"    Freed {_arch_size_gb:.1f} GB (deleted local copy)", flush=True)
+
+        # ── End of archive loop ──────────────────────────────────────────────
 
         train_root = _ensure_canonical_train_root(LOCAL_CACHE, _detect_train_root(LOCAL_CACHE))
+        final_count = sum(len(f) for _, _, f in os.walk(LOCAL_CACHE))
         if final_count > 5000 and train_root:
             print(f"   Verification passed: {final_count} files on local SSD", flush=True)
-            print(f"  🧪 [VERIFY] Dataset root detected: {train_root}", flush=True)
-            with open(CACHE_MARKER, 'w', encoding='utf-8') as f:
+            print(f"  🧪 [VERIFY] Dataset root: {train_root}", flush=True)
+            with open(CACHE_MARKER, "w", encoding="utf-8") as f:
                 f.write("1")
         else:
-            top_dirs = sorted(
-                d for d in os.listdir(LOCAL_CACHE)
-                if os.path.isdir(os.path.join(LOCAL_CACHE, d))
-            )[:8]
+            top_dirs = sorted(d for d in os.listdir(LOCAL_CACHE) if os.path.isdir(os.path.join(LOCAL_CACHE, d)))[:8]
             print(
-                f"  ⚠️ WARN Verification failed (files={final_count}, root={train_root}, "
-                f"top_dirs={top_dirs}) - "
-                "re-run to retry from Drive",
+                f"  ⚠️ WARN Verification failed (files={final_count}, root={train_root}, top_dirs={top_dirs}) - re-run to retry",
                 flush=True,
             )
 

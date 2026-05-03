@@ -126,6 +126,18 @@ MAPPINGS = {
         "sampling_rate": 1.0,
         "oversample": 5,  # tiny pure UAI/UAP dataset (187 imgs)
     },
+
+    # ---------------------------------------------------------
+    # LABEL_ROBOFLOW — Teknofest ekip üyesi tarafından etiketlenmiş
+    # 615 ardışık frame (frame 18-712), UAP/UAI odaklı, ek insan/taşıt var.
+    # Kaynak: Roboflow polygon → bbox dönüştürüldü.
+    # data.yaml sırası: Insan=0, Tasit=1, UAI=2, UAP=3
+    # ---------------------------------------------------------
+    "Label_roboflow": {
+        "id_map": {0: 1, 1: 0, 2: 3, 3: 2},
+        "sampling_rate": 1.0,
+        "oversample": 2,  # 615 ardışık/korelasyonlu frame, az tekrar yeterli
+    },
     "teknofest_05": {
         "id_map": {0: 1, 1: 0, 2: 3, 3: 2},
         "sampling_rate": 1.0,
